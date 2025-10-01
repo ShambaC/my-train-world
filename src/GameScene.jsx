@@ -3,9 +3,18 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sky } from '@react-three/drei';
 import * as THREE from 'three';
 import { generateTerrain, createGrid } from './terrain';
+import TrackRenderer from './tracks/TrackRenderer';
 
 // Scene component that contains the terrain
-function Scene({ terrainSize, onTerrainGenerated }) {
+function Scene({ 
+  terrainSize, 
+  onTerrainGenerated, 
+  trackManager, 
+  selectedTool, 
+  rotation,
+  heightOffset,
+  onTracksChange 
+}) {
   const terrainRef = useRef();
   const [terrain, setTerrain] = useState(null);
 
@@ -49,6 +58,18 @@ function Scene({ terrainSize, onTerrainGenerated }) {
       {/* Terrain */}
       {terrain && (
         <primitive object={terrain} ref={terrainRef} />
+      )}
+      
+      {/* Track System */}
+      {terrain && (
+        <TrackRenderer
+          trackManager={trackManager}
+          terrainRef={terrainRef}
+          selectedTool={selectedTool}
+          rotation={rotation}
+          heightOffset={heightOffset}
+          onTracksChange={onTracksChange}
+        />
       )}
       
       {/* Grid helper */}
@@ -96,11 +117,25 @@ function FPSCounter({ show }) {
 }
 
 // Main Game Scene Component
-export default function GameScene({ terrainSize, showDebug }) {
+export default function GameScene({ 
+  terrainSize, 
+  showDebug, 
+  trackManager,
+  selectedTool,
+  rotation,
+  heightOffset,
+  onTracksChange 
+}) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
   });
   const [fps, setFps] = useState(0);
+  const [trackCount, setTrackCount] = useState(0);
+
+  const handleTracksChange = (tracks) => {
+    setTrackCount(tracks.length);
+    if (onTracksChange) onTracksChange(tracks);
+  };
 
   return (
     <div className="relative w-full h-full">
@@ -112,6 +147,11 @@ export default function GameScene({ terrainSize, showDebug }) {
         <Scene 
           terrainSize={terrainSize} 
           onTerrainGenerated={setSceneStats}
+          trackManager={trackManager}
+          selectedTool={selectedTool}
+          rotation={rotation}
+          heightOffset={heightOffset}
+          onTracksChange={handleTracksChange}
         />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} />
       </Canvas>
@@ -122,7 +162,15 @@ export default function GameScene({ terrainSize, showDebug }) {
           <div className="font-bold text-green-400 mb-2">Debug Info</div>
           <div>FPS: {fps}</div>
           <div>Voxels: {sceneStats.voxelCount.toLocaleString()}</div>
+          <div>Tracks: {trackCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
+          {selectedTool && (
+            <div className="pt-2 border-t border-gray-600">
+              <div>Tool: {selectedTool.name}</div>
+              <div>Rotation: {rotation}°</div>
+              {heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}
+            </div>
+          )}
           <div className="pt-2 text-xs text-gray-400">
             <div>Controls:</div>
             <div>• Left Mouse: Rotate</div>

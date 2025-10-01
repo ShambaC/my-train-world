@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 2: Track Placement System 🎉
+- **Track System**
+  - Two track types: Straight and Curved (90° turns)
+  - Click-to-place track placement on terrain
+  - Ghost preview with transparency before placement
+  - Visual validation: Green tint for valid, red for invalid placements
+  - Snap-to-grid positioning for perfect alignment
+  - Track data management with TrackManager class
+  - Instanced rendering for performance
+
+- **Rotation System**
+  - Press R key to rotate tracks before placing
+  - Rotation state persists between placements
+  - Works with both track types
+  - Visual feedback in debug overlay
+
+- **Interactive Hotbar**
+  - Bottom-screen tool selector
+  - Number key shortcuts (1-5)
+  - Mouse click selection
+  - Visual indication of selected tool
+  - Expandable for future tools
+
+- **Delete Mode**
+  - Dedicated delete tool (key 3)
+  - Click-to-delete placed tracks
+  - Track removal with connection cleanup
+
+- **Bridge Mode (Bonus Feature)**
+  - Adjustable track height with Q/E keys
+  - Place tracks at elevated positions
+  - X key to reset to ground level
+  - Height offset indicator when active
+  - Foundation for future bridge/viaduct features
+  - Automatic track angling (prepared for height transitions)
+
+- **Smart Click Detection**
+  - UI clicks don't trigger world placement
+  - Canvas-aware click handling
+  - Prevents accidental placement when using controls
+
+### Technical Improvements
+- Created modular track system architecture
+- Custom hook (useTrackPlacement) for raycasting
+- Separation of concerns: models, rendering, management
+- Real-time validation system
+- Performance-optimized with instanced meshes
+
 ### Changed
 - **Terrain Generation Overhaul**
   - Reduced height variation for flatter, more buildable terrain

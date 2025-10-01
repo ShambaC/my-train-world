@@ -149,15 +149,21 @@ export default function ControlPanel({
             </label>
           </div>
 
-          {/* Future Features (Disabled) */}
+          {/* Track System Info */}
+          <div className="pt-4 border-t border-gray-700">
+            <h3 className="text-sm font-semibold mb-2 text-green-400">✅ Track System Active</h3>
+            <p className="text-xs text-gray-400 mb-2">Use the hotbar at the bottom to:</p>
+            <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
+              <li>Select track types (1-2)</li>
+              <li>Press R to rotate</li>
+              <li>Click to place tracks</li>
+              <li>Use Q/E for bridges</li>
+            </ul>
+          </div>
+
+          {/* Future Features */}
           <div className="pt-4 border-t border-gray-700">
             <h3 className="text-sm font-semibold mb-2 text-gray-400">Coming Soon</h3>
-            <button
-              disabled
-              className="w-full py-2 px-4 rounded-lg font-medium mb-2 bg-gray-700 text-gray-500 cursor-not-allowed"
-            >
-              🛤️ Place Tracks
-            </button>
             <button
               disabled
               className="w-full py-2 px-4 rounded-lg font-medium bg-gray-700 text-gray-500 cursor-not-allowed"

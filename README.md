@@ -4,7 +4,7 @@ A voxel-based train sandbox game built with React, Three.js, and Tauri.
 
 ## 🎮 Features
 
-### Current Implementation (Phase 1)
+### Current Implementation (Phase 1 + Phase 2)
 - ✅ **Randomized Voxel Terrain Generation**
   - Procedurally generated terrain using Simplex noise
   - Customizable terrain size (length × breadth)
@@ -19,6 +19,24 @@ A voxel-based train sandbox game built with React, Three.js, and Tauri.
   - Natural distribution using noise-based placement
   - Proper spacing between vegetation
   - ~8% coverage on suitable terrain
+
+- ✅ **Track Placement System** 🆕
+  - **Two track types**: Straight and curved (90°)
+  - **Click-to-place** on terrain with mouse
+  - **Ghost preview** showing track before placement
+  - **Visual feedback**: Green for valid placement, red for invalid
+  - **Rotation system**: Press R or use hotbar to rotate tracks
+  - **Hotbar interface**: Select tools with mouse or number keys (1-2)
+  - **Delete mode**: Remove placed tracks
+  - **Bridge mode**: Adjustable height with Q/E keys for elevated tracks
+  - **Snap-to-grid** for perfect alignment
+  - **UI-aware clicking**: Control panel clicks don't interfere with world
+
+- ✅ **Interactive Hotbar**
+  - Tool selection with mouse or number keys (1-5)
+  - Visual feedback for selected tool
+  - Keyboard shortcuts displayed
+  - Expandable for future tools (trains, stations, etc.)
 
 - ✅ **Interactive 3D Camera**
   - Orbit controls for navigation
@@ -41,12 +59,12 @@ A voxel-based train sandbox game built with React, Three.js, and Tauri.
   - Dark theme suitable for gameplay
   - Smooth transitions and animations
 
-### Coming Soon (Phase 2+)
-- 🚧 Track placement system
+### Coming Soon (Phase 3+)
 - 🚧 Train placement and movement
-- 🚧 Multiple train types
+- 🚧 Multiple train types with physics
 - 🚧 Track switching and signaling
 - 🚧 Landscape editing tools
+- 🚧 Station system
 - 🚧 Save/Load functionality (using Tauri)
 
 ## 🛠️ Tech Stack
@@ -84,7 +102,32 @@ npm run tauri dev
    - Left mouse button: Rotate camera
    - Right mouse button: Pan camera
    - Mouse wheel: Zoom in/out
-5. **Toggle debug info**: Enable "Show Debug Info" to see FPS and performance stats
+
+### Building Railways 🛤️
+
+5. **Select track type**: 
+   - Press `1` for straight tracks
+   - Press `2` for curved tracks
+   - Press `3` for delete tool
+   - Or click tools in the hotbar at the bottom
+
+6. **Place tracks**:
+   - Move mouse over terrain to see ghost preview
+   - Green = valid placement, Red = invalid
+   - Press `R` to rotate before placing
+   - Click to place the track
+
+7. **Build bridges** (elevated tracks):
+   - Press `Q` to lower track height
+   - Press `E` to raise track height
+   - Press `X` to reset to ground level
+   - Tracks will angle automatically between different heights
+
+8. **Delete tracks**:
+   - Select delete tool (press `3`)
+   - Click on tracks to remove them
+
+9. **Toggle debug info**: Enable "Show Debug Info" to see FPS, track count, and performance stats
 
 ## 🎨 Terrain Generation
 
@@ -114,9 +157,18 @@ src/
 ├── App.jsx              # Main application component
 ├── GameScene.jsx        # 3D scene with terrain and camera
 ├── ControlPanel.jsx     # UI controls for terrain generation
-├── terrain.js           # Terrain generation logic
+├── LoadingScreen.jsx    # Initial loading screen
+├── terrain.js           # Terrain & vegetation generation logic
 ├── main.jsx            # React entry point
-└── index.css           # Tailwind styles
+├── index.css           # Tailwind styles
+├── tracks/
+│   ├── TrackModels.js   # 3D track model generation
+│   ├── TrackManager.js  # Track data management
+│   └── TrackRenderer.jsx # Track rendering component
+├── hooks/
+│   └── useTrackPlacement.js # Track placement logic hook
+└── ui/
+    └── Hotbar.jsx       # Tool selection hotbar
 ```
 
 ## 🚀 Next Steps

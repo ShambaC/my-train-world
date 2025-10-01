@@ -1,20 +1,88 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import GameScene from "./GameScene";
 import ControlPanel from "./ControlPanel";
 import LoadingScreen from "./LoadingScreen";
+import Hotbar from "./ui/Hotbar";
+import { TrackManager } from "./tracks/TrackManager";
+
+// Define available tools
+const TOOLS = [
+  { 
+    id: 'straight', 
+    name: 'Straight Track', 
+    label: 'Straight',
+    icon: '━', 
+    type: 'track',
+    trackType: 'straight'
+  },
+  { 
+    id: 'curved', 
+    name: 'Curved Track', 
+    label: 'Curved',
+    icon: '╰', 
+    type: 'track',
+    trackType: 'curved'
+  },
+  { 
+    id: 'delete', 
+    name: 'Delete Tool', 
+    label: 'Delete',
+    icon: '🗑️', 
+    type: 'delete'
+  },
+];
 
 function App() {
   const [terrainSize, setTerrainSize] = useState({ length: 50, breadth: 50 });
   const [showDebug, setShowDebug] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedToolIndex, setSelectedToolIndex] = useState(0);
+  const [rotation, setRotation] = useState(0);
+  const [heightOffset, setHeightOffset] = useState(0);
+  
+  const trackManagerRef = useRef(new TrackManager());
+  const selectedTool = TOOLS[selectedToolIndex];
 
   const handleTerrainSizeChange = (newSize) => {
     setIsGenerating(true);
     setTerrainSize(newSize);
+    // Clear tracks when terrain changes
+    trackManagerRef.current.clear();
     // Simulate generation delay for UI feedback
     setTimeout(() => setIsGenerating(false), 500);
   };
+
+  const handleToolSelect = (index) => {
+    setSelectedToolIndex(index);
+  };
+
+  const handleRotate = () => {
+    setRotation((prev) => (prev + 90) % 360);
+  };
+
+  const handleHeightChange = (delta) => {
+    setHeightOffset((prev) => Math.max(-2, Math.min(5, prev + delta)));
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Q/E for height adjustment
+      if (e.key.toLowerCase() === 'q') {
+        handleHeightChange(-0.5);
+      } else if (e.key.toLowerCase() === 'e') {
+        handleHeightChange(0.5);
+      }
+      // X to reset height
+      else if (e.key.toLowerCase() === 'x') {
+        setHeightOffset(0);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (isLoading) {
     return <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />;
@@ -26,6 +94,10 @@ function App() {
       <GameScene 
         terrainSize={terrainSize} 
         showDebug={showDebug}
+        trackManager={trackManagerRef.current}
+        selectedTool={selectedTool}
+        rotation={rotation * (Math.PI / 180)} // Convert to radians
+        heightOffset={heightOffset}
       />
       
       {/* Control Panel */}
@@ -35,6 +107,25 @@ function App() {
         showDebug={showDebug}
         isGenerating={isGenerating}
       />
+      
+      {/* Hotbar */}
+      <Hotbar
+        tools={TOOLS}
+        selectedIndex={selectedToolIndex}
+        onSelect={handleToolSelect}
+        onRotate={handleRotate}
+      />
+      
+      {/* Height Control Indicator */}
+      {heightOffset !== 0 && (
+        <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg font-mono text-sm z-30">
+          <div className="font-bold text-blue-400 mb-1">Bridge Mode</div>
+          <div>Height: {heightOffset.toFixed(1)}</div>
+          <div className="text-xs text-gray-400 mt-1">
+            Q/E: Adjust • X: Reset
+          </div>
+        </div>
+      )}
       
       {/* Title Overlay */}
       <div className="absolute bottom-4 left-4 z-30">
