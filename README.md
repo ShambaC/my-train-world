@@ -8,9 +8,17 @@ A voxel-based train sandbox game built with React, Three.js, and Tauri.
 - ✅ **Randomized Voxel Terrain Generation**
   - Procedurally generated terrain using Simplex noise
   - Customizable terrain size (length × breadth)
-  - Multiple terrain types: water, sand, grass, rock, and snow
+  - **Optimized for railway construction** - Mostly flat plains with gentle hills
+  - Multiple terrain types: water, sand, and grass
   - High-resolution voxels (smaller than Minecraft for better detail)
   - Optimized rendering using instanced meshes
+
+- ✅ **Vegetation System**
+  - Procedurally placed trees (3-4 voxels tall with canopy)
+  - Simple bushes (rounded, 2 voxels high)
+  - Natural distribution using noise-based placement
+  - Proper spacing between vegetation
+  - ~8% coverage on suitable terrain
 
 - ✅ **Interactive 3D Camera**
   - Orbit controls for navigation
@@ -80,13 +88,15 @@ npm run tauri dev
 
 ## 🎨 Terrain Generation
 
-The terrain uses multi-octave Simplex noise for natural-looking landscapes:
+The terrain uses multi-octave Simplex noise for natural-looking landscapes, optimized for railway construction:
 
 - **Water level**: Blue voxels at lower elevations
 - **Sand**: Transition zone near water
-- **Grass**: Primary terrain surface
-- **Rock**: Higher elevation areas
-- **Snow**: Mountain peaks
+- **Grass**: Primary terrain surface (plains and gentle hills)
+- **Trees**: Dark green canopy with brown trunks (3-4 voxels tall)
+- **Bushes**: Rounded vegetation (2 voxels high)
+
+The terrain is intentionally flatter than typical voxel games to make it suitable for placing railway tracks. Mountains are rare, with most of the terrain consisting of plains and gentle, gradual slopes.
 
 Voxel size is set to 0.5 units for higher resolution compared to Minecraft-style games.
 

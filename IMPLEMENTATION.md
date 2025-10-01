@@ -15,22 +15,42 @@ App.jsx (Root)
 
 ### Algorithm: Multi-Octave Simplex Noise
 
-The terrain uses a sophisticated noise-based generation system:
+The terrain uses a sophisticated noise-based generation system optimized for railway construction:
 
 ```javascript
-// Parameters
-- Scale: 0.05 (controls feature size)
-- Height Multiplier: 10 (max terrain height)
-- Octaves: 4 (detail layers)
-- Water Level: 2 (sea level)
+// Parameters (Optimized for flatter terrain)
+- Scale: 0.03 (larger = broader, gentler features)
+- Height Multiplier: 4 (reduced for flatter terrain)
+- Octaves: 3 (fewer for smoother terrain)
+- Water Level: 1 (lower sea level)
+- Height Bias: 0.6 toward plains height
 ```
 
 ### Height-Based Biomes
-- **0-2**: Water (Blue, #4a90e2)
-- **2-3**: Sand (Beige, #ddc490)
-- **3-height-3**: Grass (Green, #5cb85c)
-- **height-3 to height-1**: Rock (Gray, #808080)
-- **height-1 to height**: Snow (White, #ffffff)
+- **0-1**: Water (Blue, #4a90e2)
+- **1-2**: Sand (Beige, #ddc490)
+- **2+**: Grass (Green, #5cb85c) - Most common
+- **6+**: Rock (Gray, #808080) - Very rare high points
+
+### Vegetation System
+The terrain includes procedurally generated vegetation:
+
+#### Trees
+- **Height**: 3-4 voxels
+- **Trunk**: Brown (#8b4513)
+- **Canopy**: Dark green (#2d5a2d) leaf blocks
+- **Structure**: Trunk with 9-block canopy on top
+
+#### Bushes
+- **Height**: 2 voxels
+- **Color**: Medium green (#3a7a3a)
+- **Structure**: Central block with 4 side branches
+
+#### Placement Algorithm
+- Uses separate noise layer for distribution
+- ~8% vegetation density on grass terrain
+- Minimum spacing: 3 units between plants
+- Only placed on suitable terrain (not water/sand)
 
 ### Voxel System
 - **Size**: 0.5 units (smaller than Minecraft's 1.0)

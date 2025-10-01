@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Terrain Generation Overhaul**
+  - Reduced height variation for flatter, more buildable terrain
+  - Changed from mountainous to plains-focused landscape
+  - Adjusted noise parameters for gentler slopes
+  - Removed snow and rock biomes (too steep for railways)
+  - Optimized terrain for track placement
+
+### Added
+- **Vegetation System**
+  - Procedurally generated voxel trees (3-4 blocks tall)
+  - Simple bushes with rounded shapes
+  - Noise-based placement for natural distribution
+  - Proper spacing system to prevent clustering
+  - ~8% vegetation coverage on grass areas
+  - Trees have brown trunks and green canopies
+  - Performance-optimized instanced rendering
+
 ### Planned
 - Track placement system
 - Train spawning and movement
