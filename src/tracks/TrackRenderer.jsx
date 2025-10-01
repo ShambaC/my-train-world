@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react';
-import { createStraightTrack, createCurvedTrack } from './TrackModels';
+import { useRef, useState, useEffect, useMemo } from 'react';
+import { createStraightTrack, createCurvedTrack, createSupportBeams } from './TrackModels';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import * as THREE from 'three';
 
@@ -15,8 +15,8 @@ export default function TrackRenderer({
   onTracksChange 
 }) {
   const [tracks, setTracks] = useState([]);
-  const [ghostTrack, setGhostTrack] = useState(null);
-  const tracksGroupRef = useRef(new THREE.Group());
+  const ghostMeshRef = useRef(null);
+  const trackMeshesRef = useRef(new Map());
   
   const {
     ghostPosition,
@@ -26,17 +26,10 @@ export default function TrackRenderer({
     handleDelete,
   } = useTrackPlacement(terrainRef, trackManager, selectedTool, rotation, heightOffset);
 
-  // Update ghost track preview
+  // Update tracks list when changed
   useEffect(() => {
-    if (ghostPosition && selectedTool && selectedTool.type !== 'delete') {
-      setGhostTrack({
-        ...ghostPosition,
-        isValid: isValidPosition,
-      });
-    } else {
-      setGhostTrack(null);
-    }
-  }, [ghostPosition, isValidPosition, selectedTool]);
+    setTracks(trackManager.getAllTracks());
+  }, [trackManager]);
 
   // Handle mouse move for ghost preview
   useEffect(() => {
@@ -68,10 +61,14 @@ export default function TrackRenderer({
       if (!isOnCanvas) return;
 
       if (selectedTool?.type === 'delete') {
-        const deleted = handleDelete(e);
-        if (deleted) {
-          setTracks(trackManager.getAllTracks());
-          onTracksChange?.(trackManager.getAllTracks());
+        // Delete track at position
+        if (ghostPosition) {
+          const trackToDelete = trackManager.getTrackAtPosition(ghostPosition, 1.0);
+          if (trackToDelete) {
+            trackManager.removeTrack(trackToDelete.id);
+            setTracks(trackManager.getAllTracks());
+            onTracksChange?.(trackManager.getAllTracks());
+          }
         }
       } else if (selectedTool && ghostPosition && isValidPosition) {
         const track = handlePlacement(e);
@@ -86,13 +83,81 @@ export default function TrackRenderer({
     return () => canvas.removeEventListener('click', handleClick);
   }, [selectedTool, ghostPosition, isValidPosition, handlePlacement, handleDelete, trackManager, onTracksChange]);
 
+  // Cleanup old track meshes
+  useEffect(() => {
+    const currentTrackIds = new Set(tracks.map(t => t.id));
+    
+    // Remove meshes for deleted tracks
+    for (const [id, mesh] of trackMeshesRef.current.entries()) {
+      if (!currentTrackIds.has(id)) {
+        // Dispose geometry and material
+        mesh.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(m => m.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+        trackMeshesRef.current.delete(id);
+      }
+    }
+  }, [tracks]);
+
+  // Create ghost mesh
+  const ghostMesh = useMemo(() => {
+    if (!ghostPosition || !selectedTool || selectedTool.type === 'delete') {
+      // Cleanup old ghost mesh
+      if (ghostMeshRef.current) {
+        ghostMeshRef.current.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+        ghostMeshRef.current = null;
+      }
+      return null;
+    }
+
+    // Cleanup old ghost mesh before creating new one
+    if (ghostMeshRef.current) {
+      ghostMeshRef.current.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      });
+    }
+
+    const mesh = ghostPosition.type === 'straight'
+      ? createStraightTrack(true, isValidPosition)
+      : createCurvedTrack(true, isValidPosition);
+    
+    ghostMeshRef.current = mesh;
+    return mesh;
+  }, [ghostPosition, isValidPosition, selectedTool]);
+
   return (
-    <group ref={tracksGroupRef}>
+    <group>
       {/* Render placed tracks */}
       {tracks.map((track) => {
-        const trackMesh = track.type === 'straight' 
-          ? createStraightTrack(false) 
-          : createCurvedTrack(false);
+        // Check if we already have a mesh for this track
+        if (!trackMeshesRef.current.has(track.id)) {
+          const trackMesh = track.type === 'straight' 
+            ? createStraightTrack(false) 
+            : createCurvedTrack(false);
+          
+          // Add support beams if elevated
+          if (track.heightOffset > 0.5) {
+            const beams = createSupportBeams(track.heightOffset, track.type);
+            if (beams) {
+              trackMesh.add(beams);
+            }
+          }
+          
+          trackMeshesRef.current.set(track.id, trackMesh);
+        }
+        
+        const trackMesh = trackMeshesRef.current.get(track.id);
         
         return (
           <primitive
@@ -105,15 +170,11 @@ export default function TrackRenderer({
       })}
 
       {/* Ghost preview */}
-      {ghostTrack && (
+      {ghostMesh && ghostPosition && (
         <primitive
-          object={
-            ghostTrack.type === 'straight'
-              ? createStraightTrack(true, ghostTrack.isValid)
-              : createCurvedTrack(true, ghostTrack.isValid)
-          }
-          position={[ghostTrack.x, ghostTrack.y, ghostTrack.z]}
-          rotation={[0, ghostTrack.rotation, 0]}
+          object={ghostMesh}
+          position={[ghostPosition.x, ghostPosition.y, ghostPosition.z]}
+          rotation={[0, ghostPosition.rotation, 0]}
         />
       )}
     </group>
