@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { generateTerrain, createGrid } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
 import TrainRenderer from './trains/TrainRenderer';
+import Skybox, { getLightingForTime } from './environment/Skybox';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -16,10 +17,44 @@ function Scene({
   rotation,
   heightOffset,
   onTracksChange,
-  tracksVersion // Add tracksVersion prop
+  tracksVersion,
+  timeOfDay,
+  fogEnabled
 }) {
   const terrainRef = useRef();
+    const { camera, scene } = useThree();
   const [terrain, setTerrain] = useState(null);
+  
+  // Setup lighting based on time of day
+  useEffect(() => {
+    const lighting = getLightingForTime(timeOfDay);
+    
+    // Update ambient light
+    const existingAmbient = scene.getObjectByName('ambientLight');
+    if (existingAmbient) {
+      existingAmbient.intensity = lighting.ambient.intensity;
+    }
+    
+    // Update directional light
+    const existingDirectional = scene.getObjectByName('directionalLight');
+    if (existingDirectional) {
+      existingDirectional.color.set(lighting.directional.color);
+      existingDirectional.intensity = lighting.directional.intensity;
+      existingDirectional.position.set(...lighting.directional.position);
+    }
+    
+    // Update fog
+    if (fogEnabled && lighting.fog) {
+      scene.fog = new THREE.Fog(
+        lighting.fog.color,
+        lighting.fog.near,
+        lighting.fog.far
+      );
+    } else {
+      scene.fog = null;
+    }
+  }, [timeOfDay, fogEnabled, scene]);
+
 
   useEffect(() => {
     // Generate terrain when size changes
@@ -40,9 +75,12 @@ function Scene({
 
   return (
     <>
+      <Skybox timeOfDay={timeOfDay} />
+      
       {/* Lighting */}
-      <ambientLight intensity={0.5} />
+      <ambientLight name="ambientLight" intensity={0.5} />
       <directionalLight
+        name="directionalLight"
         position={[50, 50, 25]}
         intensity={1}
         castShadow
@@ -54,9 +92,6 @@ function Scene({
         shadow-camera-top={50}
         shadow-camera-bottom={-50}
       />
-      
-      {/* Sky */}
-      <Sky sunPosition={[100, 20, 100]} />
       
       {/* Terrain */}
       {terrain && (
@@ -109,7 +144,9 @@ export default function GameScene({
   rotation,
   heightOffset,
   onTracksChange,
-  tracksVersion // Add tracksVersion prop
+  tracksVersion,
+  timeOfDay = 'day',
+  fogEnabled = true
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -147,7 +184,9 @@ export default function GameScene({
           rotation={rotation}
           heightOffset={heightOffset}
           onTracksChange={handleTracksChange}
-          tracksVersion={tracksVersion} // Pass through to Scene
+          tracksVersion={tracksVersion}
+          timeOfDay={timeOfDay}
+          fogEnabled={fogEnabled}
         />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} />
       </Canvas>

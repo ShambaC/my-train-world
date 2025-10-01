@@ -73,11 +73,9 @@ export class TrackManager {
     if (!track1.connections.front && !track2.connections.back) {
       track1.connections.front = track2.id;
       track2.connections.back = track1.id;
-      console.log(`Connected ${track1.id} (front) to ${track2.id} (back)`);
     } else if (!track1.connections.back && !track2.connections.front) {
       track1.connections.back = track2.id;
       track2.connections.front = track1.id;
-      console.log(`Connected ${track1.id} (back) to ${track2.id} (front)`);
     }
   }
 

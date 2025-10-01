@@ -48,6 +48,8 @@ function App() {
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
   const [rotation, setRotation] = useState(0);
   const [heightOffset, setHeightOffset] = useState(0);
+  const [timeOfDay, setTimeOfDay] = useState('day');
+  const [fogEnabled, setFogEnabled] = useState(true);
   const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
   
   const trackManagerRef = useRef(new TrackManager());
@@ -111,7 +113,9 @@ function App() {
         selectedTool={selectedTool}
         rotation={rotation * (Math.PI / 180)} // Convert to radians
         heightOffset={heightOffset}
-        tracksVersion={tracksVersion} // Pass version to force re-render
+        tracksVersion={tracksVersion}
+        timeOfDay={timeOfDay}
+        fogEnabled={fogEnabled}
       />
       
       {/* Control Panel */}
@@ -121,6 +125,10 @@ function App() {
         showDebug={showDebug}
         isGenerating={isGenerating}
         trainManager={trainManagerRef.current}
+        timeOfDay={timeOfDay}
+        onTimeChange={setTimeOfDay}
+        fogEnabled={fogEnabled}
+        onFogEnabledChange={setFogEnabled}
       />
       
       {/* Hotbar */}

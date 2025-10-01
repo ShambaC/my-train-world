@@ -81,39 +81,28 @@ export default function TrackRenderer({
 
       if (selectedTool?.type === 'train') {
         // Place train on track at cursor position
-        console.log('[TRAIN] Attempting to place train at:', ghostPosition);
         if (ghostPosition) {
           const track = trackManager.getTrackAtPosition(ghostPosition, 0.8);
-          console.log('[TRAIN] Track found:', track);
           if (track) {
-            const train = trainManager.addTrain(track.id, 1);
-            console.log('[TRAIN] Train placed:', train);
-          } else {
-            console.log('[TRAIN] No track found at position');
+            trainManager.addTrain(track.id, 1);
           }
         }
       } else if (selectedTool?.type === 'delete') {
         // Delete track at position
-        console.log('[DELETE] Ghost position:', ghostPosition);
         if (ghostPosition) {
           const trackToDelete = trackManager.getTrackAtPosition(ghostPosition, 1.0);
-          console.log('[DELETE] Track found:', trackToDelete);
           if (trackToDelete) {
-            console.log('[DELETE] Removing track:', trackToDelete.id);
-            
             // Also remove any trains on this track
             const trainsOnTrack = trainManager.getAllTrains().filter(
               train => train.currentTrackId === trackToDelete.id
             );
             trainsOnTrack.forEach(train => {
-              console.log('[DELETE] Removing train on track:', train.id);
               trainManager.removeTrain(train.id);
             });
             
             trackManager.removeTrack(trackToDelete.id);
             setTracks(trackManager.getAllTracks());
             onTracksChange?.(trackManager.getAllTracks());
-            console.log('[DELETE] Tracks after removal:', trackManager.getAllTracks().length);
           } else {
             // Try to delete a train directly
             const trains = trainManager.getAllTrains();
@@ -121,15 +110,11 @@ export default function TrackRenderer({
               const dx = Math.abs(train.position.x - ghostPosition.x);
               const dz = Math.abs(train.position.z - ghostPosition.z);
               if (dx < 0.5 && dz < 0.5) {
-                console.log('[DELETE] Removing train:', train.id);
                 trainManager.removeTrain(train.id);
                 break;
               }
             }
-            console.log('[DELETE] No track found at position');
           }
-        } else {
-          console.log('[DELETE] Ghost position is null');
         }
       } else if (selectedTool && ghostPosition && isValidPosition) {
         const track = handlePlacement(e);
