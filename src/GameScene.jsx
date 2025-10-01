@@ -4,12 +4,14 @@ import { OrbitControls, Sky } from '@react-three/drei';
 import * as THREE from 'three';
 import { generateTerrain, createGrid } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
+import TrainRenderer from './trains/TrainRenderer';
 
 // Scene component that contains the terrain
 function Scene({ 
   terrainSize, 
   onTerrainGenerated, 
-  trackManager, 
+  trackManager,
+  trainManager,
   selectedTool, 
   rotation,
   heightOffset,
@@ -66,11 +68,19 @@ function Scene({
         <TrackRenderer
           key={tracksVersion} // Force re-mount when tracks are cleared
           trackManager={trackManager}
+          trainManager={trainManager}
           terrainRef={terrainRef}
           selectedTool={selectedTool}
           rotation={rotation}
           heightOffset={heightOffset}
           onTracksChange={onTracksChange}
+        />
+      )}
+      
+      {/* Train System */}
+      {terrain && (
+        <TrainRenderer
+          trainManager={trainManager}
         />
       )}
       
@@ -123,6 +133,7 @@ export default function GameScene({
   terrainSize, 
   showDebug, 
   trackManager,
+  trainManager,
   selectedTool,
   rotation,
   heightOffset,
@@ -134,11 +145,20 @@ export default function GameScene({
   });
   const [fps, setFps] = useState(0);
   const [trackCount, setTrackCount] = useState(0);
+  const [trainCount, setTrainCount] = useState(0);
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
     if (onTracksChange) onTracksChange(tracks);
   };
+  
+  // Update train count
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTrainCount(trainManager.getAllTrains().length);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [trainManager]);
 
   return (
     <div className="relative w-full h-full">
@@ -151,6 +171,7 @@ export default function GameScene({
           terrainSize={terrainSize} 
           onTerrainGenerated={setSceneStats}
           trackManager={trackManager}
+          trainManager={trainManager}
           selectedTool={selectedTool}
           rotation={rotation}
           heightOffset={heightOffset}
@@ -167,6 +188,7 @@ export default function GameScene({
           <div>FPS: {fps}</div>
           <div>Voxels: {sceneStats.voxelCount.toLocaleString()}</div>
           <div>Tracks: {trackCount}</div>
+          <div>Trains: {trainCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">

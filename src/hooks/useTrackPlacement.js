@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -11,10 +11,33 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
   const [isValidPosition, setIsValidPosition] = useState(true);
   const raycaster = useRef(new THREE.Raycaster());
   const mouse = useRef(new THREE.Vector2());
+  const lastMousePos = useRef({ x: 0, y: 0 }); // Store last mouse position
 
   const updateGhostPosition = useCallback((event) => {
-    if (!terrainRef.current || !selectedTool || selectedTool.type === 'delete') {
+    if (!terrainRef.current || !selectedTool) {
       setGhostPosition(null);
+      return;
+    }
+    
+    // For delete and train tools, we still need ghost position to show where we're clicking
+    if (selectedTool.type === 'delete' || selectedTool.type === 'train') {
+      // Get mouse position for raycasting
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      
+      lastMousePos.current = { x: event.clientX, y: event.clientY };
+      
+      raycaster.current.setFromCamera(mouse.current, camera);
+      const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+      
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        const snapped = trackManager.snapToGrid(point);
+        setGhostPosition(snapped);
+      } else {
+        setGhostPosition(null);
+      }
       return;
     }
 
@@ -22,6 +45,9 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
     const rect = gl.domElement.getBoundingClientRect();
     mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Store last mouse position
+    lastMousePos.current = { x: event.clientX, y: event.clientY };
 
     // Update raycaster
     raycaster.current.setFromCamera(mouse.current, camera);
@@ -56,6 +82,30 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
       setGhostPosition(null);
     }
   }, [camera, gl, terrainRef, trackManager, selectedTool, rotation, heightOffset]);
+
+  // Recalculate ghost position when rotation or heightOffset changes
+  const recalculateGhostPosition = useCallback(() => {
+    if (!terrainRef.current || !selectedTool || !lastMousePos.current.x) {
+      return;
+    }
+    
+    // Skip recalculation for delete and train tools
+    if (selectedTool.type === 'delete' || selectedTool.type === 'train') {
+      return;
+    }
+
+    // Simulate a mouse move event with the last known position
+    const syntheticEvent = {
+      clientX: lastMousePos.current.x,
+      clientY: lastMousePos.current.y
+    };
+    updateGhostPosition(syntheticEvent);
+  }, [terrainRef, selectedTool, updateGhostPosition]);
+
+  // Trigger recalculation when rotation or heightOffset changes
+  useEffect(() => {
+    recalculateGhostPosition();
+  }, [rotation, heightOffset, recalculateGhostPosition]);
 
   const handlePlacement = useCallback((event) => {
     if (!ghostPosition || !isValidPosition || !selectedTool) return null;

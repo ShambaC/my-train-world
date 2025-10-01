@@ -4,6 +4,7 @@ import ControlPanel from "./ControlPanel";
 import LoadingScreen from "./LoadingScreen";
 import Hotbar from "./ui/Hotbar";
 import { TrackManager } from "./tracks/TrackManager";
+import { TrainManager } from "./trains/TrainManager";
 
 // Define available tools
 const TOOLS = [
@@ -22,6 +23,13 @@ const TOOLS = [
     icon: '╰', 
     type: 'track',
     trackType: 'curved'
+  },
+  { 
+    id: 'train', 
+    name: 'Place Train', 
+    label: 'Train',
+    icon: '🚂', 
+    type: 'train'
   },
   { 
     id: 'delete', 
@@ -43,6 +51,7 @@ function App() {
   const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
   
   const trackManagerRef = useRef(new TrackManager());
+  const trainManagerRef = useRef(new TrainManager(trackManagerRef.current));
   const selectedTool = TOOLS[selectedToolIndex];
 
   const handleTerrainSizeChange = (newSize) => {
@@ -97,6 +106,7 @@ function App() {
         terrainSize={terrainSize} 
         showDebug={showDebug}
         trackManager={trackManagerRef.current}
+        trainManager={trainManagerRef.current}
         selectedTool={selectedTool}
         rotation={rotation * (Math.PI / 180)} // Convert to radians
         heightOffset={heightOffset}

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
 const VOXEL_SIZE = 0.5;
-const STRAIGHT_TRACK_WIDTH = 0.6; // Separate width for straight tracks
-const CURVED_TRACK_WIDTH = 0.8; // Separate width for curved tracks  
-const RAIL_HEIGHT = 0.08; // Reduced further
-const SLEEPER_SPACING = 0.3; // Reduced from 0.4
-const TRACK_LENGTH = 1.5; // Reduced from 2
+// Tracks are now exactly 1x1 voxel (0.5 units = 1 voxel)
+const STRAIGHT_TRACK_WIDTH = 0.5;
+const CURVED_TRACK_WIDTH = 0.5;
+const TRACK_LENGTH = 0.5; // 1 voxel long
+const RAIL_HEIGHT = 0.05;
+const SLEEPER_SPACING = 0.15;
 
 // Track colors
 const COLORS = {
@@ -82,8 +83,8 @@ export function createStraightTrack(isGhost = false, isValid = true) {
  */
 export function createCurvedTrack(isGhost = false, isValid = true) {
   const group = new THREE.Group();
-  const radius = 1.2; // Reduced from 1.5
-  const segments = 8; // Reduced from 16 for performance
+  const radius = 0.5; // 1 voxel radius for 90-degree curve
+  const segments = 6; // Fewer segments for small size
   
   if (isGhost) {
     // Simplified ghost preview
@@ -222,8 +223,8 @@ export function createSupportBeams(height, trackType = 'straight') {
     });
   } else if (trackType === 'curved') {
     // Support beams along the curve
-    const radius = 1.2; // Updated to match curved track radius
-    const segments = 4;
+    const radius = 0.5; // Updated to match curved track radius
+    const segments = 3; // Fewer beams for small curve
     const angleStep = (Math.PI / 2) / segments;
     
     for (let i = 0; i <= segments; i++) {
@@ -249,7 +250,7 @@ export function getTrackDimensions(type) {
   if (type === 'straight') {
     return { width: STRAIGHT_TRACK_WIDTH, length: TRACK_LENGTH };
   } else if (type === 'curved') {
-    return { width: 1.2, length: 1.2 }; // Adjusted to match curved radius
+    return { width: 0.5, length: 0.5 }; // 1x1 voxel for curved
   }
   return { width: 0, length: 0 };
 }

@@ -12,7 +12,8 @@ export default function TrackRenderer({
   selectedTool, 
   rotation,
   heightOffset,
-  onTracksChange 
+  onTracksChange,
+  trainManager // Add trainManager prop
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -78,15 +79,36 @@ export default function TrackRenderer({
         }
       }
 
-      if (selectedTool?.type === 'delete') {
+      if (selectedTool?.type === 'train') {
+        // Place train on track at cursor position
+        console.log('[TRAIN] Attempting to place train at:', ghostPosition);
+        if (ghostPosition) {
+          const track = trackManager.getTrackAtPosition(ghostPosition, 0.8);
+          console.log('[TRAIN] Track found:', track);
+          if (track) {
+            const train = trainManager.addTrain(track.id, 1);
+            console.log('[TRAIN] Train placed:', train);
+          } else {
+            console.log('[TRAIN] No track found at position');
+          }
+        }
+      } else if (selectedTool?.type === 'delete') {
         // Delete track at position
+        console.log('[DELETE] Ghost position:', ghostPosition);
         if (ghostPosition) {
           const trackToDelete = trackManager.getTrackAtPosition(ghostPosition, 1.0);
+          console.log('[DELETE] Track found:', trackToDelete);
           if (trackToDelete) {
+            console.log('[DELETE] Removing track:', trackToDelete.id);
             trackManager.removeTrack(trackToDelete.id);
             setTracks(trackManager.getAllTracks());
             onTracksChange?.(trackManager.getAllTracks());
+            console.log('[DELETE] Tracks after removal:', trackManager.getAllTracks().length);
+          } else {
+            console.log('[DELETE] No track found at position');
           }
+        } else {
+          console.log('[DELETE] Ghost position is null');
         }
       } else if (selectedTool && ghostPosition && isValidPosition) {
         const track = handlePlacement(e);
