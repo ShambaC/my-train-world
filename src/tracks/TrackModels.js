@@ -88,10 +88,10 @@ export function createCurvedTrack(isGhost = false, isValid = true) {
     // Simplified ghost preview
     const curve = new THREE.EllipseCurve(
       0, 0,
-      radius, radius,
-      0, Math.PI / 2,
-      false,
-      0
+      radius + TRACK_WIDTH / 4,
+      radius + TRACK_WIDTH / 4,
+      0, 3 * Math.PI / 2,
+      true, 0
     );
     
     const points = curve.getPoints(segments);
