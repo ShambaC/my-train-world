@@ -72,9 +72,18 @@ export class TrackManager {
   /**
    * Check if position is valid for track placement
    */
-  isValidPlacement(position, type, rotation, terrainHeight) {
+  isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
     // Check if on terrain (not in water)
     if (terrainHeight < 2) return false;
+    
+    // Check if placement is on top surface only (not on sides)
+    if (surfaceNormal) {
+      // Normal should point mostly upward (y component should be dominant)
+      // Allow some tolerance for slightly angled surfaces
+      if (Math.abs(surfaceNormal.y) < 0.8) {
+        return false; // Surface is too steep or is a side face
+      }
+    }
     
     // Check if position is already occupied
     const existing = this.getTrackAtPosition(position, 0.8);

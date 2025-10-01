@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 const VOXEL_SIZE = 0.5;
-const TRACK_WIDTH = 1.0; // Reduced from 1.5
-const RAIL_HEIGHT = 0.1; // Reduced from 0.15
-const SLEEPER_SPACING = 0.4; // Reduced from 0.5
-const TRACK_LENGTH = 2; // 2 units long
+const STRAIGHT_TRACK_WIDTH = 0.6; // Separate width for straight tracks
+const CURVED_TRACK_WIDTH = 0.8; // Separate width for curved tracks  
+const RAIL_HEIGHT = 0.08; // Reduced further
+const SLEEPER_SPACING = 0.3; // Reduced from 0.4
+const TRACK_LENGTH = 1.5; // Reduced from 2
 
 // Track colors
 const COLORS = {
@@ -24,7 +25,7 @@ export function createStraightTrack(isGhost = false, isValid = true) {
   
   if (isGhost) {
     // Simplified ghost preview
-    const geometry = new THREE.BoxGeometry(TRACK_WIDTH, RAIL_HEIGHT * 2, TRACK_LENGTH);
+    const geometry = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 2, TRACK_LENGTH);
     const material = new THREE.MeshBasicMaterial({
       color: isValid ? COLORS.validGhost : COLORS.invalidGhost,
       transparent: true,
@@ -37,7 +38,7 @@ export function createStraightTrack(isGhost = false, isValid = true) {
   }
   
   // Gravel base (simplified)
-  const gravelGeometry = new THREE.BoxGeometry(TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH);
+  const gravelGeometry = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH);
   const gravelMaterial = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
   const gravel = new THREE.Mesh(gravelGeometry, gravelMaterial);
   gravel.position.y = RAIL_HEIGHT * 0.25;
@@ -46,7 +47,7 @@ export function createStraightTrack(isGhost = false, isValid = true) {
   group.add(gravel);
   
   // Fewer sleepers for performance
-  const sleeperGeometry = new THREE.BoxGeometry(TRACK_WIDTH, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
+  const sleeperGeometry = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
   const sleeperMaterial = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
   
   for (let z = -TRACK_LENGTH / 2; z <= TRACK_LENGTH / 2; z += SLEEPER_SPACING) {
@@ -62,13 +63,13 @@ export function createStraightTrack(isGhost = false, isValid = true) {
   const railMaterial = new THREE.MeshLambertMaterial({ color: COLORS.rail, flatShading: true });
   
   const rail1 = new THREE.Mesh(railGeometry, railMaterial);
-  rail1.position.set(-TRACK_WIDTH / 3, RAIL_HEIGHT * 0.8, 0);
+  rail1.position.set(-STRAIGHT_TRACK_WIDTH / 2 + RAIL_HEIGHT * 0.4, RAIL_HEIGHT, 0);
   rail1.castShadow = true;
   rail1.receiveShadow = true;
   group.add(rail1);
   
   const rail2 = new THREE.Mesh(railGeometry, railMaterial);
-  rail2.position.set(TRACK_WIDTH / 3, RAIL_HEIGHT * 0.8, 0);
+  rail2.position.set(STRAIGHT_TRACK_WIDTH / 2 - RAIL_HEIGHT * 0.4, RAIL_HEIGHT, 0);
   rail2.castShadow = true;
   rail2.receiveShadow = true;
   group.add(rail2);
@@ -81,15 +82,15 @@ export function createStraightTrack(isGhost = false, isValid = true) {
  */
 export function createCurvedTrack(isGhost = false, isValid = true) {
   const group = new THREE.Group();
-  const radius = 1.5; // Reduced from 2
+  const radius = 1.2; // Reduced from 1.5
   const segments = 8; // Reduced from 16 for performance
   
   if (isGhost) {
     // Simplified ghost preview
     const curve = new THREE.EllipseCurve(
       0, 0,
-      radius + TRACK_WIDTH / 4,
-      radius + TRACK_WIDTH / 4,
+      radius + CURVED_TRACK_WIDTH / 4,
+      radius + CURVED_TRACK_WIDTH / 4,
       0, 3 * Math.PI / 2,
       true, 0
     );
@@ -132,7 +133,7 @@ export function createCurvedTrack(isGhost = false, isValid = true) {
     const z = Math.sin(angle) * radius;
     
     // Gravel
-    const gravelGeometry = new THREE.BoxGeometry(TRACK_WIDTH * 0.8, RAIL_HEIGHT * 0.5, SLEEPER_SPACING);
+    const gravelGeometry = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.8, RAIL_HEIGHT * 0.5, SLEEPER_SPACING);
     const gravelMaterial = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
     const gravel = new THREE.Mesh(gravelGeometry, gravelMaterial);
     gravel.position.set(x, RAIL_HEIGHT * 0.25, z);
@@ -143,7 +144,7 @@ export function createCurvedTrack(isGhost = false, isValid = true) {
     
     // Sleepers (every other segment)
     if (i % 2 === 0) {
-      const sleeperGeometry = new THREE.BoxGeometry(TRACK_WIDTH * 0.8, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
+      const sleeperGeometry = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.8, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
       const sleeperMaterial = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
       const sleeper = new THREE.Mesh(sleeperGeometry, sleeperMaterial);
       sleeper.position.set(x, RAIL_HEIGHT * 0.5, z);
@@ -155,8 +156,8 @@ export function createCurvedTrack(isGhost = false, isValid = true) {
   }
   
   // Simplified rails using tubes
-  const railCurve = new THREE.EllipseCurve(0, 0, radius - TRACK_WIDTH / 4, radius - TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
-  const railCurve2 = new THREE.EllipseCurve(0, 0, radius + TRACK_WIDTH / 4, radius + TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
+  const railCurve = new THREE.EllipseCurve(0, 0, radius - CURVED_TRACK_WIDTH / 4, radius - CURVED_TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
+  const railCurve2 = new THREE.EllipseCurve(0, 0, radius + CURVED_TRACK_WIDTH / 4, radius + CURVED_TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
   
   const railPoints1 = railCurve.getPoints(segments);
   const railPoints2 = railCurve2.getPoints(segments);
@@ -206,10 +207,10 @@ export function createSupportBeams(height, trackType = 'straight') {
   if (trackType === 'straight') {
     // 4 support beams for straight track
     const positions = [
-      [-TRACK_WIDTH / 3, -height / 2, -TRACK_LENGTH / 3],
-      [TRACK_WIDTH / 3, -height / 2, -TRACK_LENGTH / 3],
-      [-TRACK_WIDTH / 3, -height / 2, TRACK_LENGTH / 3],
-      [TRACK_WIDTH / 3, -height / 2, TRACK_LENGTH / 3],
+      [-STRAIGHT_TRACK_WIDTH / 3, -height / 2, -TRACK_LENGTH / 3],
+      [STRAIGHT_TRACK_WIDTH / 3, -height / 2, -TRACK_LENGTH / 3],
+      [-STRAIGHT_TRACK_WIDTH / 3, -height / 2, TRACK_LENGTH / 3],
+      [STRAIGHT_TRACK_WIDTH / 3, -height / 2, TRACK_LENGTH / 3],
     ];
     
     positions.forEach(pos => {
@@ -221,7 +222,7 @@ export function createSupportBeams(height, trackType = 'straight') {
     });
   } else if (trackType === 'curved') {
     // Support beams along the curve
-    const radius = 1.5;
+    const radius = 1.2; // Updated to match curved track radius
     const segments = 4;
     const angleStep = (Math.PI / 2) / segments;
     
@@ -246,11 +247,11 @@ export function createSupportBeams(height, trackType = 'straight') {
  */
 export function getTrackDimensions(type) {
   if (type === 'straight') {
-    return { width: TRACK_WIDTH, length: TRACK_LENGTH };
+    return { width: STRAIGHT_TRACK_WIDTH, length: TRACK_LENGTH };
   } else if (type === 'curved') {
-    return { width: 1.5, length: 1.5 }; // Adjusted from 2
+    return { width: 1.2, length: 1.2 }; // Adjusted to match curved radius
   }
   return { width: 0, length: 0 };
 }
 
-export { VOXEL_SIZE, TRACK_WIDTH, RAIL_HEIGHT, TRACK_LENGTH };
+export { VOXEL_SIZE, STRAIGHT_TRACK_WIDTH, CURVED_TRACK_WIDTH, RAIL_HEIGHT, TRACK_LENGTH };

@@ -31,17 +31,19 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
 
     if (intersects.length > 0) {
       const point = intersects[0].point;
+      const normal = intersects[0].face ? intersects[0].face.normal : new THREE.Vector3(0, 1, 0);
       
       // Snap to grid
       const snapped = trackManager.snapToGrid(point);
       snapped.y = point.y + heightOffset;
 
-      // Check if valid placement (only for track tools)
+      // Check if valid placement (only for track tools) - pass surface normal
       const valid = selectedTool.type === 'track' ? trackManager.isValidPlacement(
         snapped,
         selectedTool.trackType,
         rotation,
-        point.y
+        point.y,
+        normal
       ) : true;
 
       setIsValidPosition(valid);

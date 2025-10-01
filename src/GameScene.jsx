@@ -13,7 +13,8 @@ function Scene({
   selectedTool, 
   rotation,
   heightOffset,
-  onTracksChange 
+  onTracksChange,
+  tracksVersion // Add tracksVersion prop
 }) {
   const terrainRef = useRef();
   const [terrain, setTerrain] = useState(null);
@@ -63,6 +64,7 @@ function Scene({
       {/* Track System */}
       {terrain && (
         <TrackRenderer
+          key={tracksVersion} // Force re-mount when tracks are cleared
           trackManager={trackManager}
           terrainRef={terrainRef}
           selectedTool={selectedTool}
@@ -124,7 +126,8 @@ export default function GameScene({
   selectedTool,
   rotation,
   heightOffset,
-  onTracksChange 
+  onTracksChange,
+  tracksVersion // Add tracksVersion prop
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -152,6 +155,7 @@ export default function GameScene({
           rotation={rotation}
           heightOffset={heightOffset}
           onTracksChange={handleTracksChange}
+          tracksVersion={tracksVersion} // Pass through to Scene
         />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} />
       </Canvas>

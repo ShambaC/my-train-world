@@ -40,6 +40,7 @@ function App() {
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
   const [rotation, setRotation] = useState(0);
   const [heightOffset, setHeightOffset] = useState(0);
+  const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
   
   const trackManagerRef = useRef(new TrackManager());
   const selectedTool = TOOLS[selectedToolIndex];
@@ -49,6 +50,7 @@ function App() {
     setTerrainSize(newSize);
     // Clear tracks when terrain changes
     trackManagerRef.current.clear();
+    setTracksVersion(v => v + 1); // Trigger re-render
     // Simulate generation delay for UI feedback
     setTimeout(() => setIsGenerating(false), 500);
   };
@@ -98,6 +100,7 @@ function App() {
         selectedTool={selectedTool}
         rotation={rotation * (Math.PI / 180)} // Convert to radians
         heightOffset={heightOffset}
+        tracksVersion={tracksVersion} // Pass version to force re-render
       />
       
       {/* Control Panel */}
@@ -116,9 +119,9 @@ function App() {
         onRotate={handleRotate}
       />
       
-      {/* Height Control Indicator */}
+      {/* Height Control Indicator - Moved to bottom-left */}
       {heightOffset !== 0 && (
-        <div className="absolute top-4 right-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg font-mono text-sm z-30">
+        <div className="absolute bottom-24 left-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg font-mono text-sm z-30">
           <div className="font-bold text-blue-400 mb-1">Bridge Mode</div>
           <div>Height: {heightOffset.toFixed(1)}</div>
           <div className="text-xs text-gray-400 mt-1">

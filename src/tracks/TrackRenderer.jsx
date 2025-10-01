@@ -17,6 +17,7 @@ export default function TrackRenderer({
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
   const trackMeshesRef = useRef(new Map());
+  const mouseDownPosRef = useRef(null); // Track mousedown position to prevent drag-placing
   
   const {
     ghostPosition,
@@ -49,6 +50,11 @@ export default function TrackRenderer({
     const canvas = document.querySelector('canvas');
     if (!canvas) return;
 
+    const handleMouseDown = (e) => {
+      // Record mouse position on mousedown
+      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
     const handleClick = (e) => {
       // Check if click is on canvas (not UI)
       const rect = canvas.getBoundingClientRect();
@@ -59,6 +65,18 @@ export default function TrackRenderer({
         e.clientY <= rect.bottom;
 
       if (!isOnCanvas) return;
+
+      // Prevent placement if mouse moved significantly (drag)
+      if (mouseDownPosRef.current) {
+        const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+        const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+        const dragThreshold = 5; // pixels
+        
+        if (dx > dragThreshold || dy > dragThreshold) {
+          mouseDownPosRef.current = null;
+          return; // Don't place if user was dragging
+        }
+      }
 
       if (selectedTool?.type === 'delete') {
         // Delete track at position
@@ -77,10 +95,16 @@ export default function TrackRenderer({
           onTracksChange?.(trackManager.getAllTracks());
         }
       }
+      
+      mouseDownPosRef.current = null;
     };
 
+    canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('click', handleClick);
-    return () => canvas.removeEventListener('click', handleClick);
+    return () => {
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('click', handleClick);
+    };
   }, [selectedTool, ghostPosition, isValidPosition, handlePlacement, handleDelete, trackManager, onTracksChange]);
 
   // Cleanup old track meshes
@@ -106,7 +130,7 @@ export default function TrackRenderer({
     }
   }, [tracks]);
 
-  // Create ghost mesh
+  // Create ghost mesh - add rotation and heightOffset to dependencies
   const ghostMesh = useMemo(() => {
     if (!ghostPosition || !selectedTool || selectedTool.type === 'delete') {
       // Cleanup old ghost mesh
@@ -134,7 +158,7 @@ export default function TrackRenderer({
     
     ghostMeshRef.current = mesh;
     return mesh;
-  }, [ghostPosition, isValidPosition, selectedTool]);
+  }, [ghostPosition, isValidPosition, selectedTool, rotation, heightOffset]); // Add rotation and heightOffset
 
   return (
     <group>

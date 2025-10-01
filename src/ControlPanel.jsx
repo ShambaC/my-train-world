@@ -8,7 +8,7 @@ export default function ControlPanel({
 }) {
   const [length, setLength] = useState(50);
   const [breadth, setBreadth] = useState(50);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [isPanelOpen, setIsPanelOpen] = useState(false); // Start closed
 
   const handleGenerate = () => {
     onTerrainSizeChange({ length: parseInt(length), breadth: parseInt(breadth) });
@@ -42,9 +42,13 @@ export default function ControlPanel({
         </svg>
       </button>
 
-      {/* Control Panel */}
-      {isPanelOpen && (
-        <div className="fixed top-20 right-4 z-40 bg-gray-800 text-white rounded-lg shadow-2xl p-6 w-80 max-h-[80vh] overflow-y-auto">
+      {/* Side Panel with sliding animation and transparency */}
+      <div 
+        className={`fixed top-0 right-0 h-full z-40 bg-gray-900 bg-opacity-90 backdrop-blur-sm text-white shadow-2xl w-80 max-h-screen overflow-y-auto transition-transform duration-300 ease-in-out ${
+          isPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="p-6 pt-20">
           <h2 className="text-xl font-bold mb-4 text-blue-400">Train World Controls</h2>
           
           {/* Terrain Size Section */}
@@ -179,7 +183,7 @@ export default function ControlPanel({
             </p>
           </div>
         </div>
-      )}
+      </div>
     </>
   );
 }
