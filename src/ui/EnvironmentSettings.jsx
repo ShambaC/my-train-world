@@ -11,7 +11,9 @@ function EnvironmentSettings({
   timeOfDay, 
   onTimeChange, 
   fogEnabled, 
-  onFogEnabledChange 
+  onFogEnabledChange,
+  fogDensity,
+  onFogDensityChange
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -71,10 +73,35 @@ function EnvironmentSettings({
             </button>
           </div>
 
+          {/* Fog Density Slider */}
+          {fogEnabled && fogDensity !== undefined && onFogDensityChange && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Fog Density: {(fogDensity * 100).toFixed(0)}%
+              </label>
+              <input
+                type="range"
+                min="0.005"
+                max="0.035"
+                step="0.001"
+                value={fogDensity}
+                onChange={(e) => onFogDensityChange(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>Clear</span>
+                <span>Thick</span>
+              </div>
+            </div>
+          )}
+
           {/* Current Settings Display */}
           <div className="pt-2 border-t border-gray-700 text-xs text-gray-400">
             <div>Current: {TIME_OPTIONS.find(t => t.value === timeOfDay)?.label}</div>
             <div>Fog: {fogEnabled ? 'Enabled' : 'Disabled'}</div>
+            {fogEnabled && fogDensity !== undefined && (
+              <div>Density: {(fogDensity * 100).toFixed(0)}%</div>
+            )}
           </div>
         </div>
       )}

@@ -50,22 +50,22 @@ export function getLightingForTime(timeOfDay) {
     dawn: {
       ambient: { intensity: 0.4, color: 0xffa07a },
       directional: { intensity: 0.6, color: 0xffb347, position: [30, 20, 30] },
-      fog: { color: 0xffa07a, near: 50, far: 200 },
+      fog: { color: 0xffb89f, density: 0.015 }, // Warm misty morning
     },
     day: {
       ambient: { intensity: 0.6, color: 0xffffff },
       directional: { intensity: 1.0, color: 0xffffff, position: [50, 50, 25] },
-      fog: { color: 0x87ceeb, near: 100, far: 300 },
+      fog: { color: 0xd4e8f7, density: 0.008 }, // Light blue sky haze
     },
     dusk: {
       ambient: { intensity: 0.3, color: 0xff6b47 },
       directional: { intensity: 0.5, color: 0xff8c47, position: [30, 15, -30] },
-      fog: { color: 0xff6b47, near: 40, far: 180 },
+      fog: { color: 0xff9777, density: 0.018 }, // Orange/pink sunset haze
     },
     night: {
       ambient: { intensity: 0.2, color: 0x4169e1 },
       directional: { intensity: 0.3, color: 0x6495ed, position: [-20, 30, -20] },
-      fog: { color: 0x191970, near: 30, far: 150 },
+      fog: { color: 0x2b3a5f, density: 0.025 }, // Deep blue night mist
     },
   };
 

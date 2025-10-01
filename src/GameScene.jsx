@@ -6,6 +6,8 @@ import { generateTerrain, createGrid } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
 import TrainRenderer from './trains/TrainRenderer';
 import Skybox, { getLightingForTime } from './environment/Skybox';
+import CameraController from './environment/CameraController';
+import { createForestBorder } from './environment/ForestBorder';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -19,11 +21,13 @@ function Scene({
   onTracksChange,
   tracksVersion,
   timeOfDay,
-  fogEnabled
+  fogEnabled,
+  fogDensity
 }) {
   const terrainRef = useRef();
     const { camera, scene } = useThree();
   const [terrain, setTerrain] = useState(null);
+  const [forestBorder, setForestBorder] = useState(null);
   
   // Setup lighting based on time of day
   useEffect(() => {
@@ -43,23 +47,28 @@ function Scene({
       existingDirectional.position.set(...lighting.directional.position);
     }
     
-    // Update fog
+    // Update fog - using FogExp2 for more natural distance-based fog
     if (fogEnabled && lighting.fog) {
-      scene.fog = new THREE.Fog(
+      // Use custom density if provided, otherwise use preset
+      const density = fogDensity !== undefined ? fogDensity : lighting.fog.density;
+      scene.fog = new THREE.FogExp2(
         lighting.fog.color,
-        lighting.fog.near,
-        lighting.fog.far
+        density
       );
     } else {
       scene.fog = null;
     }
-  }, [timeOfDay, fogEnabled, scene]);
+  }, [timeOfDay, fogEnabled, fogDensity, scene]);
 
 
   useEffect(() => {
     // Generate terrain when size changes
     const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth);
     setTerrain(newTerrain);
+    
+    // Generate forest border around terrain
+    const border = createForestBorder(terrainSize, 1, 0.1);
+    setForestBorder(border);
     
     if (onTerrainGenerated) {
       // Count voxels for debug info
@@ -71,11 +80,22 @@ function Scene({
       });
       onTerrainGenerated({ voxelCount });
     }
+
+    // Cleanup old border on unmount
+    return () => {
+      if (border) {
+        border.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+      }
+    };
   }, [terrainSize, onTerrainGenerated]);
 
   return (
     <>
       <Skybox timeOfDay={timeOfDay} />
+      <CameraController terrainSize={terrainSize} enabled={true} />
       
       {/* Lighting */}
       <ambientLight name="ambientLight" intensity={0.5} />
@@ -96,6 +116,11 @@ function Scene({
       {/* Terrain */}
       {terrain && (
         <primitive object={terrain} ref={terrainRef} />
+      )}
+
+      {/* Forest Border */}
+      {forestBorder && (
+        <primitive object={forestBorder} />
       )}
       
       {/* Track System */}
@@ -146,7 +171,8 @@ export default function GameScene({
   onTracksChange,
   tracksVersion,
   timeOfDay = 'day',
-  fogEnabled = true
+  fogEnabled = true,
+  fogDensity
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -187,6 +213,7 @@ export default function GameScene({
           tracksVersion={tracksVersion}
           timeOfDay={timeOfDay}
           fogEnabled={fogEnabled}
+          fogDensity={fogDensity}
         />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} />
       </Canvas>

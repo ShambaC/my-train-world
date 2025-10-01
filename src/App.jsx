@@ -50,6 +50,7 @@ function App() {
   const [heightOffset, setHeightOffset] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState('day');
   const [fogEnabled, setFogEnabled] = useState(true);
+  const [fogDensity, setFogDensity] = useState(0.012); // Default medium density
   const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
   
   const trackManagerRef = useRef(new TrackManager());
@@ -116,6 +117,7 @@ function App() {
         tracksVersion={tracksVersion}
         timeOfDay={timeOfDay}
         fogEnabled={fogEnabled}
+        fogDensity={fogDensity}
       />
       
       {/* Control Panel */}
@@ -129,6 +131,8 @@ function App() {
         onTimeChange={setTimeOfDay}
         fogEnabled={fogEnabled}
         onFogEnabledChange={setFogEnabled}
+        fogDensity={fogDensity}
+        onFogDensityChange={setFogDensity}
       />
       
       {/* Hotbar */}

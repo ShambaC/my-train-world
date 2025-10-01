@@ -11,7 +11,9 @@ export default function ControlPanel({
   timeOfDay,
   onTimeChange,
   fogEnabled,
-  onFogEnabledChange
+  onFogEnabledChange,
+  fogDensity,
+  onFogDensityChange
 }) {
   const [length, setLength] = useState(50);
   const [breadth, setBreadth] = useState(50);
@@ -167,6 +169,8 @@ export default function ControlPanel({
               onTimeChange={onTimeChange}
               fogEnabled={fogEnabled}
               onFogEnabledChange={onFogEnabledChange}
+              fogDensity={fogDensity}
+              onFogDensityChange={onFogDensityChange}
             />
           </div>
 
