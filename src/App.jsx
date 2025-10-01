@@ -1,50 +1,51 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import GameScene from "./GameScene";
+import ControlPanel from "./ControlPanel";
+import LoadingScreen from "./LoadingScreen";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [terrainSize, setTerrainSize] = useState({ length: 50, breadth: 50 });
+  const [showDebug, setShowDebug] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  const handleTerrainSizeChange = (newSize) => {
+    setIsGenerating(true);
+    setTerrainSize(newSize);
+    // Simulate generation delay for UI feedback
+    setTimeout(() => setIsGenerating(false), 500);
+  };
+
+  if (isLoading) {
+    return <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />;
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="w-full h-screen bg-gray-900 overflow-hidden">
+      {/* 3D Game Scene */}
+      <GameScene 
+        terrainSize={terrainSize} 
+        showDebug={showDebug}
+      />
+      
+      {/* Control Panel */}
+      <ControlPanel
+        onTerrainSizeChange={handleTerrainSizeChange}
+        onToggleDebug={setShowDebug}
+        showDebug={showDebug}
+        isGenerating={isGenerating}
+      />
+      
+      {/* Title Overlay */}
+      <div className="absolute bottom-4 left-4 z-30">
+        <h1 className="text-white text-3xl font-bold drop-shadow-lg">
+          🚂 MyTrainWorld
+        </h1>
+        <p className="text-gray-300 text-sm mt-1 drop-shadow">
+          Build your railway empire
+        </p>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+    </div>
   );
 }
 
