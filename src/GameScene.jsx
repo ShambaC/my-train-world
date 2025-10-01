@@ -67,7 +67,7 @@ function Scene({
     setTerrain(newTerrain);
     
     // Generate forest border around terrain
-    const border = createForestBorder(terrainSize, 1, 0.1);
+    const border = createForestBorder(terrainSize, 8, 0.33);
     setForestBorder(border);
     
     if (onTerrainGenerated) {
