@@ -3,7 +3,7 @@ import * as THREE from 'three';
 const VOXEL_SIZE = 0.5;
 // Tracks are now exactly 1x1 voxel (0.5 units = 1 voxel)
 const STRAIGHT_TRACK_WIDTH = 0.5;
-const CURVED_TRACK_WIDTH = 0.5;
+const CURVED_TRACK_WIDTH = 0.7;
 const TRACK_LENGTH = 0.5; // 1 voxel long
 const RAIL_HEIGHT = 0.05;
 const SLEEPER_SPACING = 0.15;
@@ -83,7 +83,7 @@ export function createStraightTrack(isGhost = false, isValid = true) {
  */
 export function createCurvedTrack(isGhost = false, isValid = true) {
   const group = new THREE.Group();
-  const radius = 0.5; // 1 voxel radius for 90-degree curve
+  const radius = 0.25; // 1 voxel radius for 90-degree curve
   const segments = 6; // Fewer segments for small size
   
   if (isGhost) {

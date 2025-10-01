@@ -91,40 +91,11 @@ function Scene({
       <OrbitControls
         enableDamping
         dampingFactor={0.05}
-        minDistance={5}
+        minDistance={0.2}
         maxDistance={100}
         maxPolarAngle={Math.PI / 2.1}
       />
     </>
-  );
-}
-
-// FPS Counter Component
-function FPSCounter({ show }) {
-  const [fps, setFps] = useState(0);
-  const frameCount = useRef(0);
-  const lastTime = useRef(performance.now());
-
-  useFrame(() => {
-    if (!show) return;
-    
-    frameCount.current++;
-    const currentTime = performance.now();
-    const deltaTime = currentTime - lastTime.current;
-
-    if (deltaTime >= 1000) {
-      setFps(Math.round((frameCount.current * 1000) / deltaTime));
-      frameCount.current = 0;
-      lastTime.current = currentTime;
-    }
-  });
-
-  if (!show) return null;
-
-  return (
-    <mesh position={[0, 0, 0]}>
-      {/* Hidden mesh - actual FPS display is handled by parent component */}
-    </mesh>
   );
 }
 

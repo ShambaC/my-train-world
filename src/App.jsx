@@ -57,8 +57,9 @@ function App() {
   const handleTerrainSizeChange = (newSize) => {
     setIsGenerating(true);
     setTerrainSize(newSize);
-    // Clear tracks when terrain changes
+    // Clear tracks AND trains when terrain changes
     trackManagerRef.current.clear();
+    trainManagerRef.current.clear();
     setTracksVersion(v => v + 1); // Trigger re-render
     // Simulate generation delay for UI feedback
     setTimeout(() => setIsGenerating(false), 500);
@@ -119,6 +120,7 @@ function App() {
         onToggleDebug={setShowDebug}
         showDebug={showDebug}
         isGenerating={isGenerating}
+        trainManager={trainManagerRef.current}
       />
       
       {/* Hotbar */}

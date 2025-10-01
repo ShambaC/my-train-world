@@ -24,7 +24,61 @@ export class TrackManager {
     };
     
     this.tracks.set(id, track);
+    
+    // Auto-connect to nearby tracks
+    this.autoConnectTrack(track);
+    
     return track;
+  }
+
+  /**
+   * Automatically connect a track to nearby compatible tracks
+   */
+  autoConnectTrack(track) {
+    const connectionDistance = 0.6; // Slightly larger than track size for tolerance
+    
+    for (const [otherId, otherTrack] of this.tracks) {
+      if (otherId === track.id) continue;
+      
+      // Check if tracks are at similar heights
+      if (Math.abs(track.position.y - otherTrack.position.y) > 0.3) continue;
+      
+      // Calculate distance between tracks
+      const dx = track.position.x - otherTrack.position.x;
+      const dz = track.position.z - otherTrack.position.z;
+      const distance = Math.sqrt(dx * dx + dz * dz);
+      
+      if (distance < connectionDistance && distance > 0.1) {
+        // Tracks are close enough - determine connection points
+        // Calculate angle between tracks
+        const angle = Math.atan2(dz, dx) * (180 / Math.PI);
+        
+        // Determine which ends to connect based on track rotations and positions
+        this.connectTracks(track, otherTrack, angle);
+      }
+    }
+  }
+
+  /**
+   * Connect two tracks at appropriate ends
+   */
+  connectTracks(track1, track2, angleBetween) {
+    // Simplified connection logic - connect if tracks are adjacent
+    // Front/back determined by rotation and relative position
+    
+    const rot1 = track1.rotation % 360;
+    const rot2 = track2.rotation % 360;
+    
+    // If no existing connections, create them
+    if (!track1.connections.front && !track2.connections.back) {
+      track1.connections.front = track2.id;
+      track2.connections.back = track1.id;
+      console.log(`Connected ${track1.id} (front) to ${track2.id} (back)`);
+    } else if (!track1.connections.back && !track2.connections.front) {
+      track1.connections.back = track2.id;
+      track2.connections.front = track1.id;
+      console.log(`Connected ${track1.id} (back) to ${track2.id} (front)`);
+    }
   }
 
   /**
@@ -74,7 +128,7 @@ export class TrackManager {
    */
   isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
     // Check if on terrain (not in water)
-    if (terrainHeight < 2) return false;
+    if (terrainHeight < 1) return false;
     
     // Check if placement is on top surface only (not on sides)
     if (surfaceNormal) {
@@ -86,7 +140,7 @@ export class TrackManager {
     }
     
     // Check if position is already occupied
-    const existing = this.getTrackAtPosition(position, 0.8);
+    const existing = this.getTrackAtPosition(position, 0.5);
     if (existing) return false;
     
     // Check slope (max gradient)

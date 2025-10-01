@@ -100,11 +100,32 @@ export default function TrackRenderer({
           console.log('[DELETE] Track found:', trackToDelete);
           if (trackToDelete) {
             console.log('[DELETE] Removing track:', trackToDelete.id);
+            
+            // Also remove any trains on this track
+            const trainsOnTrack = trainManager.getAllTrains().filter(
+              train => train.currentTrackId === trackToDelete.id
+            );
+            trainsOnTrack.forEach(train => {
+              console.log('[DELETE] Removing train on track:', train.id);
+              trainManager.removeTrain(train.id);
+            });
+            
             trackManager.removeTrack(trackToDelete.id);
             setTracks(trackManager.getAllTracks());
             onTracksChange?.(trackManager.getAllTracks());
             console.log('[DELETE] Tracks after removal:', trackManager.getAllTracks().length);
           } else {
+            // Try to delete a train directly
+            const trains = trainManager.getAllTrains();
+            for (const train of trains) {
+              const dx = Math.abs(train.position.x - ghostPosition.x);
+              const dz = Math.abs(train.position.z - ghostPosition.z);
+              if (dx < 0.5 && dz < 0.5) {
+                console.log('[DELETE] Removing train:', train.id);
+                trainManager.removeTrain(train.id);
+                break;
+              }
+            }
             console.log('[DELETE] No track found at position');
           }
         } else {

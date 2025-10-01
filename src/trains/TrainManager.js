@@ -28,6 +28,7 @@ export class TrainManager {
       speed: 0.5, // units per second
       position: { ...startTrack.position },
       rotation: startTrack.rotation,
+      active: true, // New: whether train is moving
     };
 
     this.trains.set(id, train);
@@ -46,6 +47,9 @@ export class TrainManager {
    */
   update(deltaTime) {
     for (const [id, train] of this.trains) {
+      // Skip inactive trains
+      if (!train.active) continue;
+      
       // Update progress along current track
       train.progress += (train.speed * deltaTime * train.direction);
 
@@ -140,9 +144,32 @@ export class TrainManager {
   }
 
   /**
+   * Toggle train active state
+   */
+  toggleTrain(id) {
+    const train = this.trains.get(id);
+    if (train) {
+      train.active = !train.active;
+      return train.active;
+    }
+    return false;
+  }
+
+  /**
+   * Set train active state
+   */
+  setTrainActive(id, active) {
+    const train = this.trains.get(id);
+    if (train) {
+      train.active = active;
+    }
+  }
+
+  /**
    * Clear all trains
    */
   clear() {
     this.trains.clear();
+    this.nextId = 0;
   }
 }

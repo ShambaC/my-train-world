@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import TrainControl from './ui/TrainControl';
 
 export default function ControlPanel({ 
   onTerrainSizeChange, 
   onToggleDebug, 
   showDebug,
-  isGenerating 
+  isGenerating,
+  trainManager // Add trainManager prop
 }) {
   const [length, setLength] = useState(50);
   const [breadth, setBreadth] = useState(50);
@@ -151,6 +153,11 @@ export default function ControlPanel({
                 <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               </div>
             </label>
+          </div>
+
+          {/* Train Control Section */}
+          <div className="pt-4 border-t border-gray-700">
+            <TrainControl trainManager={trainManager} />
           </div>
 
           {/* Track System Info */}
