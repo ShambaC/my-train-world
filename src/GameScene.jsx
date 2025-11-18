@@ -95,7 +95,7 @@ function Scene({
   return (
     <>
       <Skybox timeOfDay={timeOfDay} />
-      <CameraController terrainSize={terrainSize} enabled={true} />
+      <CameraController terrainSize={terrainSize} enabled={false} />
       
       {/* Lighting */}
       <ambientLight name="ambientLight" intensity={0.5} />
