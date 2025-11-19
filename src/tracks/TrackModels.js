@@ -8,6 +8,10 @@ const TRACK_LENGTH = 0.5; // 1 voxel long
 const RAIL_HEIGHT = 0.05;
 const SLEEPER_SPACING = 0.15;
 
+// Calculate rail offset to ensure alignment between straight and curved tracks
+// Straight track rails are at +/- (STRAIGHT_TRACK_WIDTH / 2 - RAIL_HEIGHT * 0.4)
+const RAIL_OFFSET = STRAIGHT_TRACK_WIDTH / 2 - RAIL_HEIGHT * 0.4;
+
 // Track colors
 const COLORS = {
   rail: 0x4a4a4a,        // Dark gray steel
@@ -157,8 +161,9 @@ export function createCurvedTrack(isGhost = false, isValid = true) {
   }
   
   // Simplified rails using tubes
-  const railCurve = new THREE.EllipseCurve(0, 0, radius - CURVED_TRACK_WIDTH / 4, radius - CURVED_TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
-  const railCurve2 = new THREE.EllipseCurve(0, 0, radius + CURVED_TRACK_WIDTH / 4, radius + CURVED_TRACK_WIDTH / 4, 0, Math.PI / 2, false, 0);
+  // Use RAIL_OFFSET to ensure alignment with straight tracks
+  const railCurve = new THREE.EllipseCurve(0, 0, radius - RAIL_OFFSET, radius - RAIL_OFFSET, 0, Math.PI / 2, false, 0);
+  const railCurve2 = new THREE.EllipseCurve(0, 0, radius + RAIL_OFFSET, radius + RAIL_OFFSET, 0, Math.PI / 2, false, 0);
   
   const railPoints1 = railCurve.getPoints(segments);
   const railPoints2 = railCurve2.getPoints(segments);

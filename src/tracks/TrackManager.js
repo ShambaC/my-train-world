@@ -35,27 +35,86 @@ export class TrackManager {
    * Automatically connect a track to nearby compatible tracks
    */
   autoConnectTrack(track) {
-    const connectionDistance = 0.6; // Slightly larger than track size for tolerance
-    
+    const endpoints = this.getEndpoints(track);
+    const tolerance = 0.1; // Tolerance for connection
+
     for (const [otherId, otherTrack] of this.tracks) {
       if (otherId === track.id) continue;
       
-      // Check if tracks are at similar heights
-      if (Math.abs(track.position.y - otherTrack.position.y) > 0.3) continue;
+      // Check height difference
+      if (Math.abs(track.position.y - otherTrack.position.y) > 0.1) continue;
+
+      const otherEndpoints = this.getEndpoints(otherTrack);
+
+      // Check all 4 combinations: Front-Front, Front-Back, Back-Front, Back-Back
       
-      // Calculate distance between tracks
-      const dx = track.position.x - otherTrack.position.x;
-      const dz = track.position.z - otherTrack.position.z;
-      const distance = Math.sqrt(dx * dx + dz * dz);
-      
-      if (distance < connectionDistance && distance > 0.1) {
-        // Tracks are close enough - determine connection points
-        // Calculate angle between tracks
-        const angle = Math.atan2(dz, dx) * (180 / Math.PI);
-        
-        // Determine which ends to connect based on track rotations and positions
-        this.connectTracks(track, otherTrack, angle);
+      // Track Front -> Other Front
+      if (!track.connections.front && !otherTrack.connections.front && 
+          this.distance(endpoints.front, otherEndpoints.front) < tolerance) {
+        track.connections.front = otherId;
+        otherTrack.connections.front = track.id;
       }
+      // Track Front -> Other Back
+      else if (!track.connections.front && !otherTrack.connections.back && 
+               this.distance(endpoints.front, otherEndpoints.back) < tolerance) {
+        track.connections.front = otherId;
+        otherTrack.connections.back = track.id;
+      }
+      
+      // Track Back -> Other Front
+      if (!track.connections.back && !otherTrack.connections.front && 
+          this.distance(endpoints.back, otherEndpoints.front) < tolerance) {
+        track.connections.back = otherId;
+        otherTrack.connections.front = track.id;
+      }
+      // Track Back -> Other Back
+      else if (!track.connections.back && !otherTrack.connections.back && 
+               this.distance(endpoints.back, otherEndpoints.back) < tolerance) {
+        track.connections.back = otherId;
+        otherTrack.connections.back = track.id;
+      }
+    }
+  }
+
+  distance(p1, p2) {
+    const dx = p1.x - p2.x;
+    const dz = p1.z - p2.z;
+    return Math.sqrt(dx * dx + dz * dz);
+  }
+
+  getEndpoints(track) {
+    const pos = track.position;
+    // Convert rotation to radians (negative because Three.js rotation is CCW but our grid logic might be different? 
+    // Actually standard math is CCW. Let's assume standard.)
+    const rotRad = (track.rotation * Math.PI) / 180;
+    const cos = Math.cos(rotRad);
+    const sin = Math.sin(rotRad);
+
+    const rotate = (x, z) => ({
+      x: x * cos - z * sin,
+      z: x * sin + z * cos
+    });
+
+    if (track.type === 'straight') {
+      // Straight track is aligned along Z axis by default?
+      // In TrackModels, createStraightTrack creates geometry along Z axis (-0.25 to 0.25)
+      // So Front is (0, 0.25), Back is (0, -0.25)
+      const front = rotate(0, 0.25);
+      const back = rotate(0, -0.25);
+      return {
+        front: { x: pos.x + front.x, z: pos.z + front.z },
+        back: { x: pos.x + back.x, z: pos.z + back.z }
+      };
+    } else {
+      // Curved track
+      // In TrackModels, it goes from (0.25, 0) to (0, 0.25)
+      // Let's define Front as (0, 0.25) [Angle 90] and Back as (0.25, 0) [Angle 0]
+      const front = rotate(0, 0.25);
+      const back = rotate(0.25, 0);
+      return {
+        front: { x: pos.x + front.x, z: pos.z + front.z },
+        back: { x: pos.x + back.x, z: pos.z + back.z }
+      };
     }
   }
 
@@ -63,20 +122,7 @@ export class TrackManager {
    * Connect two tracks at appropriate ends
    */
   connectTracks(track1, track2, angleBetween) {
-    // Simplified connection logic - connect if tracks are adjacent
-    // Front/back determined by rotation and relative position
-    
-    const rot1 = track1.rotation % 360;
-    const rot2 = track2.rotation % 360;
-    
-    // If no existing connections, create them
-    if (!track1.connections.front && !track2.connections.back) {
-      track1.connections.front = track2.id;
-      track2.connections.back = track1.id;
-    } else if (!track1.connections.back && !track2.connections.front) {
-      track1.connections.back = track2.id;
-      track2.connections.front = track1.id;
-    }
+    // Deprecated - logic moved to autoConnectTrack
   }
 
   /**
