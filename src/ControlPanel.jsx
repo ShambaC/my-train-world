@@ -13,7 +13,9 @@ export default function ControlPanel({
   fogEnabled,
   onFogEnabledChange,
   fogDensity,
-  onFogDensityChange
+  onFogDensityChange,
+  tiltShiftEnabled,
+  onTiltShiftChange
 }) {
   const [length, setLength] = useState(50);
   const [breadth, setBreadth] = useState(50);
@@ -171,6 +173,8 @@ export default function ControlPanel({
               onFogEnabledChange={onFogEnabledChange}
               fogDensity={fogDensity}
               onFogDensityChange={onFogDensityChange}
+              tiltShiftEnabled={tiltShiftEnabled}
+              onTiltShiftChange={onTiltShiftChange}
             />
           </div>
 

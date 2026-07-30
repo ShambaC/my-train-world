@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { createStraightTrack, createCurvedTrack, createSupportBeams } from './TrackModels';
+import { createTrainGhost } from '../trains/TrainModel';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import * as THREE from 'three';
 
@@ -158,10 +159,9 @@ export default function TrackRenderer({
     }
   }, [tracks]);
 
-  // Create ghost mesh - add rotation and heightOffset to dependencies
+  // Create ghost mesh - handles tracks, train placement, and delete red silhouette
   const ghostMesh = useMemo(() => {
-    if (!ghostPosition || !selectedTool || selectedTool.type === 'delete') {
-      // Cleanup old ghost mesh
+    if (!ghostPosition || !selectedTool) {
       if (ghostMeshRef.current) {
         ghostMeshRef.current.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
@@ -172,7 +172,6 @@ export default function TrackRenderer({
       return null;
     }
 
-    // Cleanup old ghost mesh before creating new one
     if (ghostMeshRef.current) {
       ghostMeshRef.current.traverse((child) => {
         if (child.geometry) child.geometry.dispose();
@@ -180,27 +179,43 @@ export default function TrackRenderer({
       });
     }
 
-    const mesh = ghostPosition.type === 'straight'
-      ? createStraightTrack(true, isValidPosition)
-      : createCurvedTrack(true, isValidPosition);
-    
+    let mesh = null;
+
+    if (selectedTool.type === 'train') {
+      const trackUnder = trackManager.getTrackAtPosition(ghostPosition, 0.8);
+      mesh = createTrainGhost(!!trackUnder);
+    } else if (selectedTool.type === 'delete') {
+      const trackToDelete = trackManager.getTrackAtPosition(ghostPosition, 1.0);
+      if (trackToDelete) {
+        mesh = trackToDelete.type === 'straight'
+          ? createStraightTrack(true, false)
+          : createCurvedTrack(true, false);
+      } else {
+        mesh = createTrainGhost(false);
+      }
+    } else if (selectedTool.type === 'track') {
+      mesh = ghostPosition.type === 'straight'
+        ? createStraightTrack(true, isValidPosition)
+        : createCurvedTrack(true, isValidPosition);
+    }
+
     ghostMeshRef.current = mesh;
     return mesh;
-  }, [ghostPosition, isValidPosition, selectedTool, rotation, heightOffset]); // Add rotation and heightOffset
+  }, [ghostPosition, isValidPosition, selectedTool, rotation, heightOffset, trackManager]);
 
   return (
     <group>
       {/* Render placed tracks */}
       {tracks.map((track) => {
-        // Check if we already have a mesh for this track
         if (!trackMeshesRef.current.has(track.id)) {
           const trackMesh = track.type === 'straight' 
             ? createStraightTrack(false) 
             : createCurvedTrack(false);
           
-          // Add support beams if elevated
-          if (track.heightOffset > 0.5) {
-            const beams = createSupportBeams(track.heightOffset, track.type);
+          // Support beams if elevated (heightOffset > 0.05 or positioned above 0.6)
+          const effectiveHeight = track.heightOffset > 0.05 ? track.heightOffset : (track.position.y > 0.6 ? track.position.y : 0);
+          if (effectiveHeight > 0.05) {
+            const beams = createSupportBeams(effectiveHeight, track.type);
             if (beams) {
               trackMesh.add(beams);
             }

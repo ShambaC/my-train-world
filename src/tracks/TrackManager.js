@@ -86,7 +86,7 @@ export class TrackManager {
     const pos = track.position;
     // Convert rotation to radians (negative because Three.js rotation is CCW but our grid logic might be different? 
     // Actually standard math is CCW. Let's assume standard.)
-    const rotRad = (track.rotation * Math.PI) / 180;
+    const rotRad = track.rotation;
     const cos = Math.cos(rotRad);
     const sin = Math.sin(rotRad);
 

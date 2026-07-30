@@ -13,7 +13,9 @@ function EnvironmentSettings({
   fogEnabled, 
   onFogEnabledChange,
   fogDensity,
-  onFogDensityChange
+  onFogDensityChange,
+  tiltShiftEnabled,
+  onTiltShiftChange
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -95,13 +97,30 @@ function EnvironmentSettings({
             </div>
           )}
 
+          {/* Miniature Tilt-Shift Toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">
+              🔍 Miniature Mode (Tilt-Shift)
+            </label>
+            <button
+              onClick={() => onTiltShiftChange && onTiltShiftChange(!tiltShiftEnabled)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                tiltShiftEnabled ? 'bg-blue-600' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  tiltShiftEnabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Current Settings Display */}
           <div className="pt-2 border-t border-gray-700 text-xs text-gray-400">
             <div>Current: {TIME_OPTIONS.find(t => t.value === timeOfDay)?.label}</div>
             <div>Fog: {fogEnabled ? 'Enabled' : 'Disabled'}</div>
-            {fogEnabled && fogDensity !== undefined && (
-              <div>Density: {(fogDensity * 100).toFixed(0)}%</div>
-            )}
+            <div>Miniature: {tiltShiftEnabled ? 'Active' : 'Off'}</div>
           </div>
         </div>
       )}

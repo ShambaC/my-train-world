@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { createTrainEngine } from './TrainModel';
+import SmokeParticles from './SmokeParticles';
 import * as THREE from 'three';
 
 /**
@@ -20,7 +21,7 @@ export default function TrainRenderer({ trainManager }) {
     updateTrains();
     
     // Set up interval to check for new trains
-    const interval = setInterval(updateTrains, 1000);
+    const interval = setInterval(updateTrains, 500);
     return () => clearInterval(interval);
   }, [trainManager]);
 
@@ -48,22 +49,28 @@ export default function TrainRenderer({ trainManager }) {
 
   return (
     <group>
-      {trains.map((train) => {
+      {trains.map((train, index) => {
         // Create mesh if it doesn't exist
         if (!trainMeshesRef.current.has(train.id)) {
-          const trainMesh = createTrainEngine();
+          const trainMesh = createTrainEngine(index);
           trainMeshesRef.current.set(train.id, trainMesh);
         }
 
         const trainMesh = trainMeshesRef.current.get(train.id);
 
         return (
-          <primitive
-            key={train.id}
-            object={trainMesh}
-            position={[train.position.x, train.position.y + 0.1, train.position.z]}
-            rotation={[0, (train.rotation * Math.PI) / 180, 0]}
-          />
+          <group key={train.id}>
+            <primitive
+              object={trainMesh}
+              position={[train.position.x, train.position.y + 0.1, train.position.z]}
+              rotation={[0, train.rotation, 0]}
+            />
+            <SmokeParticles
+              position={[train.position.x, train.position.y + 0.1, train.position.z]}
+              rotation={[0, train.rotation, 0]}
+              active={train.active}
+            />
+          </group>
         );
       })}
     </group>

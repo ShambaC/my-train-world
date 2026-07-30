@@ -19,21 +19,31 @@ const TERRAIN_COLORS = {
 
 // --- generateVegetation function remains unchanged ---
 function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed) {
-  // This function is fine as it is, since it only places vegetation
-  // on the top surface, which is always visible. No changes needed here.
-  const noise2D = createNoise2D(() => seed * 2); 
-  const vegetationInstances = new Map();
+  const noise2D = createNoise2D(() => seed * 2);
+  const treeTrunks = [];
+  const treeCones1 = [];
+  const treeCones2 = [];
+  const bushes = [];
   
   const vegetationDensity = 0.08; 
   const minSpacing = 3; 
-  
   const placedVegetation = [];
   
-  for (let x = 0; x < length; x += 2) { 
-    for (let z = 0; z < breadth; z += 2) {
+  const trunkGeo = new THREE.CylinderGeometry(0.04, 0.07, 0.5, 5);
+  const cone1Geo = new THREE.ConeGeometry(0.35, 0.5, 5);
+  const cone2Geo = new THREE.ConeGeometry(0.25, 0.4, 5);
+  const bushGeo = new THREE.DodecahedronGeometry(0.2, 0);
+
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e18, flatShading: true });
+  const leafMat1 = new THREE.MeshLambertMaterial({ color: 0x2d5a2d, flatShading: true });
+  const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x3a7a3a, flatShading: true });
+  const bushMat = new THREE.MeshLambertMaterial({ color: 0x448844, flatShading: true });
+
+  for (let x = 1; x < length - 1; x += 2) { 
+    for (let z = 1; z < breadth - 1; z += 2) {
       const height = heightMap[x][z];
       
-      if (height <= 1) continue;
+      if (height <= 1) continue; // Skip water level
       
       const vegetationNoise = noise2D(x * 0.1, z * 0.1);
       if (vegetationNoise < (1 - vegetationDensity * 2)) continue;
@@ -49,80 +59,71 @@ function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, 
       if (tooClose) continue;
       
       const worldX = (x - length / 2) * VOXEL_SIZE;
+      const worldY = (height + 0.5) * VOXEL_SIZE;
       const worldZ = (z - breadth / 2) * VOXEL_SIZE;
       
       const isBush = vegetationNoise > 0.5;
       
       if (isBush) {
-        const bushPositions = [
-          { x: 0, y: 1, z: 0 }, { x: 0, y: 2, z: 0 }, { x: 1, y: 1, z: 0 },
-          { x: -1, y: 1, z: 0 }, { x: 0, y: 1, z: 1 }, { x: 0, y: 1, z: -1 },
-        ];
-        
-        bushPositions.forEach(offset => {
-          const pos = new THREE.Vector3(
-            worldX + offset.x * VOXEL_SIZE,
-            (height + offset.y) * VOXEL_SIZE,
-            worldZ + offset.z * VOXEL_SIZE
-          );
-          
-          const colorKey = TERRAIN_COLORS.bush.toString();
-          if (!vegetationInstances.has(colorKey)) {
-            vegetationInstances.set(colorKey, []);
-          }
-          vegetationInstances.get(colorKey).push({ position: pos });
-        });
+        bushes.push(new THREE.Vector3(worldX, worldY, worldZ));
       } else {
-        const treeHeight = 3 + Math.floor(Math.random() * 2);
-        
-        for (let y = 1; y <= treeHeight; y++) {
-          const pos = new THREE.Vector3(worldX, (height + y) * VOXEL_SIZE, worldZ);
-          const colorKey = TERRAIN_COLORS.treeTrunk.toString();
-          if (!vegetationInstances.has(colorKey)) {
-            vegetationInstances.set(colorKey, []);
-          }
-          vegetationInstances.get(colorKey).push({ position: pos });
-        }
-        
-        const canopyPositions = [
-          { x: 0, y: treeHeight + 1, z: 0 }, { x: 1, y: treeHeight, z: 0 },
-          { x: -1, y: treeHeight, z: 0 }, { x: 0, y: treeHeight, z: 1 },
-          { x: 0, y: treeHeight, z: -1 }, { x: 1, y: treeHeight + 1, z: 0 },
-          { x: -1, y: treeHeight + 1, z: 0 }, { x: 0, y: treeHeight + 1, z: 1 },
-          { x: 0, y: treeHeight + 1, z: -1 },
-        ];
-        
-        canopyPositions.forEach(offset => {
-          const pos = new THREE.Vector3(
-            worldX + offset.x * VOXEL_SIZE,
-            (height + offset.y) * VOXEL_SIZE,
-            worldZ + offset.z * VOXEL_SIZE
-          );
-          const colorKey = TERRAIN_COLORS.treeLeaf.toString();
-          if (!vegetationInstances.has(colorKey)) {
-            vegetationInstances.set(colorKey, []);
-          }
-          vegetationInstances.get(colorKey).push({ position: pos });
-        });
+        treeTrunks.push(new THREE.Vector3(worldX, worldY + 0.25, worldZ));
+        treeCones1.push(new THREE.Vector3(worldX, worldY + 0.6, worldZ));
+        treeCones2.push(new THREE.Vector3(worldX, worldY + 0.95, worldZ));
       }
       placedVegetation.push({ x, z });
     }
   }
-  
-  vegetationInstances.forEach((instances, colorKey) => {
-    const color = parseInt(colorKey);
-    const material = new THREE.MeshLambertMaterial({ color, flatShading: true });
-    const instancedMesh = new THREE.InstancedMesh(voxelGeometry, material, instances.length);
-    const matrix = new THREE.Matrix4();
-    instances.forEach((instance, index) => {
-      matrix.setPosition(instance.position);
-      instancedMesh.setMatrixAt(index, matrix);
+
+  const matrix = new THREE.Matrix4();
+
+  // Trunks
+  if (treeTrunks.length > 0) {
+    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeTrunks.length);
+    treeTrunks.forEach((pos, i) => {
+      matrix.setPosition(pos);
+      trunkMesh.setMatrixAt(i, matrix);
     });
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    instancedMesh.castShadow = true;
-    instancedMesh.receiveShadow = true;
-    terrain.add(instancedMesh);
-  });
+    trunkMesh.instanceMatrix.needsUpdate = true;
+    trunkMesh.castShadow = true;
+    terrain.add(trunkMesh);
+  }
+
+  // Cone Layer 1
+  if (treeCones1.length > 0) {
+    const cone1Mesh = new THREE.InstancedMesh(cone1Geo, leafMat1, treeCones1.length);
+    treeCones1.forEach((pos, i) => {
+      matrix.setPosition(pos);
+      cone1Mesh.setMatrixAt(i, matrix);
+    });
+    cone1Mesh.instanceMatrix.needsUpdate = true;
+    cone1Mesh.castShadow = true;
+    terrain.add(cone1Mesh);
+  }
+
+  // Cone Layer 2
+  if (treeCones2.length > 0) {
+    const cone2Mesh = new THREE.InstancedMesh(cone2Geo, leafMat2, treeCones2.length);
+    treeCones2.forEach((pos, i) => {
+      matrix.setPosition(pos);
+      cone2Mesh.setMatrixAt(i, matrix);
+    });
+    cone2Mesh.instanceMatrix.needsUpdate = true;
+    cone2Mesh.castShadow = true;
+    terrain.add(cone2Mesh);
+  }
+
+  // Bushes
+  if (bushes.length > 0) {
+    const bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, bushes.length);
+    bushes.forEach((pos, i) => {
+      matrix.setPosition(pos);
+      bushMesh.setMatrixAt(i, matrix);
+    });
+    bushMesh.instanceMatrix.needsUpdate = true;
+    bushMesh.castShadow = true;
+    terrain.add(bushMesh);
+  }
 }
 
 

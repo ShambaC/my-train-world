@@ -9,6 +9,8 @@ import Skybox, { getLightingForTime } from './environment/Skybox';
 import CameraController from './environment/CameraController';
 import { createForestBorder } from './environment/ForestBorder';
 
+import WaterSurface from './environment/WaterSurface';
+
 // Scene component that contains the terrain
 function Scene({ 
   terrainSize, 
@@ -117,6 +119,9 @@ function Scene({
       {terrain && (
         <primitive object={terrain} ref={terrainRef} />
       )}
+
+      {/* Water Surface */}
+      <WaterSurface terrainSize={terrainSize} />
 
       {/* Forest Border */}
       {forestBorder && (
