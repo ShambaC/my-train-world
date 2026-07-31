@@ -211,7 +211,7 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
         
         let color;
         if (y <= waterLevel) {
-          color = TERRAIN_COLORS.water;
+          color = TERRAIN_COLORS.sand; // Lakebed: sand underwater (shader water covers ponds)
         } else if (y <= waterLevel + 1) {
           color = TERRAIN_COLORS.sand;
         } else if (y < height) { // A side-block
@@ -238,6 +238,9 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
   
   // Generate trees and bushes on the now-generated terrain surface
   generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed);
+
+  // Attach height data for water shader
+  terrain.userData = { heightMap, length, breadth, waterLevel };
   
   // Create instanced meshes (this part remains the same)
   voxelInstances.forEach((instances, colorKey) => {

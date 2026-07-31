@@ -52,6 +52,7 @@ function App() {
   const [fogEnabled, setFogEnabled] = useState(true);
   const [fogDensity, setFogDensity] = useState(0.012); // Default medium density
   const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
+  const [celShadingEnabled, setCelShadingEnabled] = useState(false);
   const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
   
   const trackManagerRef = useRef(new TrackManager());
@@ -113,12 +114,14 @@ function App() {
         trackManager={trackManagerRef.current}
         trainManager={trainManagerRef.current}
         selectedTool={selectedTool}
-        rotation={rotation * (Math.PI / 180)} // Convert to radians
+        rotation={rotation * (Math.PI / 180)}
         heightOffset={heightOffset}
         tracksVersion={tracksVersion}
         timeOfDay={timeOfDay}
         fogEnabled={fogEnabled}
         fogDensity={fogDensity}
+        tiltShiftEnabled={tiltShiftEnabled}
+        celShadingEnabled={celShadingEnabled}
       />
       
       {/* Control Panel */}
@@ -136,6 +139,8 @@ function App() {
         onFogDensityChange={setFogDensity}
         tiltShiftEnabled={tiltShiftEnabled}
         onTiltShiftChange={setTiltShiftEnabled}
+        celShadingEnabled={celShadingEnabled}
+        onCelShadingChange={setCelShadingEnabled}
       />
       
       {/* Hotbar */}

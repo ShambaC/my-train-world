@@ -8,8 +8,9 @@ import TrainRenderer from './trains/TrainRenderer';
 import Skybox, { getLightingForTime } from './environment/Skybox';
 import CameraController from './environment/CameraController';
 import { createForestBorder } from './environment/ForestBorder';
-
 import WaterSurface from './environment/WaterSurface';
+import FogWall from './environment/FogWall';
+import Effects from './postprocessing/Effects';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -24,10 +25,12 @@ function Scene({
   tracksVersion,
   timeOfDay,
   fogEnabled,
-  fogDensity
+  fogDensity,
+  tiltShiftEnabled,
+  celShadingEnabled,
 }) {
   const terrainRef = useRef();
-    const { camera, scene } = useThree();
+  const { camera, scene } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
   
@@ -68,8 +71,8 @@ function Scene({
     const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth);
     setTerrain(newTerrain);
     
-    // Generate forest border around terrain
-    const border = createForestBorder(terrainSize, 8, 0.33);
+    // Generate forest border around terrain (world-unit based)
+    const border = createForestBorder(terrainSize);
     setForestBorder(border);
     
     if (onTerrainGenerated) {
@@ -121,12 +124,15 @@ function Scene({
       )}
 
       {/* Water Surface */}
-      <WaterSurface terrainSize={terrainSize} />
+      <WaterSurface terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} />
 
       {/* Forest Border */}
       {forestBorder && (
         <primitive object={forestBorder} />
       )}
+
+      {/* Fog Wall */}
+      <FogWall terrainSize={terrainSize} fogColor={getLightingForTime(timeOfDay).fog?.color || 0xd4e8f7} />
       
       {/* Track System */}
       {terrain && (
@@ -177,7 +183,9 @@ export default function GameScene({
   tracksVersion,
   timeOfDay = 'day',
   fogEnabled = true,
-  fogDensity
+  fogDensity,
+  tiltShiftEnabled = false,
+  celShadingEnabled = false,
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -219,7 +227,13 @@ export default function GameScene({
           timeOfDay={timeOfDay}
           fogEnabled={fogEnabled}
           fogDensity={fogDensity}
+          tiltShiftEnabled={tiltShiftEnabled}
+          celShadingEnabled={celShadingEnabled}
         />
+        {/* Effects only mount when active to avoid breaking default render */}
+        {(tiltShiftEnabled || celShadingEnabled) && (
+          <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
+        )}
         <FPSTracker show={showDebug} onFpsUpdate={setFps} />
       </Canvas>
       

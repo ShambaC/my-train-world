@@ -1,133 +1,132 @@
 import * as THREE from 'three';
+import { VOXEL_SIZE } from '../terrain.js';
 
 /**
- * Creates an optimized forest border using InstancedMesh and adds a ground plane.
- * @param {object} terrainSize - An object with { length, breadth } properties.
- * @param {number} borderDepth - How far the forest extends from the terrain edge.
- * @param {number} density - How dense the trees are (trees per square unit).
- * @returns {THREE.Group} A group containing the forest and the ground.
+ * Creates an optimized forest border using InstancedMesh.
+ * Uses world units (terrainSize × VOXEL_SIZE).
+ * @param {object} terrainSize - { length, breadth } in voxels
+ * @param {number} rows - number of tree rows (default 6)
+ * @param {number} rowSpacing - world units between rows (default 1.2)
  */
-export function createForestBorder(terrainSize, borderDepth = 15, density = 0.3) {
+export function createForestBorder(terrainSize, rows = 6, rowSpacing = 1.2) {
   const borderGroup = new THREE.Group();
   borderGroup.name = 'forestBorder';
 
-  const halfLength = terrainSize.length / 2;
-  const halfBreadth = terrainSize.breadth / 2;
+  // Convert to world units
+  const worldHalfL = (terrainSize.length / 2) * VOXEL_SIZE;
+  const worldHalfB = (terrainSize.breadth / 2) * VOXEL_SIZE;
+  const worldL = worldHalfL * 2;
+  const worldB = worldHalfB * 2;
+  const borderDepth = rows * rowSpacing;
 
-  // --- 1. Add a Ground Plane for the Trees ---
-  const groundSize = Math.max(terrainSize.length, terrainSize.breadth) + borderDepth * 2;
+  // --- 1. Ground Plane ---
+  const groundSize = Math.max(worldL, worldB) + borderDepth * 2 + 4;
   const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a4d2a, // A dark, earthy green
+    color: 0x41503a,
     roughness: 0.9,
     metalness: 0.1,
   });
   const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-  groundPlane.rotation.x = -Math.PI / 2; // Rotate plane to be horizontal
-  groundPlane.position.y = -0.05; // Position slightly below y=0 to avoid z-fighting
+  groundPlane.rotation.x = -Math.PI / 2;
+  groundPlane.position.y = -0.02;
   groundPlane.receiveShadow = true;
   borderGroup.add(groundPlane);
 
-  // --- 2. Setup for Instanced Rendering ---
-
-  // Calculate the total number of trees needed first
+  // --- 2. Estimate total trees for InstancedMesh allocation ---
   let totalTrees = 0;
-  const areas = [
-    { w: terrainSize.length + 2 * borderDepth, d: borderDepth }, // North
-    { w: terrainSize.length + 2 * borderDepth, d: borderDepth }, // South
-    { w: borderDepth, d: terrainSize.breadth }, // East
-    { w: borderDepth, d: terrainSize.breadth }, // West
-  ];
-  areas.forEach(area => {
-    totalTrees += Math.floor(area.w * area.d * density);
-  });
+  const baseDensity = 3.0; // trees per sq world unit
+  for (let r = 0; r < rows; r++) {
+    const offset = 0.3 + r * rowSpacing; // start 0.3 outside terrain edge
+    const density = baseDensity * (1 - (r / rows) * 0.6);
+    // Perimeter of ring at this offset
+    const perimL = worldL + offset * 2;
+    const perimB = worldB + offset * 2;
+    const area = (perimL * perimB) - (worldL * worldB); // ring area
+    totalTrees += Math.floor(area * density);
+  }
+  totalTrees = Math.min(totalTrees, 20000);
 
-  console.log(`Generating an optimized forest with approximately ${totalTrees} trees.`);
-
-  // Create base geometries and materials ONCE
-  const trunkGeometry = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
-
-  const coneGeometries = [
+  // --- 3. Instanced meshes ---
+  const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+  const coneGeos = [
     new THREE.ConeGeometry(0.8, 1.5, 6),
     new THREE.ConeGeometry(0.6, 1.3, 6),
     new THREE.ConeGeometry(0.4, 1.0, 6),
   ];
-  const foliageMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a6b1f,
-    flatShading: true,
+  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3a6b1f, flatShading: true });
+
+  const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, totalTrees);
+  const cone1Inst = new THREE.InstancedMesh(coneGeos[0], foliageMat, totalTrees);
+  const cone2Inst = new THREE.InstancedMesh(coneGeos[1], foliageMat, totalTrees);
+  const cone3Inst = new THREE.InstancedMesh(coneGeos[2], foliageMat, totalTrees);
+
+  [trunkInst, cone1Inst, cone2Inst, cone3Inst].forEach(m => {
+    m.castShadow = true;
+    m.receiveShadow = true;
   });
 
-  // Create InstancedMesh for each tree part
-  const trunkInstances = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, totalTrees);
-  const cone1Instances = new THREE.InstancedMesh(coneGeometries[0], foliageMaterial, totalTrees);
-  const cone2Instances = new THREE.InstancedMesh(coneGeometries[1], foliageMaterial, totalTrees);
-  const cone3Instances = new THREE.InstancedMesh(coneGeometries[2], foliageMaterial, totalTrees);
-
-  // Enable shadows for all instances
-  [trunkInstances, cone1Instances, cone2Instances, cone3Instances].forEach(instancedMesh => {
-    instancedMesh.castShadow = true;
-    instancedMesh.receiveShadow = true; // Trees can receive shadows from each other
-  });
-
-  // --- 3. Placement Logic using Matrices ---
+  // --- 4. Place trees ring by ring ---
   let treeIndex = 0;
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scaleVec = new THREE.Vector3();
 
-  const placeTrees = (startX, endX, startZ, endZ) => {
-    const width = Math.abs(endX - startX);
-    const depth = Math.abs(endZ - startZ);
-    const numTrees = Math.floor(width * depth * density);
+  const placeTrees = (startX, endX, startZ, endZ, count) => {
+    const w = Math.abs(endX - startX);
+    const d = Math.abs(endZ - startZ);
+    for (let i = 0; i < count; i++) {
+      if (treeIndex >= totalTrees) return;
+      const x = startX + Math.random() * w;
+      const z = startZ + Math.random() * d;
+      const scale = 0.7 + Math.random() * 0.9;
+      const rotY = Math.random() * Math.PI * 2;
+      const tilt = (Math.random() - 0.5) * 0.1; // slight tilt
+      quaternion.setFromEuler(new THREE.Euler(tilt, rotY, tilt * 0.5));
 
-    for (let i = 0; i < numTrees; i++) {
-        if (treeIndex >= totalTrees) break; // Safety break
-
-        const x = startX + Math.random() * width;
-        const z = startZ + Math.random() * depth;
-        const scale = 0.8 + Math.random() * 0.7; // Randomize scale for variety
-        
-        // Use a dummy object to easily compose transformations
-        const rotationY = Math.random() * Math.PI * 2;
-        quaternion.setFromEuler(new THREE.Euler(0, rotationY, 0));
-
-        // Set matrix for each part of the tree, relative to the tree's root position
-        const setPartMatrix = (instancedMesh, offsetY) => {
-            position.set(x, offsetY * scale, z);
-            scaleVec.set(scale, scale, scale);
-            matrix.compose(position, quaternion, scaleVec);
-            instancedMesh.setMatrixAt(treeIndex, matrix);
-        };
-        
-        setPartMatrix(trunkInstances, 1.0);
-        setPartMatrix(cone1Instances, 2.5);
-        setPartMatrix(cone2Instances, 3.5);
-        setPartMatrix(cone3Instances, 4.5);
-        
-        treeIndex++;
+      const setPart = (mesh, yOff) => {
+        position.set(x, yOff * scale, z);
+        scaleVec.set(scale, scale, scale);
+        matrix.compose(position, quaternion, scaleVec);
+        mesh.setMatrixAt(treeIndex, matrix);
+      };
+      setPart(trunkInst, 1.0);
+      setPart(cone1Inst, 2.5);
+      setPart(cone2Inst, 3.5);
+      setPart(cone3Inst, 4.5);
+      treeIndex++;
     }
   };
 
-  // Define border zones
-  // North
-  placeTrees(-halfLength, halfLength, halfBreadth, halfBreadth + borderDepth);
-  // South
-  placeTrees(-halfLength, halfLength, -halfBreadth - borderDepth, -halfBreadth);
-  // East
-  placeTrees(halfLength, halfLength + borderDepth, -halfBreadth, halfBreadth);
-  // West
-  placeTrees(-halfLength - borderDepth, -halfLength, -halfBreadth, halfBreadth);
+  for (let r = 0; r < rows; r++) {
+    const offset = 0.3 + r * rowSpacing;
+    const density = baseDensity * (1 - (r / rows) * 0.6);
+    const innerL = worldHalfL + (r === 0 ? 0 : 0.3 + (r - 1) * rowSpacing);
+    const innerB = worldHalfB + (r === 0 ? 0 : 0.3 + (r - 1) * rowSpacing);
+    const outerL = worldHalfL + offset + rowSpacing;
+    const outerB = worldHalfB + offset + rowSpacing;
 
-  // Corners
-  placeTrees(halfLength, halfLength + borderDepth, halfBreadth, halfBreadth + borderDepth);
-  placeTrees(-halfLength - borderDepth, -halfLength, halfBreadth, halfBreadth + borderDepth);
-  placeTrees(halfLength, halfLength + borderDepth, -halfBreadth - borderDepth, -halfBreadth);
-  placeTrees(-halfLength - borderDepth, -halfLength, -halfBreadth - borderDepth, -halfBreadth);
+    const perim = (outerL * outerB) - (innerL * innerB);
+    const count = Math.floor(perim * density);
 
-  // Add the instanced meshes to the group
-  borderGroup.add(trunkInstances, cone1Instances, cone2Instances, cone3Instances);
+    // North
+    placeTrees(-outerL, outerL, worldHalfB + offset, worldHalfB + offset + rowSpacing, Math.floor(count * 0.25));
+    // South
+    placeTrees(-outerL, outerL, -worldHalfB - offset - rowSpacing, -worldHalfB - offset, Math.floor(count * 0.25));
+    // East
+    placeTrees(worldHalfL + offset, worldHalfL + offset + rowSpacing, -outerB, outerB, Math.floor(count * 0.25));
+    // West
+    placeTrees(-worldHalfL - offset - rowSpacing, -worldHalfL - offset, -outerB, outerB, Math.floor(count * 0.25));
+  }
+
+  trunkInst.instanceMatrix.needsUpdate = true;
+  cone1Inst.instanceMatrix.needsUpdate = true;
+  cone2Inst.instanceMatrix.needsUpdate = true;
+  cone3Inst.instanceMatrix.needsUpdate = true;
+
+  borderGroup.add(trunkInst, cone1Inst, cone2Inst, cone3Inst);
 
   return borderGroup;
 }

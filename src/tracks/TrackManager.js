@@ -2,6 +2,8 @@
  * Track Manager - Handles track data storage and validation
  */
 
+import { getEndpoints as getEndpointsFromGeometry } from './trackGeometry.js';
+
 export class TrackManager {
   constructor() {
     this.tracks = new Map();
@@ -32,46 +34,39 @@ export class TrackManager {
   }
 
   /**
-   * Automatically connect a track to nearby compatible tracks
+   * Automatically connect a track to nearby compatible tracks.
+   * Uses closest-pair strategy to avoid asymmetric/mirrored links.
    */
   autoConnectTrack(track) {
+    const tolerance = 0.3; // Tolerance for connection
     const endpoints = this.getEndpoints(track);
-    const tolerance = 0.1; // Tolerance for connection
 
     for (const [otherId, otherTrack] of this.tracks) {
       if (otherId === track.id) continue;
-      
+
       // Check height difference
       if (Math.abs(track.position.y - otherTrack.position.y) > 0.1) continue;
 
       const otherEndpoints = this.getEndpoints(otherTrack);
 
-      // Check all 4 combinations: Front-Front, Front-Back, Back-Front, Back-Back
-      
-      // Track Front -> Other Front
-      if (!track.connections.front && !otherTrack.connections.front && 
-          this.distance(endpoints.front, otherEndpoints.front) < tolerance) {
-        track.connections.front = otherId;
-        otherTrack.connections.front = track.id;
-      }
-      // Track Front -> Other Back
-      else if (!track.connections.front && !otherTrack.connections.back && 
-               this.distance(endpoints.front, otherEndpoints.back) < tolerance) {
-        track.connections.front = otherId;
-        otherTrack.connections.back = track.id;
-      }
-      
-      // Track Back -> Other Front
-      if (!track.connections.back && !otherTrack.connections.front && 
-          this.distance(endpoints.back, otherEndpoints.front) < tolerance) {
-        track.connections.back = otherId;
-        otherTrack.connections.front = track.id;
-      }
-      // Track Back -> Other Back
-      else if (!track.connections.back && !otherTrack.connections.back && 
-               this.distance(endpoints.back, otherEndpoints.back) < tolerance) {
-        track.connections.back = otherId;
-        otherTrack.connections.back = track.id;
+      // Compute distances for all 4 combinations
+      const combos = [
+        { d: this.distance(endpoints.front, otherEndpoints.front), myEnd: 'front', otherEnd: 'front' },
+        { d: this.distance(endpoints.front, otherEndpoints.back),  myEnd: 'front', otherEnd: 'back' },
+        { d: this.distance(endpoints.back, otherEndpoints.front),  myEnd: 'back',  otherEnd: 'front' },
+        { d: this.distance(endpoints.back, otherEndpoints.back),   myEnd: 'back',  otherEnd: 'back' },
+      ];
+
+      // Find the closest pair
+      combos.sort((a, b) => a.d - b.d);
+      const best = combos[0];
+
+      if (best.d < tolerance) {
+        // Only connect if neither end is already taken
+        if (!track.connections[best.myEnd] && !otherTrack.connections[best.otherEnd]) {
+          track.connections[best.myEnd] = otherId;
+          otherTrack.connections[best.otherEnd] = track.id;
+        }
       }
     }
   }
@@ -83,39 +78,7 @@ export class TrackManager {
   }
 
   getEndpoints(track) {
-    const pos = track.position;
-    // Convert rotation to radians (negative because Three.js rotation is CCW but our grid logic might be different? 
-    // Actually standard math is CCW. Let's assume standard.)
-    const rotRad = track.rotation;
-    const cos = Math.cos(rotRad);
-    const sin = Math.sin(rotRad);
-
-    const rotate = (x, z) => ({
-      x: x * cos - z * sin,
-      z: x * sin + z * cos
-    });
-
-    if (track.type === 'straight') {
-      // Straight track is aligned along Z axis by default?
-      // In TrackModels, createStraightTrack creates geometry along Z axis (-0.25 to 0.25)
-      // So Front is (0, 0.25), Back is (0, -0.25)
-      const front = rotate(0, 0.25);
-      const back = rotate(0, -0.25);
-      return {
-        front: { x: pos.x + front.x, z: pos.z + front.z },
-        back: { x: pos.x + back.x, z: pos.z + back.z }
-      };
-    } else {
-      // Curved track
-      // In TrackModels, it goes from (0.25, 0) to (0, 0.25)
-      // Let's define Front as (0, 0.25) [Angle 90] and Back as (0.25, 0) [Angle 0]
-      const front = rotate(0, 0.25);
-      const back = rotate(0.25, 0);
-      return {
-        front: { x: pos.x + front.x, z: pos.z + front.z },
-        back: { x: pos.x + back.x, z: pos.z + back.z }
-      };
-    }
+    return getEndpointsFromGeometry(track.type, track.position, track.rotation);
   }
 
   /**

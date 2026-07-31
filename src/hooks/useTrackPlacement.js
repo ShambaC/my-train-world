@@ -34,7 +34,44 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
       if (intersects.length > 0) {
         const point = intersects[0].point;
         const snapped = trackManager.snapToGrid(point);
-        setGhostPosition(snapped);
+
+        if (selectedTool.type === 'train') {
+          // Snap ghost to the actual track under cursor
+          const track = trackManager.getTrackAtPosition(snapped, 0.8);
+          if (track) {
+            setGhostPosition({
+              x: track.position.x,
+              y: track.position.y,
+              z: track.position.z,
+              rotation: track.rotation || 0,
+              type: track.type,
+              isTrack: true,
+            });
+            setIsValidPosition(true);
+          } else {
+            setGhostPosition({
+              x: snapped.x,
+              y: snapped.y,
+              z: snapped.z,
+              rotation: 0,
+              type: null,
+              isTrack: false,
+            });
+            setIsValidPosition(false);
+          }
+        } else {
+          // Delete tool: snap to hovered track
+          const track = trackManager.getTrackAtPosition(snapped, 1.0);
+          setGhostPosition({
+            x: track ? track.position.x : snapped.x,
+            y: track ? track.position.y : snapped.y,
+            z: track ? track.position.z : snapped.z,
+            rotation: track ? (track.rotation || 0) : 0,
+            type: track ? track.type : null,
+            isTrack: !!track,
+          });
+          setIsValidPosition(!!track);
+        }
       } else {
         setGhostPosition(null);
       }

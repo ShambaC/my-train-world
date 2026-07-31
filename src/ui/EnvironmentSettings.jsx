@@ -15,7 +15,9 @@ function EnvironmentSettings({
   fogDensity,
   onFogDensityChange,
   tiltShiftEnabled,
-  onTiltShiftChange
+  onTiltShiftChange,
+  celShadingEnabled,
+  onCelShadingChange
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
@@ -116,11 +118,31 @@ function EnvironmentSettings({
             </button>
           </div>
 
+          {/* Cel Shading Toggle */}
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">
+              🎨 Cel Shading (Toon)
+            </label>
+            <button
+              onClick={() => onCelShadingChange && onCelShadingChange(!celShadingEnabled)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${
+                celShadingEnabled ? 'bg-blue-600' : 'bg-gray-600'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  celShadingEnabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Current Settings Display */}
           <div className="pt-2 border-t border-gray-700 text-xs text-gray-400">
             <div>Current: {TIME_OPTIONS.find(t => t.value === timeOfDay)?.label}</div>
             <div>Fog: {fogEnabled ? 'Enabled' : 'Disabled'}</div>
             <div>Miniature: {tiltShiftEnabled ? 'Active' : 'Off'}</div>
+            <div>Cel: {celShadingEnabled ? 'On' : 'Off'}</div>
           </div>
         </div>
       )}

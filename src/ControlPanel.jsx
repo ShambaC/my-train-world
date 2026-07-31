@@ -15,7 +15,9 @@ export default function ControlPanel({
   fogDensity,
   onFogDensityChange,
   tiltShiftEnabled,
-  onTiltShiftChange
+  onTiltShiftChange,
+  celShadingEnabled,
+  onCelShadingChange
 }) {
   const [length, setLength] = useState(50);
   const [breadth, setBreadth] = useState(50);
@@ -175,6 +177,8 @@ export default function ControlPanel({
               onFogDensityChange={onFogDensityChange}
               tiltShiftEnabled={tiltShiftEnabled}
               onTiltShiftChange={onTiltShiftChange}
+              celShadingEnabled={celShadingEnabled}
+              onCelShadingChange={onCelShadingChange}
             />
           </div>
 

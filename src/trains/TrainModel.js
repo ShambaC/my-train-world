@@ -107,23 +107,6 @@ export function createTrainEngine(colorIndex = 0) {
 }
 
 /**
- * Create transparent ghost silhouette for train engine
- */
-export function createTrainGhost(isValid = true) {
-  const group = new THREE.Group();
-  const geometry = new THREE.BoxGeometry(ENGINE_WIDTH * 0.9, ENGINE_HEIGHT * 0.8, ENGINE_LENGTH * 0.9);
-  const material = new THREE.MeshBasicMaterial({
-    color: isValid ? 0x00ff00 : 0xff0000,
-    transparent: true,
-    opacity: 0.5,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.y = ENGINE_HEIGHT * 0.4;
-  group.add(mesh);
-  return group;
-}
-
-/**
  * Get train dimensions
  */
 export function getTrainDimensions() {
