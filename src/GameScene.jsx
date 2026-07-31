@@ -28,6 +28,7 @@ function Scene({
   fogDensity,
   tiltShiftEnabled,
   celShadingEnabled,
+  trainDirection,
 }) {
   const terrainRef = useRef();
   const { camera, scene } = useThree();
@@ -137,7 +138,7 @@ function Scene({
       {/* Track System */}
       {terrain && (
         <TrackRenderer
-          key={tracksVersion} // Force re-mount when tracks are cleared
+          key={tracksVersion}
           trackManager={trackManager}
           trainManager={trainManager}
           terrainRef={terrainRef}
@@ -145,6 +146,7 @@ function Scene({
           rotation={rotation}
           heightOffset={heightOffset}
           onTracksChange={onTracksChange}
+          trainDirection={trainDirection}
         />
       )}
       
@@ -186,6 +188,7 @@ export default function GameScene({
   fogDensity,
   tiltShiftEnabled = false,
   celShadingEnabled = false,
+  trainDirection = 1,
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -229,6 +232,7 @@ export default function GameScene({
           fogDensity={fogDensity}
           tiltShiftEnabled={tiltShiftEnabled}
           celShadingEnabled={celShadingEnabled}
+          trainDirection={trainDirection}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (

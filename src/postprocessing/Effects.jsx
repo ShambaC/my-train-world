@@ -96,10 +96,10 @@ const CelShader = {
       float bands = 5.0;
       float quantized = floor(luma * bands + 0.5) / bands;
       float scale = quantized / max(luma, 0.001);
-      scale = clamp(scale, 0.3, 3.0);
+      scale = clamp(scale, 0.4, 2.5);
       color.rgb *= scale;
 
-      // Sobel edge detection on luminance
+      // Sobel edge detection on luminance - stronger threshold
       float tl = dot(texture2D(tDiffuse, vUv + texel * vec2(-1, -1)).rgb, vec3(0.299, 0.587, 0.114));
       float t  = dot(texture2D(tDiffuse, vUv + texel * vec2( 0, -1)).rgb, vec3(0.299, 0.587, 0.114));
       float tr = dot(texture2D(tDiffuse, vUv + texel * vec2( 1, -1)).rgb, vec3(0.299, 0.587, 0.114));
@@ -113,12 +113,13 @@ const CelShader = {
       float gy = -tl - 2.0*t - tr + bl + 2.0*b + br;
       float sobel = sqrt(gx*gx + gy*gy);
 
-      float edge = smoothstep(0.05, 0.15, sobel);
-      color.rgb = mix(color.rgb, vec3(0.08), edge * 0.85);
+      // Only draw edges where there's a significant luminance jump (object boundaries)
+      float edge = smoothstep(0.12, 0.25, sobel);
+      color.rgb = mix(color.rgb, vec3(0.05), edge * 0.8);
 
       // Saturation boost
       float luma2 = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-      color.rgb = mix(vec3(luma2), color.rgb, 1.2);
+      color.rgb = mix(vec3(luma2), color.rgb, 1.15);
 
       gl_FragColor = color;
     }

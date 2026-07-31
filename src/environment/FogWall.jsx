@@ -7,7 +7,7 @@ const FogWallShader = {
   uniforms: {
     uTime: { value: 0 },
     uColor: { value: new THREE.Color(0xd4e8f7) },
-    uOpacity: { value: 0.85 },
+    uOpacity: { value: 1.0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -40,13 +40,14 @@ const FogWallShader = {
     }
 
     void main() {
-      // Animated cloud noise
-      float n = noise(vec2(vUv.x * 24.0 + uTime * 0.03, vUv.y * 2.0));
-      float n2 = noise(vec2(vUv.x * 12.0 - uTime * 0.02, vUv.y * 3.0 + uTime * 0.01));
-      float cloud = n * 0.6 + n2 * 0.4;
+      // Multiple layers of cloud noise for thickness
+      float n1 = noise(vec2(vUv.x * 20.0 + uTime * 0.02, vUv.y * 3.0));
+      float n2 = noise(vec2(vUv.x * 12.0 - uTime * 0.015, vUv.y * 2.0 + uTime * 0.01));
+      float n3 = noise(vec2(vUv.x * 8.0 + uTime * 0.01, vUv.y * 4.0));
+      float cloud = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
 
-      // Height fade: transparent at bottom, opaque at middle, fade at top
-      float heightFade = smoothstep(0.0, 0.2, vHeight) * (1.0 - smoothstep(0.7, 1.0, vHeight));
+      // Height fade: more opaque at bottom/middle, fade at very top
+      float heightFade = smoothstep(0.0, 0.15, vHeight) * (1.0 - smoothstep(0.8, 1.0, vHeight));
 
       float alpha = cloud * heightFade * uOpacity;
 

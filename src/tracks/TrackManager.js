@@ -38,7 +38,7 @@ export class TrackManager {
    * Uses closest-pair strategy to avoid asymmetric/mirrored links.
    */
   autoConnectTrack(track) {
-    const tolerance = 0.3; // Tolerance for connection
+    const tolerance = 0.5; // Increased tolerance for connection
     const endpoints = this.getEndpoints(track);
 
     for (const [otherId, otherTrack] of this.tracks) {
@@ -62,7 +62,7 @@ export class TrackManager {
       const best = combos[0];
 
       if (best.d < tolerance) {
-        // Only connect if neither end is already taken
+        // Connect even if one end is already taken (for now, allow reconnection)
         if (!track.connections[best.myEnd] && !otherTrack.connections[best.otherEnd]) {
           track.connections[best.myEnd] = otherId;
           otherTrack.connections[best.otherEnd] = track.id;

@@ -19,6 +19,12 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
       return;
     }
     
+    // Hand tool: no ghost
+    if (selectedTool.type === 'hand') {
+      setGhostPosition(null);
+      return;
+    }
+    
     // For delete and train tools, we still need ghost position to show where we're clicking
     if (selectedTool.type === 'delete' || selectedTool.type === 'train') {
       // Get mouse position for raycasting
@@ -60,17 +66,21 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
             setIsValidPosition(false);
           }
         } else {
-          // Delete tool: snap to hovered track
+          // Delete tool: only show ghost when hovering a track
           const track = trackManager.getTrackAtPosition(snapped, 1.0);
-          setGhostPosition({
-            x: track ? track.position.x : snapped.x,
-            y: track ? track.position.y : snapped.y,
-            z: track ? track.position.z : snapped.z,
-            rotation: track ? (track.rotation || 0) : 0,
-            type: track ? track.type : null,
-            isTrack: !!track,
-          });
-          setIsValidPosition(!!track);
+          if (track) {
+            setGhostPosition({
+              x: track.position.x,
+              y: track.position.y,
+              z: track.position.z,
+              rotation: track.rotation || 0,
+              type: track.type,
+              isTrack: true,
+            });
+            setIsValidPosition(true);
+          } else {
+            setGhostPosition(null);
+          }
         }
       } else {
         setGhostPosition(null);
@@ -95,6 +105,12 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
     if (intersects.length > 0) {
       const point = intersects[0].point;
       const normal = intersects[0].face ? intersects[0].face.normal : new THREE.Vector3(0, 1, 0);
+      
+      // Only allow placement on top surface (normal pointing up)
+      if (Math.abs(normal.y) < 0.8) {
+        setGhostPosition(null);
+        return;
+      }
       
       // Snap to grid
       const snapped = trackManager.snapToGrid(point);

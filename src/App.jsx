@@ -9,6 +9,13 @@ import { TrainManager } from "./trains/TrainManager";
 // Define available tools
 const TOOLS = [
   { 
+    id: 'hand', 
+    name: 'Hand / Deselect', 
+    label: 'Hand',
+    icon: '✋', 
+    type: 'hand'
+  },
+  { 
     id: 'straight', 
     name: 'Straight Track', 
     label: 'Straight',
@@ -53,7 +60,8 @@ function App() {
   const [fogDensity, setFogDensity] = useState(0.012); // Default medium density
   const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
-  const [tracksVersion, setTracksVersion] = useState(0); // Force re-render of tracks
+  const [tracksVersion, setTracksVersion] = useState(0);
+  const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
   
   const trackManagerRef = useRef(new TrackManager());
   const trainManagerRef = useRef(new TrainManager(trackManagerRef.current));
@@ -75,7 +83,12 @@ function App() {
   };
 
   const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
+    if (selectedTool?.type === 'train') {
+      // Toggle train direction
+      setTrainDirection(d => d === 1 ? -1 : 1);
+    } else {
+      setRotation((prev) => (prev + 90) % 360);
+    }
   };
 
   const handleHeightChange = (delta) => {
@@ -122,6 +135,7 @@ function App() {
         fogDensity={fogDensity}
         tiltShiftEnabled={tiltShiftEnabled}
         celShadingEnabled={celShadingEnabled}
+        trainDirection={trainDirection}
       />
       
       {/* Control Panel */}

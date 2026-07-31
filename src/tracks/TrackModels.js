@@ -75,6 +75,9 @@ export function createCurvedTrack() {
   const r  = CURVE.r;   // 0.25
   const segments = 8;
   const angleStep = (Math.PI / 2) / segments;
+  
+  // Use smaller rail offset for curved tracks to prevent clustering
+  const curvedRailOffset = 0.15;
 
   // Gravel and sleepers along arc
   for (let i = 0; i <= segments; i++) {
@@ -83,7 +86,7 @@ export function createCurvedTrack() {
     const z = cz + Math.sin(angle) * r;
 
     // Gravel segment
-    const gravelGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.85, RAIL_HEIGHT * 0.5, r * angleStep * 1.1);
+    const gravelGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, r * angleStep * 1.1);
     const gravelMat = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
     const gravel = new THREE.Mesh(gravelGeo, gravelMat);
     gravel.position.set(x, RAIL_HEIGHT * 0.25, z);
@@ -92,9 +95,9 @@ export function createCurvedTrack() {
     gravel.receiveShadow = true;
     group.add(gravel);
 
-    // Sleepers
+    // Sleepers - fewer, every 2 segments
     if (i % 2 === 0) {
-      const sleeperGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.85, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
+      const sleeperGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
       const sleeperMat = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
       const sleeper = new THREE.Mesh(sleeperGeo, sleeperMat);
       sleeper.position.set(x, RAIL_HEIGHT * 0.5, z);
@@ -106,8 +109,8 @@ export function createCurvedTrack() {
   }
 
   // Curved Rails — inner and outer arcs
-  const innerRadius = r - RAIL_OFFSET;
-  const outerRadius = r + RAIL_OFFSET;
+  const innerRadius = r - curvedRailOffset;
+  const outerRadius = r + curvedRailOffset;
 
   const buildRailMesh = (radius) => {
     const points = [];

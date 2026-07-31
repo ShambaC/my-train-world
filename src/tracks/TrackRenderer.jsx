@@ -13,6 +13,7 @@ export default function TrackRenderer({
   heightOffset,
   onTracksChange,
   trainManager,
+  trainDirection,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -66,7 +67,7 @@ export default function TrackRenderer({
       if (selectedTool?.type === 'train') {
         if (ghostPosition?.isTrack) {
           const track = trackManager.getTrackAtPosition(ghostPosition, 0.8);
-          if (track) trainManager.addTrain(track.id, 1);
+          if (track) trainManager.addTrain(track.id, trainDirection);
         }
       } else if (selectedTool?.type === 'delete') {
         if (ghostPosition) {

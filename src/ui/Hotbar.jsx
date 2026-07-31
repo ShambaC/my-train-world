@@ -6,6 +6,7 @@ const TOOL_KEYS = {
   '3': 2,
   '4': 3,
   '5': 4,
+  'Escape': -1, // Deselect
 };
 
 /**
@@ -17,7 +18,9 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate }) {
       // Number keys for tool selection
       if (TOOL_KEYS[e.key] !== undefined) {
         const index = TOOL_KEYS[e.key];
-        if (index < tools.length) {
+        if (index === -1) {
+          onSelect(0); // Select hand tool
+        } else if (index < tools.length) {
           onSelect(index);
         }
       }
@@ -76,7 +79,8 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate }) {
         {/* Instructions */}
         <div className="mt-2 text-xs text-gray-400 text-center">
           Press <kbd className="bg-gray-900 px-1 rounded">1-5</kbd> to select • 
-          <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate
+          <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
+          <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const PARTICLE_COUNT = 28;
+const PARTICLE_COUNT = 35;
 
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
@@ -15,7 +15,7 @@ function smoothstep(edge0, edge1, x) {
 
 /**
  * Low-poly smoke particle system for trains.
- * Improved: more particles, fade-out, spin, turbulence, wind drift.
+ * Thick, dark, visible puffs.
  */
 export default function SmokeParticles({ position, rotation, active }) {
   const meshRef = useRef();
@@ -23,11 +23,11 @@ export default function SmokeParticles({ position, rotation, active }) {
   const particles = useMemo(() => {
     return Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
       x: 0, y: 0, z: 0,
-      size: 0.03 + Math.random() * 0.04,
+      size: 0.05 + Math.random() * 0.06, // Bigger particles
       life: i / PARTICLE_COUNT,
-      maxLife: 1.2 + Math.random() * 0.6,
+      maxLife: 1.0 + Math.random() * 0.5,
       vx: 0,
-      vy: 0.25 + Math.random() * 0.2,
+      vy: 0.3 + Math.random() * 0.25,
       vz: 0,
       spinAxis: new THREE.Vector3(
         Math.random() - 0.5,
@@ -36,14 +36,14 @@ export default function SmokeParticles({ position, rotation, active }) {
       ).normalize(),
       spinSpeed: 0.5 + Math.random() * 1.5,
       wobblePhase: Math.random() * Math.PI * 2,
-      driftX: (Math.random() - 0.5) * 0.04,
-      driftZ: (Math.random() - 0.5) * 0.04,
+      driftX: (Math.random() - 0.5) * 0.06,
+      driftZ: (Math.random() - 0.5) * 0.06,
     }));
   }, []);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const colorA = useMemo(() => new THREE.Color(0x4a4a4a), []);
-  const colorB = useMemo(() => new THREE.Color(0xd9d9d9), []);
+  const colorA = useMemo(() => new THREE.Color(0x333333), []); // Dark smoke
+  const colorB = useMemo(() => new THREE.Color(0x888888), []); // Lighter as it fades
   const tempColor = useMemo(() => new THREE.Color(), []);
 
   useFrame((_, delta) => {
@@ -55,11 +55,11 @@ export default function SmokeParticles({ position, rotation, active }) {
         if (p.life > p.maxLife) {
           // Respawn
           p.life = 0;
-          p.x = (Math.random() - 0.5) * 0.02;
+          p.x = (Math.random() - 0.5) * 0.03;
           p.y = 0.52;
-          p.z = 0.25 + (Math.random() - 0.5) * 0.02;
+          p.z = 0.25 + (Math.random() - 0.5) * 0.03;
           p.vx = p.driftX;
-          p.vy = 0.25 + Math.random() * 0.2;
+          p.vy = 0.3 + Math.random() * 0.25;
           p.vz = p.driftZ;
         }
 
@@ -67,14 +67,14 @@ export default function SmokeParticles({ position, rotation, active }) {
         p.y += p.vy * delta;
         p.z += p.vz * delta;
         // Lateral wobble
-        p.x += Math.sin(p.life * 3 + p.wobblePhase) * 0.05 * delta;
-        p.z += Math.cos(p.life * 2.5 + p.wobblePhase) * 0.03 * delta;
+        p.x += Math.sin(p.life * 3 + p.wobblePhase) * 0.06 * delta;
+        p.z += Math.cos(p.life * 2.5 + p.wobblePhase) * 0.04 * delta;
 
         const progress = p.life / p.maxLife;
-        // Ease-out growth
-        const growthScale = 1 + easeOutCubic(progress) * 2.5;
+        // Ease-out growth - thicker
+        const growthScale = 1 + easeOutCubic(progress) * 3.0;
         // Fade-out scale
-        const fadeScale = 1 - smoothstep(0.75, 1.0, progress);
+        const fadeScale = 1 - smoothstep(0.7, 1.0, progress);
         const currentScale = p.size * growthScale * fadeScale;
 
         dummy.position.set(p.x, p.y, p.z);
@@ -84,7 +84,7 @@ export default function SmokeParticles({ position, rotation, active }) {
         dummy.updateMatrix();
         meshRef.current.setMatrixAt(i, dummy.matrix);
 
-        // Color fade: dark gray → light gray
+        // Color fade: dark gray → lighter gray
         tempColor.copy(colorA).lerp(colorB, progress);
         meshRef.current.setColorAt(i, tempColor);
       } else {
@@ -107,11 +107,11 @@ export default function SmokeParticles({ position, rotation, active }) {
         ref={meshRef}
         args={[null, null, PARTICLE_COUNT]}
       >
-        <dodecahedronGeometry args={[0.05, 0]} />
+        <dodecahedronGeometry args={[0.06, 0]} />
         <meshLambertMaterial
           color={0xffffff}
           transparent
-          opacity={0.55}
+          opacity={0.65}
           flatShading
         />
       </instancedMesh>

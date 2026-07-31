@@ -6,14 +6,14 @@ import { VOXEL_SIZE } from '../terrain.js';
 const WaterShader = {
   uniforms: {
     uTime: { value: 0 },
-    uColorDeep: { value: new THREE.Color(0x0b3d5c) },
-    uColorShallow: { value: new THREE.Color(0x2e8b9a) },
+    uColorDeep: { value: new THREE.Color(0x0a4a6e) },
+    uColorShallow: { value: new THREE.Color(0x2e9bba) },
     uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
     uSunColor: { value: new THREE.Color(0xfff8e0) },
     uSkyColor: { value: new THREE.Color(0x87ceeb) },
     uHeightMap: { value: null },
     uTerrainSize: { value: new THREE.Vector2(50, 50) },
-    uWaterY: { value: 0.76 },
+    uWaterY: { value: 0.85 },
     uVoxel: { value: VOXEL_SIZE },
   },
   vertexShader: `
@@ -27,28 +27,31 @@ const WaterShader = {
       vUv = uv;
       vec3 pos = position;
 
-      // 3 directional waves (Gerstner-ish)
+      // Multiple waves for visible deformation
       float e = 0.0;
-      // Wave 1
-      float w1 = sin(pos.x * 3.1 + uTime * 1.6) * 0.018;
+      // Wave 1 - main swell
+      float w1 = sin(pos.x * 4.0 + uTime * 2.0) * 0.03;
       e += w1;
-      // Wave 2
-      float w2 = cos(pos.z * 2.3 - uTime * 1.1) * 0.014;
+      // Wave 2 - cross wave
+      float w2 = cos(pos.z * 3.5 - uTime * 1.5) * 0.025;
       e += w2;
-      // Wave 3
-      float w3 = sin((pos.x + pos.z) * 1.3 + uTime * 2.2) * 0.008;
+      // Wave 3 - diagonal chop
+      float w3 = sin((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015;
       e += w3;
+      // Wave 4 - small ripples
+      float w4 = cos((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008;
+      e += w4;
 
       pos.y += e;
       vElevation = e;
 
       // Compute normal from wave derivatives
-      float dx = cos(pos.x * 3.1 + uTime * 1.6) * 0.018 * 3.1
-                - sin(pos.z * 2.3 - uTime * 1.1) * 0.014 * 0.0
-                + cos((pos.x + pos.z) * 1.3 + uTime * 2.2) * 0.008 * 1.3;
-      float dz = sin(pos.x * 3.1 + uTime * 1.6) * 0.018 * 0.0
-                + sin(pos.z * 2.3 - uTime * 1.1) * 0.014 * 2.3
-                + cos((pos.x + pos.z) * 1.3 + uTime * 2.2) * 0.008 * 1.3;
+      float dx = cos(pos.x * 4.0 + uTime * 2.0) * 0.03 * 4.0
+                + cos((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015 * 2.5
+                - sin((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008 * 5.0;
+      float dz = sin(pos.z * 3.5 - uTime * 1.5) * 0.025 * 3.5
+                + cos((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015 * 2.5
+                + sin((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008 * 5.0;
       vNormal = normalize(vec3(-dx, 1.0, -dz));
 
       vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
@@ -92,48 +95,46 @@ const WaterShader = {
       vec2 mapUV = vUv;
       float hSample = texture2D(uHeightMap, mapUV).r;
       float terrainTopY = (hSample + 1.0) * 0.5; // reconstruct world Y from voxel height
-      if (terrainTopY > uWaterY - 0.02) discard;
+      if (terrainTopY > uWaterY - 0.05) discard;
 
       // Shore factor: 0 = deep, 1 = near shore
-      float shore = smoothstep(uWaterY - 0.35, uWaterY, terrainTopY);
+      float shore = smoothstep(uWaterY - 0.4, uWaterY, terrainTopY);
 
-      // --- Base color ---
-      float depthFactor = shore + abs(vElevation) * 15.0;
+      // --- Base color (more blue) ---
+      float depthFactor = shore + abs(vElevation) * 20.0;
       vec3 baseColor = mix(uColorDeep, uColorShallow, clamp(depthFactor, 0.0, 1.0));
 
       // --- Procedural detail normals ---
-      float n1 = noise(vWorldPos.xz * 8.0 + uTime * 0.4);
-      float n2 = noise(vWorldPos.xz * 12.0 - uTime * 0.3);
-      vec3 detailNormal = normalize(vNormal + vec3((n1 - 0.5) * 0.15, 0.0, (n2 - 0.5) * 0.15));
+      float n1 = noise(vWorldPos.xz * 10.0 + uTime * 0.5);
+      float n2 = noise(vWorldPos.xz * 15.0 - uTime * 0.4);
+      vec3 detailNormal = normalize(vNormal + vec3((n1 - 0.5) * 0.2, 0.0, (n2 - 0.5) * 0.2));
 
       // --- View direction ---
       vec3 viewDir = normalize(cameraPosition - vWorldPos);
 
-      // --- Fresnel ---
+      // --- Fresnel (sky reflection) ---
       float fresnel = pow(1.0 - max(dot(viewDir, detailNormal), 0.0), 3.0);
-      baseColor = mix(baseColor, uSkyColor, fresnel * 0.7);
+      baseColor = mix(baseColor, uSkyColor * 0.8, fresnel * 0.6);
 
       // --- Sun glint (Blinn specular) ---
       vec3 halfVec = normalize(viewDir + uSunDir);
       float spec = pow(max(dot(detailNormal, halfVec), 0.0), 64.0);
-      baseColor += uSunColor * spec * 0.8;
+      baseColor += uSunColor * spec * 0.9;
 
       // --- Foam ---
-      // Crest foam
-      float crestFoam = smoothstep(0.75, 0.95, abs(vElevation) * 30.0);
-      // Shore foam
-      float shoreFoam = shore * smoothstep(0.0, 0.3, shore);
-      shoreFoam *= 0.5 + 0.5 * noise(vWorldPos.xz * 18.0 + uTime);
-      float foam = max(crestFoam, shoreFoam) * 0.6;
-      baseColor = mix(baseColor, vec3(1.0), foam);
+      float crestFoam = smoothstep(0.6, 0.9, abs(vElevation) * 25.0);
+      float shoreFoam = shore * smoothstep(0.0, 0.4, shore);
+      shoreFoam *= 0.5 + 0.5 * noise(vWorldPos.xz * 20.0 + uTime);
+      float foam = max(crestFoam, shoreFoam) * 0.7;
+      baseColor = mix(baseColor, vec3(0.95, 0.98, 1.0), foam);
 
       // --- Caustic shimmer (shallow areas) ---
-      float c1 = 1.0 - min(noise(vWorldPos.xz * 8.0 + uTime * 0.6), noise(vWorldPos.xz * 8.0 - uTime * 0.4));
-      float caustic = pow(c1, 6.0) * 0.25 * shore;
-      baseColor += vec3(caustic);
+      float c1 = 1.0 - min(noise(vWorldPos.xz * 10.0 + uTime * 0.7), noise(vWorldPos.xz * 10.0 - uTime * 0.5));
+      float caustic = pow(c1, 5.0) * 0.3 * shore;
+      baseColor += vec3(caustic * 0.5, caustic * 0.8, caustic);
 
       // --- Alpha ---
-      float alpha = 0.82 * (1.0 - shore * 0.4);
+      float alpha = 0.88 * (1.0 - shore * 0.3);
 
       gl_FragColor = vec4(baseColor, alpha);
     }
@@ -202,7 +203,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
     <mesh
       ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.76, 0]}
+      position={[0, 0.85, 0]}
       receiveShadow
     >
       <planeGeometry args={[width, height, 64, 64]} />
@@ -214,7 +215,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
         side={THREE.DoubleSide}
         uniforms-uHeightMap-value={heightTexture}
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
-        uniforms-uWaterY-value={0.76}
+        uniforms-uWaterY-value={0.85}
       />
     </mesh>
   );
