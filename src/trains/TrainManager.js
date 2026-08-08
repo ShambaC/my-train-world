@@ -115,8 +115,9 @@ export class TrainManager {
 
       this.updateTrainPosition(train, currentTrack);
 
-      // Station stop detection: only on tracks bound to a station, while the
-      // train is inside the station zone and crossing the platform center.
+      // Station stop detection: only on tracks bound to a station. The train
+      // stops at the FAR end of the platform — the end opposite the one it
+      // enters from — never at the building/center.
       const station = this.stationManager?.getStationForTrack(currentTrack.id);
       if (!station) continue;
 
@@ -128,11 +129,13 @@ export class TrainManager {
 
       if (inside) {
         if (!train.cooldowns.has(station.id)) {
-          const axial = Math.abs(
-            (train.position.x - station.centerWorld.x) * station.dir.x +
-            (train.position.z - station.centerWorld.z) * station.dir.z
-          );
-          if (axial < 0.25) {
+          const axial =
+            (train.position.x - station.startWorld.x) * station.dir.x +
+            (train.position.z - station.startWorld.z) * station.dir.z;
+          const platformLen = station.lengthCells * 0.5;
+          const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
+          const atFarEnd = towardEnd > 0 ? axial >= platformLen - 0.4 : axial <= 0.4;
+          if (atFarEnd) {
             train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
           }
         }

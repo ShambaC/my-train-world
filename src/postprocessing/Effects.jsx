@@ -9,9 +9,11 @@ import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftS
 
 // Tilt-shift settings (see tilt-shift-guide.md):
 //   r  — normalized screen Y of the sharp focus strip
-//   h/v — blur footprint = blurStrength / physical render size
-const FOCUS_Y = 0.5;
-const BLUR_STRENGTH = 2.4;
+//   h/v — blur footprint = blurStrength / physical render size.
+// A larger blurStrength both narrows the effective sharp band (steeper
+// ramp away from the focus line) and blurs the rest more.
+const FOCUS_Y = 0.65;
+const BLUR_STRENGTH = 3.7;
 
 // ─── Final Color Pass: applies ACES tone mapping + sRGB encoding exactly once,
 // plus a light saturation/vignette lift for the miniature look.

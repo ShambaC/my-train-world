@@ -96,11 +96,12 @@ export function createTrainEngine(colorIndex = 0) {
     group.add(wheel);
   });
   
-  // Cowcatcher
-  const catcherGeo = new THREE.BoxGeometry(ENGINE_WIDTH * 0.9, 0.06, 0.12);
+  // Cowcatcher — lifted just above the chassis top (y=0.09) so its faces
+  // are never coplanar with the black base (fixes z-fighting)
+  const catcherGeo = new THREE.BoxGeometry(ENGINE_WIDTH * 0.9, 0.07, 0.12);
   const catcherMat = new THREE.MeshLambertMaterial({ color: COLORS.details, flatShading: true });
   const catcher = new THREE.Mesh(catcherGeo, catcherMat);
-  catcher.position.set(0, 0.06, 0.42);
+  catcher.position.set(0, 0.095, 0.44);
   group.add(catcher);
   
   return group;
