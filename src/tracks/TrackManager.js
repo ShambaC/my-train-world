@@ -45,7 +45,7 @@ export class TrackManager {
       if (otherId === track.id) continue;
 
       // Check height difference
-      if (Math.abs(track.position.y - otherTrack.position.y) > 0.1) continue;
+      if (Math.abs(track.position.y - otherTrack.position.y) > 0.15) continue;
 
       const otherEndpoints = this.getEndpoints(otherTrack);
 
@@ -70,7 +70,6 @@ export class TrackManager {
       }
     }
   }
-
   distance(p1, p2) {
     const dx = p1.x - p2.x;
     const dz = p1.z - p2.z;
@@ -134,8 +133,8 @@ export class TrackManager {
    * Check if position is valid for track placement
    */
   isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
-    // Check if on terrain (not in water)
-    if (terrainHeight < 1) return false;
+    // Check if on terrain (not in water) — waterline at y=1.0
+    if (terrainHeight < 1.0) return false;
     
     // Check if placement is on top surface only (not on sides)
     if (surfaceNormal) {
@@ -159,12 +158,14 @@ export class TrackManager {
   }
 
   /**
-   * Snap position to grid
+   * Snap position to grid. Y snaps to nearest voxel top (k*0.5 + 0.25)
+   * with a small lift (+0.02) so track meshes don't z-fight the terrain.
    */
   snapToGrid(position) {
+    const voxelTop = Math.round((position.y - 0.25) / 0.5) * 0.5 + 0.25;
     return {
       x: Math.round(position.x / this.gridSize) * this.gridSize,
-      y: position.y,
+      y: voxelTop + 0.02,
       z: Math.round(position.z / this.gridSize) * this.gridSize,
     };
   }

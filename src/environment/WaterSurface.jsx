@@ -13,7 +13,7 @@ const WaterShader = {
     uSkyColor: { value: new THREE.Color(0x87ceeb) },
     uHeightMap: { value: null },
     uTerrainSize: { value: new THREE.Vector2(50, 50) },
-    uWaterY: { value: 0.85 },
+    uWaterY: { value: 1.0 },
     uVoxel: { value: VOXEL_SIZE },
   },
   vertexShader: `
@@ -27,32 +27,26 @@ const WaterShader = {
       vUv = uv;
       vec3 pos = position;
 
-      // Multiple waves for visible deformation
+      // Waves use local plane axes (pos.x, pos.y). Plane lies in XY;
+      // mesh rotation.x = -PI/2 maps local +Z to world UP.
       float e = 0.0;
-      // Wave 1 - main swell
-      float w1 = sin(pos.x * 4.0 + uTime * 2.0) * 0.03;
-      e += w1;
-      // Wave 2 - cross wave
-      float w2 = cos(pos.z * 3.5 - uTime * 1.5) * 0.025;
-      e += w2;
-      // Wave 3 - diagonal chop
-      float w3 = sin((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015;
-      e += w3;
-      // Wave 4 - small ripples
-      float w4 = cos((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008;
-      e += w4;
+      e += sin(pos.x * 4.0 + uTime * 2.0) * 0.035;
+      e += cos(pos.y * 3.5 - uTime * 1.5) * 0.03;
+      e += sin((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.018;
+      e += cos((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01;
 
-      pos.y += e;
+      pos.z += e; // displace along local normal = world UP
       vElevation = e;
 
-      // Compute normal from wave derivatives
-      float dx = cos(pos.x * 4.0 + uTime * 2.0) * 0.03 * 4.0
-                + cos((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015 * 2.5
-                - sin((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008 * 5.0;
-      float dz = sin(pos.z * 3.5 - uTime * 1.5) * 0.025 * 3.5
-                + cos((pos.x + pos.z) * 2.5 + uTime * 2.8) * 0.015 * 2.5
-                + sin((pos.x - pos.z) * 5.0 + uTime * 3.5) * 0.008 * 5.0;
-      vNormal = normalize(vec3(-dx, 1.0, -dz));
+      // Local-space normal from partial derivatives
+      float de_dx = cos(pos.x * 4.0 + uTime * 2.0) * 0.035 * 4.0
+                  + cos((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.018 * 2.5
+                  - sin((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01 * 5.0;
+      float de_dy = -sin(pos.y * 3.5 - uTime * 1.5) * 0.03 * 3.5
+                  + cos((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.018 * 2.5
+                  + sin((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01 * 5.0;
+      vec3 localNormal = normalize(vec3(-de_dx, -de_dy, 1.0));
+      vNormal = normalize((modelMatrix * vec4(localNormal, 0.0)).xyz);
 
       vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
 
@@ -91,11 +85,15 @@ const WaterShader = {
     }
 
     void main() {
-      // --- Heightmap mask: discard above water level ---
-      vec2 mapUV = vUv;
-      float hSample = texture2D(uHeightMap, mapUV).r;
-      float terrainTopY = (hSample + 1.0) * 0.5; // reconstruct world Y from voxel height
-      if (terrainTopY > uWaterY - 0.05) discard;
+      // --- Heightmap mask: voxel-exact sampling ---
+      // Plane local +Y → world -Z, so rows flip; half-texel offset centers samples.
+      vec2 mapUV = vec2(
+        (vUv.x * (uTerrainSize.x - 1.0) + 0.5) / uTerrainSize.x,
+        1.0 - (vUv.y * (uTerrainSize.y - 1.0) + 0.5) / uTerrainSize.y
+      );
+      float h = texture2D(uHeightMap, mapUV).r;
+      float terrainTopY = h * uVoxel + 0.25; // voxel top = h*0.5 + 0.25
+      if (terrainTopY > uWaterY - 0.04) discard;
 
       // Shore factor: 0 = deep, 1 = near shore
       float shore = smoothstep(uWaterY - 0.4, uWaterY, terrainTopY);
@@ -148,15 +146,14 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
   const width = (terrainSize.length) * VOXEL_SIZE;
   const height = (terrainSize.breadth) * VOXEL_SIZE;
 
-  // Build height texture from terrain userData
+  // Build height texture from terrain userData (raw voxel heights)
   const heightTexture = useMemo(() => {
     if (!heightData?.heightMap || !heightData?.length || !heightData?.breadth) return null;
     const { heightMap, length, breadth } = heightData;
     const data = new Float32Array(length * breadth);
     for (let x = 0; x < length; x++) {
       for (let z = 0; z < breadth; z++) {
-        // Encode height as normalized [0,1] for R channel
-        data[z * length + x] = heightMap[x][z] / 10.0;
+        data[z * length + x] = heightMap[x][z];
       }
     }
     const tex = new THREE.DataTexture(data, length, breadth, THREE.RedFormat, THREE.FloatType);
@@ -203,10 +200,10 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
     <mesh
       ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.85, 0]}
+      position={[0, 1.0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[width, height, 64, 64]} />
+      <planeGeometry args={[width, height, 96, 96]} />
       <shaderMaterial
         ref={materialRef}
         args={[WaterShader]}
@@ -215,7 +212,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
         side={THREE.DoubleSide}
         uniforms-uHeightMap-value={heightTexture}
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
-        uniforms-uWaterY-value={0.85}
+        uniforms-uWaterY-value={1.0}
       />
     </mesh>
   );

@@ -1,8 +1,18 @@
 /**
- * Train Manager — Handles train movement and pathfinding.
- * Uses shared track geometry from trackGeometry.js.
+ * Train Manager — heading-based movement on undirected tracks.
+ * Tracks have endpoints but no inherent travel direction; the engine
+ * owns a heading (unit XZ vector) and facing always equals motion.
  */
-import { pointOnTrack, tangentOnTrack, localToWorld } from '../tracks/trackGeometry.js';
+import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
+
+const rotLocalToWorld = (local, rotationY) => {
+  const cos = Math.cos(rotationY);
+  const sin = Math.sin(rotationY);
+  return {
+    x: local.x * cos + local.z * sin,
+    z: -local.x * sin + local.z * cos,
+  };
+};
 
 export class TrainManager {
   constructor(trackManager) {
@@ -12,7 +22,7 @@ export class TrainManager {
   }
 
   /**
-   * Add a train to the system
+   * Add a train. direction: 1 = along track tangent, -1 = against it.
    */
   addTrain(startTrackId, direction = 1) {
     const startTrack = this.trackManager.tracks.get(startTrackId);
@@ -21,15 +31,22 @@ export class TrainManager {
       return null;
     }
 
+    const t = 0.5;
+    const tangent = rotLocalToWorld(tangentOnTrack(startTrack.type, t), startTrack.rotation);
+    const heading = {
+      x: tangent.x * direction,
+      z: tangent.z * direction,
+    };
+
     const id = `train_${this.nextId++}`;
     const train = {
       id,
       currentTrackId: startTrackId,
-      direction,
-      progress: 0.5,
+      progress: t,
       speed: 0.5,
+      heading,
       position: { ...startTrack.position },
-      rotation: startTrack.rotation,
+      rotation: Math.atan2(heading.x, heading.z),
       active: false,
     };
 
@@ -42,11 +59,8 @@ export class TrainManager {
     this.trains.delete(id);
   }
 
-  /**
-   * Update all active trains.
-   */
   update(deltaTime) {
-    for (const [id, train] of this.trains) {
+    for (const train of this.trains.values()) {
       if (!train.active) continue;
 
       const currentTrack = this.trackManager.tracks.get(train.currentTrackId);
@@ -56,90 +70,81 @@ export class TrainManager {
         continue;
       }
 
-      train.progress += train.speed * deltaTime * train.direction;
+      // Movement sign from heading vs track tangent
+      const tangent = rotLocalToWorld(
+        tangentOnTrack(currentTrack.type, train.progress),
+        currentTrack.rotation
+      );
+      const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
 
-      // Check if train reached end of track
-      if (train.progress >= 1.0) {
-        this.advanceToTrack(train, currentTrack, 'front');
-      } else if (train.progress <= 0.0) {
-        this.advanceToTrack(train, currentTrack, 'back');
+      train.progress += train.speed * deltaTime * sign;
+
+      if (sign > 0 && train.progress >= 1.0) {
+        this.transition(train, currentTrack, 'front');
+      } else if (sign < 0 && train.progress <= 0.0) {
+        this.transition(train, currentTrack, 'back');
       }
 
-      // Belt-and-braces: always clamp progress
-      train.progress = Math.max(0.01, Math.min(0.99, train.progress));
+      // NO clamp here — it resets accumulation before the boundary is crossed.
+
+      // Follow tangent so facing = motion, smooth through curves
+      const newTangent = rotLocalToWorld(
+        tangentOnTrack(currentTrack.type, train.progress),
+        currentTrack.rotation
+      );
+      const newSign = (newTangent.x * train.heading.x + newTangent.z * train.heading.z) >= 0 ? 1 : -1;
+      train.heading = { x: newTangent.x * newSign, z: newTangent.z * newSign };
 
       this.updateTrainPosition(train, currentTrack);
     }
   }
 
   /**
-   * Attempt to advance train from currentTrack at the given exitEnd.
-   * If no valid connection, reverse direction in place.
+   * Move to connected track at exitEnd; reverse if no connection.
    */
-  advanceToTrack(train, currentTrack, exitEnd) {
-    const nextTrackId = currentTrack.connections[exitEnd];
-
-    if (nextTrackId) {
-      const nextTrack = this.trackManager.tracks.get(nextTrackId);
-      if (nextTrack) {
-        // Determine which end of nextTrack connects back to currentTrack
-        let enterEnd = null;
-        if (nextTrack.connections.back === currentTrack.id) {
-          enterEnd = 'back';
-        } else if (nextTrack.connections.front === currentTrack.id) {
-          enterEnd = 'front';
-        }
-
-        if (enterEnd) {
-          // Valid connection: transition
-          train.currentTrackId = nextTrackId;
-          if (enterEnd === 'back') {
-            // Entering back of next track → start at 0, move forward
-            train.progress = 0.01;
-            train.direction = 1;
-          } else {
-            // Entering front of next track → start at 1, move backward
-            train.progress = 0.99;
-            train.direction = -1;
-          }
-          return;
-        }
-      }
+  transition(train, currentTrack, exitEnd) {
+    const nextId = currentTrack.connections[exitEnd];
+    if (!nextId) {
+      train.heading = { x: -train.heading.x, z: -train.heading.z };
+      train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+      return;
     }
 
-    // Fallback: no valid connection — reverse in place
-    if (exitEnd === 'front') {
-      train.direction = -1;
-      train.progress = 0.99;
-    } else {
-      train.direction = 1;
-      train.progress = 0.01;
+    const nextTrack = this.trackManager.tracks.get(nextId);
+    if (!nextTrack) {
+      train.heading = { x: -train.heading.x, z: -train.heading.z };
+      train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+      return;
     }
+
+    // Entry end of next track
+    let entryEnd = null;
+    if (nextTrack.connections.back === currentTrack.id) entryEnd = 'back';
+    else if (nextTrack.connections.front === currentTrack.id) entryEnd = 'front';
+
+    if (!entryEnd) {
+      train.heading = { x: -train.heading.x, z: -train.heading.z };
+      train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+      return;
+    }
+
+    train.currentTrackId = nextId;
+    train.progress = entryEnd === 'back' ? 0.01 : 0.99;
   }
 
   /**
-   * Calculate train world position and yaw from track + progress.
+   * Position + yaw from track geometry.
    */
   updateTrainPosition(train, track) {
-    const t = train.progress;
-    const local = pointOnTrack(track.type, t);
-    const world = localToWorld(local, track.position, track.rotation);
+    const local = pointOnTrack(track.type, train.progress);
+    const cos = Math.cos(track.rotation);
+    const sin = Math.sin(track.rotation);
 
-    train.position.x = world.x;
+    train.position.x = track.position.x + local.x * cos + local.z * sin;
     train.position.y = track.position.y;
-    train.position.z = world.z;
+    train.position.z = track.position.z + -local.x * sin + local.z * cos;
 
-    // Compute yaw from tangent direction
-    const tangent = tangentOnTrack(track.type, t);
-    // Rotate tangent by track rotation
-    const cosR = Math.cos(track.rotation);
-    const sinR = Math.sin(track.rotation);
-    const tangentWorld = {
-      x: tangent.x * cosR + tangent.z * sinR,
-      z: -tangent.x * sinR + tangent.z * cosR,
-    };
-    train.rotation = Math.atan2(tangentWorld.x, tangentWorld.z);
-    if (train.direction < 0) train.rotation += Math.PI;
+    train.rotation = Math.atan2(train.heading.x, train.heading.z);
   }
 
   getAllTrains() {

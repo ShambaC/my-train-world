@@ -26,7 +26,7 @@ export default function TrackRenderer({
     updateGhostPosition,
     handlePlacement,
     handleDelete,
-  } = useTrackPlacement(terrainRef, trackManager, selectedTool, rotation, heightOffset);
+  } = useTrackPlacement(terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection);
 
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
@@ -66,29 +66,20 @@ export default function TrackRenderer({
 
       if (selectedTool?.type === 'train') {
         if (ghostPosition?.isTrack) {
-          const track = trackManager.getTrackAtPosition(ghostPosition, 0.8);
+          const track = trackManager.getTrackAtPosition(ghostPosition, 0.35);
           if (track) trainManager.addTrain(track.id, trainDirection);
         }
       } else if (selectedTool?.type === 'delete') {
-        if (ghostPosition) {
-          const trackToDelete = trackManager.getTrackAtPosition(ghostPosition, 1.0);
-          if (trackToDelete) {
-            trainManager.getAllTrains()
-              .filter(t => t.currentTrackId === trackToDelete.id)
-              .forEach(t => trainManager.removeTrain(t.id));
-            trackManager.removeTrack(trackToDelete.id);
-            setTracks(trackManager.getAllTracks());
-            onTracksChange?.(trackManager.getAllTracks());
-          } else {
-            for (const train of trainManager.getAllTrains()) {
-              const dx = Math.abs(train.position.x - ghostPosition.x);
-              const dz = Math.abs(train.position.z - ghostPosition.z);
-              if (dx < 0.5 && dz < 0.5) {
-                trainManager.removeTrain(train.id);
-                break;
-              }
-            }
-          }
+        const target = ghostPosition?.target;
+        if (target?.kind === 'track') {
+          trainManager.getAllTrains()
+            .filter(t => t.currentTrackId === target.id)
+            .forEach(t => trainManager.removeTrain(t.id));
+          trackManager.removeTrack(target.id);
+          setTracks(trackManager.getAllTracks());
+          onTracksChange?.(trackManager.getAllTracks());
+        } else if (target?.kind === 'train') {
+          trainManager.removeTrain(target.id);
         }
       } else if (selectedTool && ghostPosition && isValidPosition) {
         const track = handlePlacement(e);
@@ -147,19 +138,19 @@ export default function TrackRenderer({
     } else if (selectedTool.type === 'train') {
       mesh = makeGhost(createTrainEngine(0), isValidPosition ? GHOST_GREEN : GHOST_RED);
     } else if (selectedTool.type === 'delete') {
-      // Red silhouette of hovered object
-      if (ghostPosition?.isTrack && ghostPosition?.type) {
+      // Red silhouette of hovered target: track model or train engine
+      if (ghostPosition?.target?.kind === 'train') {
+        mesh = makeGhost(createTrainEngine(0), GHOST_RED, 0.5);
+      } else if (ghostPosition?.type) {
         mesh = ghostPosition.type === 'straight'
           ? makeGhost(createStraightTrack(), GHOST_RED, 0.5)
           : makeGhost(createCurvedTrack(), GHOST_RED, 0.5);
-      } else {
-        mesh = makeGhost(createTrainEngine(0), GHOST_RED, 0.5);
       }
     }
 
     ghostMeshRef.current = mesh;
     return mesh;
-  }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.isTrack]);
+  }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.target?.id]);
 
   return (
     <group>

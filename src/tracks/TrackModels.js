@@ -8,7 +8,7 @@ const TRACK_LENGTH = VOXEL;
 const RAIL_HEIGHT = 0.05;
 const SLEEPER_SPACING = 0.15;
 
-const RAIL_OFFSET = STRAIGHT_TRACK_WIDTH / 2 - RAIL_HEIGHT * 0.4;
+const RAIL_OFFSET = 0.15; // Shared gauge for straight AND curved tracks
 
 const COLORS = {
   rail: 0x4a4a4a,
@@ -75,22 +75,22 @@ export function createCurvedTrack() {
   const r  = CURVE.r;   // 0.25
   const segments = 8;
   const angleStep = (Math.PI / 2) / segments;
-  
-  // Use smaller rail offset for curved tracks to prevent clustering
-  const curvedRailOffset = 0.15;
 
   // Gravel and sleepers along arc
   for (let i = 0; i <= segments; i++) {
     const angle = Math.PI + i * angleStep; // 180° → 270°
     const x = cx + Math.cos(angle) * r;
     const z = cz + Math.sin(angle) * r;
+    // Local Z (box depth) must align with tangent (sin θ, -cos θ)
+    // rotation.y = φ maps local Z to (sin φ, cos φ) → φ = π - θ
+    const rotY = Math.PI - angle;
 
     // Gravel segment
     const gravelGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, r * angleStep * 1.1);
     const gravelMat = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
     const gravel = new THREE.Mesh(gravelGeo, gravelMat);
     gravel.position.set(x, RAIL_HEIGHT * 0.25, z);
-    gravel.rotation.y = -(angle - Math.PI / 2);
+    gravel.rotation.y = rotY;
     gravel.castShadow = true;
     gravel.receiveShadow = true;
     group.add(gravel);
@@ -101,16 +101,16 @@ export function createCurvedTrack() {
       const sleeperMat = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
       const sleeper = new THREE.Mesh(sleeperGeo, sleeperMat);
       sleeper.position.set(x, RAIL_HEIGHT * 0.5, z);
-      sleeper.rotation.y = -(angle - Math.PI / 2);
+      sleeper.rotation.y = rotY;
       sleeper.castShadow = true;
       sleeper.receiveShadow = true;
       group.add(sleeper);
     }
   }
 
-  // Curved Rails — inner and outer arcs
-  const innerRadius = r - curvedRailOffset;
-  const outerRadius = r + curvedRailOffset;
+  // Curved Rails — inner and outer arcs (shared gauge)
+  const innerRadius = r - RAIL_OFFSET;
+  const outerRadius = r + RAIL_OFFSET;
 
   const buildRailMesh = (radius) => {
     const points = [];

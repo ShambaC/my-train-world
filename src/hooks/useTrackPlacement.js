@@ -5,7 +5,7 @@ import * as THREE from 'three';
 /**
  * Custom hook for raycasting and track placement
  */
-export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotation, heightOffset) {
+export function useTrackPlacement(terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection) {
   const { camera, gl } = useThree();
   const [ghostPosition, setGhostPosition] = useState(null);
   const [isValidPosition, setIsValidPosition] = useState(true);
@@ -39,22 +39,23 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
       
       if (intersects.length > 0) {
         const point = intersects[0].point;
-        const snapped = trackManager.snapToGrid(point);
 
         if (selectedTool.type === 'train') {
           // Snap ghost to the actual track under cursor
-          const track = trackManager.getTrackAtPosition(snapped, 0.8);
+          const track = trackManager.getTrackAtPosition(point, 0.35);
           if (track) {
+            const flip = trainDirection === -1 ? Math.PI : 0;
             setGhostPosition({
               x: track.position.x,
               y: track.position.y,
               z: track.position.z,
-              rotation: track.rotation || 0,
+              rotation: (track.rotation || 0) + flip,
               type: track.type,
               isTrack: true,
             });
             setIsValidPosition(true);
           } else {
+            const snapped = trackManager.snapToGrid(point);
             setGhostPosition({
               x: snapped.x,
               y: snapped.y,
@@ -66,16 +67,30 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
             setIsValidPosition(false);
           }
         } else {
-          // Delete tool: only show ghost when hovering a track
-          const track = trackManager.getTrackAtPosition(snapped, 1.0);
-          if (track) {
+          // Delete tool: resolve exact target — trains first, then tracks
+          let target = null;
+          for (const train of trainManager.getAllTrains()) {
+            const dx = Math.abs(train.position.x - point.x);
+            const dz = Math.abs(train.position.z - point.z);
+            if (dx < 0.45 && dz < 0.45) {
+              target = { kind: 'train', id: train.id, position: train.position, rotation: train.rotation, type: null };
+              break;
+            }
+          }
+          if (!target) {
+            const track = trackManager.getTrackAtPosition(point, 0.35);
+            if (track) {
+              target = { kind: 'track', id: track.id, position: track.position, rotation: track.rotation || 0, type: track.type };
+            }
+          }
+          if (target) {
             setGhostPosition({
-              x: track.position.x,
-              y: track.position.y,
-              z: track.position.z,
-              rotation: track.rotation || 0,
-              type: track.type,
-              isTrack: true,
+              x: target.position.x,
+              y: target.position.y,
+              z: target.position.z,
+              rotation: target.rotation,
+              type: target.type,
+              target,
             });
             setIsValidPosition(true);
           } else {
@@ -112,9 +127,9 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
         return;
       }
       
-      // Snap to grid
+      // Snap to grid (y = voxel top) + height offset
       const snapped = trackManager.snapToGrid(point);
-      snapped.y = point.y + heightOffset;
+      snapped.y = snapped.y + heightOffset;
 
       // Check if valid placement (only for track tools) - pass surface normal
       const valid = selectedTool.type === 'track' ? trackManager.isValidPlacement(
@@ -134,16 +149,11 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
     } else {
       setGhostPosition(null);
     }
-  }, [camera, gl, terrainRef, trackManager, selectedTool, rotation, heightOffset]);
+  }, [camera, gl, terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection]);
 
   // Recalculate ghost position when rotation or heightOffset changes
   const recalculateGhostPosition = useCallback(() => {
     if (!terrainRef.current || !selectedTool || !lastMousePos.current.x) {
-      return;
-    }
-    
-    // Skip recalculation for delete and train tools
-    if (selectedTool.type === 'delete' || selectedTool.type === 'train') {
       return;
     }
 
@@ -158,7 +168,7 @@ export function useTrackPlacement(terrainRef, trackManager, selectedTool, rotati
   // Trigger recalculation when rotation or heightOffset changes
   useEffect(() => {
     recalculateGhostPosition();
-  }, [rotation, heightOffset, recalculateGhostPosition]);
+  }, [rotation, heightOffset, trainDirection, recalculateGhostPosition]);
 
   const handlePlacement = useCallback((event) => {
     if (!ghostPosition || !isValidPosition || !selectedTool) return null;
