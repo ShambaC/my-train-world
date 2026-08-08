@@ -5,7 +5,7 @@
  * Coaches trail the engine along the track graph (walkBack each frame).
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
-import { COACH_SPACING } from './coachTypes.js';
+import { COACH_LENGTH } from './coachTypes.js';
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -125,6 +125,11 @@ export class TrainManager {
 
       this.updateTrainPosition(train, currentTrack);
 
+      // Coaches trail the engine along the track path — ALWAYS, independent
+      // of station detection (which would otherwise freeze them once the
+      // engine leaves the station-bound tracks).
+      this.updateCoaches(train);
+
       // Station stop detection: only on tracks bound to a station. The train
       // stops at the FAR end of the platform — the end opposite the one it
       // enters from — never at the building/center.
@@ -162,9 +167,6 @@ export class TrainManager {
           train.cooldowns.delete(station.id);
         }
       }
-
-      // Coaches trail the engine along the track path
-      this.updateCoaches(train);
     }
   }
 
@@ -172,12 +174,16 @@ export class TrainManager {
 
   /**
    * Attach a coach behind the engine. One train = one engine; a coach
-   * belongs to exactly one train.
+   * belongs to exactly one train. Spacing is per-pair: half of the car
+   * ahead + half of the new coach + gap, so coaches never overlap.
    */
   addCoach(trainId, coachType) {
     const train = this.trains.get(trainId);
     if (!train) return null;
-    const spacing = COACH_SPACING[coachType] ?? 1.2;
+    const prev = train.coaches[train.coaches.length - 1];
+    const newHalf = (COACH_LENGTH[coachType] ?? 1.0) / 2;
+    const aheadHalf = prev ? (COACH_LENGTH[prev.type] ?? 1.0) / 2 : 0.5; // engine half
+    const spacing = aheadHalf + newHalf + 0.15;
     const coach = {
       id: `${train.id}_coach_${train.coaches.length}`,
       type: coachType,
@@ -278,20 +284,42 @@ export class TrainManager {
   }
 
   /**
-   * Move to connected track at exitEnd; reverse if no connection.
+   * Move to connected track at exitEnd. At a dead end, solo engines reverse;
+   * a train with coaches stays parked at the end so the train never splits
+   * (the coaches trail behind and would be left at the dead end).
    */
   transition(train, currentTrack, exitEnd) {
     const nextId = currentTrack.connections[exitEnd];
-    if (!nextId) {
-      train.heading = { x: -train.heading.x, z: -train.heading.z };
+
+    const parkAtEnd = () => {
       train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+    };
+
+    const reverse = () => {
+      train.heading = { x: -train.heading.x, z: -train.heading.z };
+      parkAtEnd();
+    };
+
+    if (train.coaches.length > 0) {
+      // Trains with coaches never reverse at a dead end
+      if (!nextId) {
+        parkAtEnd();
+        return;
+      }
+    }
+
+    if (!nextId) {
+      reverse();
       return;
     }
 
     const nextTrack = this.trackManager.tracks.get(nextId);
     if (!nextTrack) {
-      train.heading = { x: -train.heading.x, z: -train.heading.z };
-      train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+      if (train.coaches.length > 0) {
+        parkAtEnd();
+        return;
+      }
+      reverse();
       return;
     }
 
@@ -301,8 +329,11 @@ export class TrainManager {
     else if (nextTrack.connections.front === currentTrack.id) entryEnd = 'front';
 
     if (!entryEnd) {
-      train.heading = { x: -train.heading.x, z: -train.heading.z };
-      train.progress = exitEnd === 'front' ? 0.99 : 0.01;
+      if (train.coaches.length > 0) {
+        parkAtEnd();
+        return;
+      }
+      reverse();
       return;
     }
 

@@ -11,12 +11,22 @@ export const COACH_TYPES = [
   { key: 'container-flat-wagon', label: 'Container Wagon' },
 ];
 
+export const COACH_LENGTH = {
+  'passenger-coach': 2.54,
+  'freight-van': 1.0,
+  'mail-coach': 1.13,
+  'open-coal-wagon': 0.99,
+  'container-flat-wagon': 1.09,
+};
+
+// Engine-relative spacing (used for the placement ghost): engine half (0.5)
+// + coach half + 0.15 gap. Real per-pair spacing is computed in addCoach.
 export const COACH_SPACING = {
-  'passenger-coach': 0.5 + 2.54 / 2 + 0.15, // 1.92
-  'freight-van': 0.5 + 1.0 / 2 + 0.15,       // 1.15
-  'mail-coach': 0.5 + 1.13 / 2 + 0.15,       // 1.22
-  'open-coal-wagon': 0.5 + 0.99 / 2 + 0.15,  // 1.14
-  'container-flat-wagon': 0.5 + 1.09 / 2 + 0.15, // 1.2
+  'passenger-coach': 0.5 + COACH_LENGTH['passenger-coach'] / 2 + 0.15,
+  'freight-van': 0.5 + COACH_LENGTH['freight-van'] / 2 + 0.15,
+  'mail-coach': 0.5 + COACH_LENGTH['mail-coach'] / 2 + 0.15,
+  'open-coal-wagon': 0.5 + COACH_LENGTH['open-coal-wagon'] / 2 + 0.15,
+  'container-flat-wagon': 0.5 + COACH_LENGTH['container-flat-wagon'] / 2 + 0.15,
 };
 
 export const DEFAULT_COACH = 'passenger-coach';
