@@ -26,6 +26,7 @@ export function makeGhost(object, hex = 0x00ff00, opacity = 0.55) {
         opacity: 0.7,
         depthWrite: false,
         side: THREE.DoubleSide,
+        toneMapped: false, // keep ghosts bright under the effects pipeline
       });
       c.castShadow = false;
       c.receiveShadow = false;

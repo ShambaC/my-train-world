@@ -31,6 +31,43 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       return;
     }
     
+    // Coach tool: target an engine in the world
+    if (selectedTool.type === 'coach') {
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.current.setFromCamera(mouse.current, camera);
+      const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+      if (intersects.length === 0) {
+        setGhostPosition(null);
+        return;
+      }
+      const point = intersects[0].point;
+      let train = null;
+      for (const t of trainManager.getAllTrains()) {
+        const dx = Math.abs(t.position.x - point.x);
+        const dz = Math.abs(t.position.z - point.z);
+        if (dx < 0.45 && dz < 0.45) {
+          train = t;
+          break;
+        }
+      }
+      if (train) {
+        setGhostPosition({
+          x: train.position.x,
+          y: train.position.y,
+          z: train.position.z,
+          rotation: train.rotation,
+          type: null,
+          target: { kind: 'train', id: train.id },
+        });
+        setIsValidPosition(true);
+      } else {
+        setGhostPosition(null);
+      }
+      return;
+    }
+    
     // For delete and train tools, we still need ghost position to show where we're clicking
     if (selectedTool.type === 'delete' || selectedTool.type === 'train') {
       // Get mouse position for raycasting

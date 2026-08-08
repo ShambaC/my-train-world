@@ -27,6 +27,11 @@ import linesideFenceRunUrl from '../assets/Models/Trees/lineside-fence-run.glb';
 import linesideOakUrl from '../assets/Models/Trees/lineside-oak.glb';
 import linesidePineUrl from '../assets/Models/Trees/lineside-pine.glb';
 import linesideShrubUrl from '../assets/Models/Trees/lineside-shrub.glb';
+import containerFlatWagonUrl from '../assets/Models/Trains/container-flat-wagon.glb';
+import freightVanUrl from '../assets/Models/Trains/freight-van.glb';
+import mailCoachUrl from '../assets/Models/Trains/mail-coach.glb';
+import openCoalWagonUrl from '../assets/Models/Trains/open-coal-wagon.glb';
+import passengerCoachUrl from '../assets/Models/Trains/passenger-coach.glb';
 
 export const MODEL_SCALE = 0.3;
 
@@ -50,6 +55,11 @@ export const MODEL_DEFS = [
   { key: 'lineside-oak', category: 'trees', url: linesideOakUrl },
   { key: 'lineside-pine', category: 'trees', url: linesidePineUrl },
   { key: 'lineside-shrub', category: 'trees', url: linesideShrubUrl },
+  { key: 'container-flat-wagon', category: 'trains', url: containerFlatWagonUrl },
+  { key: 'freight-van', category: 'trains', url: freightVanUrl },
+  { key: 'mail-coach', category: 'trains', url: mailCoachUrl },
+  { key: 'open-coal-wagon', category: 'trains', url: openCoalWagonUrl },
+  { key: 'passenger-coach', category: 'trains', url: passengerCoachUrl },
 ];
 
 function findFirstMesh(object) {

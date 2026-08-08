@@ -13,6 +13,7 @@ import FogWall from './environment/FogWall';
 import Effects from './postprocessing/Effects';
 import ScatterProps from './environment/ScatterProps';
 import StationRenderer from './stations/StationRenderer';
+import CoachMenu from './ui/CoachMenu';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -35,6 +36,7 @@ function Scene({
   trackCount,
   stationsVersion,
   onStationsChange,
+  onCoachPick,
 }) {
   const terrainRef = useRef();
   const orbitRef = useRef(null);
@@ -166,6 +168,7 @@ function Scene({
           onTracksChange={onTracksChange}
           trainDirection={trainDirection}
           onStationsChange={onStationsChange}
+          onCoachPick={onCoachPick}
         />
       )}
 
@@ -257,6 +260,21 @@ export default function GameScene({
     stationManager?.rebuildBindings(trackManager);
   };
 
+  // Coach picker (radial menu) — opened when clicking an engine with the
+  // coach tool; selection attaches the coach behind that engine.
+  const [coachMenu, setCoachMenu] = useState(null);
+
+  const handleCoachPick = (trainId, x, y) => {
+    setCoachMenu({ trainId, x, y });
+  };
+
+  const handleCoachSelect = (coachType) => {
+    if (coachMenu) {
+      trainManager?.addCoach(coachMenu.trainId, coachType);
+    }
+    setCoachMenu(null);
+  };
+
   // Stations are cleared by App on terrain change — re-sync versions
   useEffect(() => {
     setStationsVersion((v) => v + 1);
@@ -305,6 +323,7 @@ export default function GameScene({
           trackCount={trackCount}
           stationsVersion={stationsVersion}
           onStationsChange={handleStationsChange}
+          onCoachPick={handleCoachPick}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (
@@ -312,6 +331,16 @@ export default function GameScene({
         )}
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
+
+      {/* Radial coach picker */}
+      {coachMenu && (
+        <CoachMenu
+          x={coachMenu.x}
+          y={coachMenu.y}
+          onSelect={handleCoachSelect}
+          onClose={() => setCoachMenu(null)}
+        />
+      )}
       
       {/* Debug Overlay */}
       {showDebug && (

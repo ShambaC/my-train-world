@@ -48,6 +48,13 @@ const TOOLS = [
     type: 'station'
   },
   { 
+    id: 'coach', 
+    name: 'Add Coach', 
+    label: 'Coach',
+    icon: '🚃', 
+    type: 'coach'
+  },
+  { 
     id: 'delete', 
     name: 'Delete Tool', 
     label: 'Delete',
@@ -72,6 +79,7 @@ function App() {
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
   const [loadProgress, setLoadProgress] = useState(0);
+  const [trainCount, setTrainCount] = useState(0);
   
   const trackManagerRef = useRef(new TrackManager());
   const stationManagerRef = useRef(new StationManager());
@@ -86,6 +94,20 @@ function App() {
         console.error('Model preload failed:', err);
         setIsLoading(false);
       });
+  }, []);
+
+  // Track engine count so the coach tool can be gated on it
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const count = trainManagerRef.current.getAllTrains().length;
+      setTrainCount(count);
+      // Coach tool needs at least one engine in the world
+      setSelectedToolIndex((idx) => {
+        if (TOOLS[idx]?.type === 'coach' && count === 0) return 0;
+        return idx;
+      });
+    }, 500);
+    return () => clearInterval(interval);
   }, []);
 
   const handleTerrainSizeChange = (newSize) => {
@@ -186,6 +208,7 @@ function App() {
         selectedIndex={selectedToolIndex}
         onSelect={handleToolSelect}
         onRotate={handleRotate}
+        disabledToolIds={trainCount === 0 ? ['coach'] : []}
       />
       
       {/* Height Control Indicator - Moved to bottom-left */}

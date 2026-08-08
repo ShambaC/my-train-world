@@ -2,8 +2,10 @@
  * Train Manager — heading-based movement on undirected tracks.
  * Tracks have endpoints but no inherent travel direction; the engine
  * owns a heading (unit XZ vector) and facing always equals motion.
+ * Coaches trail the engine along the track graph (walkBack each frame).
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
+import { COACH_SPACING } from './coachTypes.js';
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -22,6 +24,7 @@ export class TrainManager {
     this.nextId = 0;
     this.time = 0;
     this.STOP_DURATION = 5; // seconds trains dwell at stations
+    this.STOP_COOLDOWN = 8; // seconds after departing before a re-stop is allowed
   }
 
   setStationManager(stationManager) {
@@ -57,6 +60,7 @@ export class TrainManager {
       active: false,
       dwell: null,      // { stationId, until } while stopped at a station
       cooldowns: new Map(), // stationId -> departure time (prevents re-stop)
+      coaches: [],      // { id, type, spacing, position, rotation, dir }
     };
 
     this.trains.set(id, train);
@@ -72,12 +76,18 @@ export class TrainManager {
     this.time += deltaTime;
 
     for (const train of this.trains.values()) {
-      if (!train.active) continue;
-
       const currentTrack = this.trackManager.tracks.get(train.currentTrackId);
       if (!currentTrack) {
-        console.warn('Train on invalid track:', train.currentTrackId);
-        train.active = false;
+        if (train.active) {
+          console.warn('Train on invalid track:', train.currentTrackId);
+          train.active = false;
+        }
+        continue;
+      }
+
+      // Coaches trail even while the engine is parked (active = false)
+      if (!train.active) {
+        this.updateCoaches(train);
         continue;
       }
 
@@ -128,7 +138,12 @@ export class TrainManager {
         Math.abs(train.position.y - station.groundY) <= 0.5;
 
       if (inside) {
-        if (!train.cooldowns.has(station.id)) {
+        // Re-stop only once the departure cooldown has expired — a dead-end
+        // reversal or short loop right after the station must not trigger a
+        // second 5s stop.
+        const lastDepart = train.cooldowns.get(station.id);
+        const ready = lastDepart === undefined || (this.time - lastDepart) > this.STOP_COOLDOWN;
+        if (ready) {
           const axial =
             (train.position.x - station.startWorld.x) * station.dir.x +
             (train.position.z - station.startWorld.z) * station.dir.z;
@@ -139,11 +154,127 @@ export class TrainManager {
             train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
           }
         }
+      } else if (train.cooldowns.has(station.id)) {
+        // Forget the cooldown only after it has expired, so a train that
+        // quickly returns (dead-end just outside) cannot re-stop.
+        const lastDepart = train.cooldowns.get(station.id);
+        if (this.time - lastDepart > this.STOP_COOLDOWN) {
+          train.cooldowns.delete(station.id);
+        }
+      }
+
+      // Coaches trail the engine along the track path
+      this.updateCoaches(train);
+    }
+  }
+
+  // ── Coaches ────────────────────────────────────────────────────────────
+
+  /**
+   * Attach a coach behind the engine. One train = one engine; a coach
+   * belongs to exactly one train.
+   */
+  addCoach(trainId, coachType) {
+    const train = this.trains.get(trainId);
+    if (!train) return null;
+    const spacing = COACH_SPACING[coachType] ?? 1.2;
+    const coach = {
+      id: `${train.id}_coach_${train.coaches.length}`,
+      type: coachType,
+      spacing,
+      position: null,
+      rotation: 0,
+    };
+    train.coaches.push(coach);
+    this.updateCoaches(train);
+    return coach;
+  }
+
+  trackLength(track) {
+    return track.type === 'curved' ? (Math.PI / 2) * 0.25 : 0.5;
+  }
+
+  /**
+   * Position every coach by walking backward from the engine along the
+   * track graph by its spacing distance. Exact trailing, no drift.
+   */
+  updateCoaches(train) {
+    let behind = 0;
+    for (const coach of train.coaches) {
+      behind += coach.spacing;
+      const pos = this.walkBack(train, behind);
+      if (!pos) {
+        coach.position = null;
+        continue;
+      }
+      const track = this.trackManager.tracks.get(pos.trackId);
+      const local = pointOnTrack(track.type, pos.progress);
+      const cos = Math.cos(track.rotation);
+      const sin = Math.sin(track.rotation);
+      coach.position = {
+        x: track.position.x + local.x * cos + local.z * sin,
+        y: track.position.y,
+        z: track.position.z + -local.x * sin + local.z * cos,
+      };
+      const tangent = rotLocalToWorld(tangentOnTrack(track.type, pos.progress), track.rotation);
+      coach.rotation = Math.atan2(tangent.x * pos.travelDir, tangent.z * pos.travelDir);
+    }
+  }
+
+  /**
+   * Walk `distance` world units backward from the engine along the path
+   * (opposite its heading). Returns { trackId, progress, travelDir } where
+   * travelDir is the travel (+1 = toward front) direction on the final track.
+   */
+  walkBack(train, distance) {
+    let trackId = train.currentTrackId;
+    let progress = train.progress;
+    let remaining = distance;
+    let guard = 0;
+
+    let track = this.trackManager.tracks.get(trackId);
+    if (!track) return null;
+    const tangent = rotLocalToWorld(tangentOnTrack(track.type, train.progress), track.rotation);
+    const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
+    let walkDir = -sign; // walk opposite the travel direction
+
+    while (remaining > 0 && guard++ < 200) {
+      track = this.trackManager.tracks.get(trackId);
+      if (!track) return null;
+      const len = this.trackLength(track);
+      // Distance to the end in the walk direction
+      const distToEnd = walkDir > 0 ? (1 - progress) * len : progress * len;
+
+      if (remaining <= distToEnd) {
+        progress += walkDir > 0 ? remaining / len : -remaining / len;
+        return { trackId, progress, travelDir: -walkDir };
+      }
+
+      remaining -= distToEnd;
+      const exitEnd = walkDir > 0 ? 'front' : 'back';
+      const nextId = track.connections[exitEnd];
+      if (!nextId) {
+        // Dead end — the coach bunches up at the end
+        return { trackId, progress: exitEnd === 'front' ? 1 : 0, travelDir: -walkDir };
+      }
+
+      const nextTrack = this.trackManager.tracks.get(nextId);
+      if (!nextTrack) return null;
+      if (nextTrack.connections.front === trackId) {
+        // Entered at the next track's front — walk toward its back
+        trackId = nextId;
+        progress = 1;
+        walkDir = -1;
+      } else if (nextTrack.connections.back === trackId) {
+        // Entered at the next track's back — walk toward its front
+        trackId = nextId;
+        progress = 0;
+        walkDir = 1;
       } else {
-        // Left the zone — allow a future stop again
-        train.cooldowns.delete(station.id);
+        return null;
       }
     }
+    return null;
   }
 
   /**

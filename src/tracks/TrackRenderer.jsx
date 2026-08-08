@@ -3,6 +3,8 @@ import { createStraightTrack, createCurvedTrack, createSupportBeams } from './Tr
 import { createTrainEngine } from '../trains/TrainModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
+import ModelLibrary from '../models/ModelLibrary';
+import { DEFAULT_COACH, COACH_SPACING } from '../trains/coachTypes';
 import * as THREE from 'three';
 
 export default function TrackRenderer({
@@ -16,11 +18,13 @@ export default function TrackRenderer({
   trainManager,
   trainDirection,
   onStationsChange,
+  onCoachPick,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
   const trackMeshesRef = useRef(new Map());
   const mouseDownPosRef = useRef(null);
+  const ghostOffsetRef = useRef(null);
 
   const {
     ghostPosition,
@@ -43,6 +47,7 @@ export default function TrackRenderer({
   const trainDirectionRef = useRef(trainDirection);
   const onTracksChangeRef = useRef(onTracksChange);
   const onStationsChangeRef = useRef(onStationsChange);
+  const onCoachPickRef = useRef(onCoachPick);
   selectedToolRef.current = selectedTool;
   ghostRef.current = { ghostPosition, isValidPosition };
   updateGhostRef.current = updateGhostPosition;
@@ -53,6 +58,7 @@ export default function TrackRenderer({
   trainDirectionRef.current = trainDirection;
   onTracksChangeRef.current = onTracksChange;
   onStationsChangeRef.current = onStationsChange;
+  onCoachPickRef.current = onCoachPick;
 
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
@@ -97,6 +103,11 @@ export default function TrackRenderer({
         if (ghostPosition?.isTrack) {
           const track = trackManagerRef.current.getTrackAtPosition(ghostPosition, 0.35);
           if (track) trainManagerRef.current.addTrain(track.id, trainDirectionRef.current);
+        }
+      } else if (tool?.type === 'coach') {
+        const target = ghostPosition?.target;
+        if (target?.kind === 'train') {
+          onCoachPickRef.current?.(target.id, e.clientX, e.clientY);
         }
       } else if (tool?.type === 'delete') {
         const target = ghostPosition?.target;
@@ -152,6 +163,8 @@ export default function TrackRenderer({
   const ghostMesh = useMemo(() => {
     if (!selectedTool) return null;
 
+    ghostOffsetRef.current = null;
+
     // Dispose old ghost
     if (ghostMeshRef.current) {
       ghostMeshRef.current.traverse((child) => {
@@ -170,6 +183,23 @@ export default function TrackRenderer({
         : makeGhost(createCurvedTrack(), color);
     } else if (selectedTool.type === 'train') {
       mesh = makeGhost(createTrainEngine(0), isValidPosition ? GHOST_GREEN : GHOST_RED);
+    } else if (selectedTool.type === 'coach') {
+      // Green ghost of the default coach, hovering behind the engine
+      if (ghostPosition?.target?.kind === 'train') {
+        const spacing = COACH_SPACING[DEFAULT_COACH] ?? 1.2;
+        const head = new THREE.Vector3(
+          Math.sin(ghostPosition.rotation),
+          0,
+          Math.cos(ghostPosition.rotation)
+        );
+        const ghostPos = {
+          x: ghostPosition.x - head.x * spacing,
+          y: ghostPosition.y,
+          z: ghostPosition.z - head.z * spacing,
+        };
+        ghostOffsetRef.current = ghostPos;
+        mesh = makeGhost(ModelLibrary.getMesh(DEFAULT_COACH), GHOST_GREEN);
+      }
     } else if (selectedTool.type === 'delete') {
       // Red silhouette of hovered target: train engine, track model or station
       if (ghostPosition?.target?.kind === 'station') {
@@ -178,7 +208,7 @@ export default function TrackRenderer({
         const d = r.maxZ - r.minZ;
         const box = new THREE.Mesh(
           new THREE.BoxGeometry(w, 1.2, d),
-          new THREE.MeshBasicMaterial({ color: GHOST_RED, transparent: true, opacity: 0.4, depthWrite: false })
+          new THREE.MeshBasicMaterial({ color: GHOST_RED, transparent: true, opacity: 0.4, depthWrite: false, toneMapped: false })
         );
         box.position.set(ghostPosition.x, ghostPosition.y + 0.5, ghostPosition.z);
         box.renderOrder = 10;
@@ -227,7 +257,11 @@ export default function TrackRenderer({
       {ghostMesh && ghostPosition && (
         <primitive
           object={ghostMesh}
-          position={[ghostPosition.x, ghostPosition.y, ghostPosition.z]}
+          position={[
+            ghostOffsetRef.current?.x ?? ghostPosition.x,
+            ghostOffsetRef.current?.y ?? ghostPosition.y,
+            ghostOffsetRef.current?.z ?? ghostPosition.z,
+          ]}
           rotation={[0, ghostPosition.rotation || 0, 0]}
         />
       )}

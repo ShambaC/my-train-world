@@ -11,7 +11,10 @@ const POP_DURATION = 0.45;
 function makeGhostBox(width, height, depth, color) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(width, height, depth),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false })
+    new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.5, depthWrite: false,
+      toneMapped: false, // stay visible under the effects pipeline
+    })
   );
   mesh.renderOrder = 10;
   return mesh;

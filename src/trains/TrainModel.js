@@ -72,7 +72,7 @@ export function createTrainEngine(colorIndex = 0) {
 
   // Headlight (front)
   const lightGeo = new THREE.SphereGeometry(0.05, 8, 8);
-  const lightMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0xffea00, toneMapped: false });
   const light = new THREE.Mesh(lightGeo, lightMat);
   light.position.set(0, 0.24, 0.36);
   group.add(light);
