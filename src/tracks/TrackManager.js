@@ -3,6 +3,7 @@
  */
 
 import { getEndpoints as getEndpointsFromGeometry } from './trackGeometry.js';
+import { WATER_LEVEL } from '../terrain.js';
 
 export class TrackManager {
   constructor() {
@@ -133,8 +134,8 @@ export class TrackManager {
    * Check if position is valid for track placement
    */
   isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
-    // Check if on terrain (not in water) — waterline at y=1.0
-    if (terrainHeight < 1.0) return false;
+    // Check if on terrain (not in water)
+    if (terrainHeight < WATER_LEVEL) return false;
     
     // Check if placement is on top surface only (not on sides)
     if (surfaceNormal) {

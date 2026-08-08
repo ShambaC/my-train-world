@@ -112,18 +112,18 @@ const WaterShader = {
 
       // --- Fresnel (sky reflection) ---
       float fresnel = pow(1.0 - max(dot(viewDir, detailNormal), 0.0), 3.0);
-      baseColor = mix(baseColor, uSkyColor * 0.8, fresnel * 0.6);
+      baseColor = mix(baseColor, uSkyColor * 0.8, fresnel * 0.25);
 
       // --- Sun glint (Blinn specular) ---
       vec3 halfVec = normalize(viewDir + uSunDir);
-      float spec = pow(max(dot(detailNormal, halfVec), 0.0), 64.0);
-      baseColor += uSunColor * spec * 0.9;
+      float spec = pow(max(dot(detailNormal, halfVec), 0.0), 96.0);
+      baseColor += uSunColor * spec * 0.15;
 
       // --- Foam ---
-      float crestFoam = smoothstep(0.6, 0.9, abs(vElevation) * 25.0);
-      float shoreFoam = shore * smoothstep(0.0, 0.4, shore);
+      float crestFoam = smoothstep(0.8, 1.0, abs(vElevation) * 25.0);
+      float shoreFoam = shore * smoothstep(0.2, 0.55, shore);
       shoreFoam *= 0.5 + 0.5 * noise(vWorldPos.xz * 20.0 + uTime);
-      float foam = max(crestFoam, shoreFoam) * 0.7;
+      float foam = max(crestFoam, shoreFoam) * 0.2;
       baseColor = mix(baseColor, vec3(0.95, 0.98, 1.0), foam);
 
       // --- Caustic shimmer (shallow areas) ---
@@ -200,7 +200,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
     <mesh
       ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 1.0, 0]}
+      position={[0, 1.5, 0]}
       receiveShadow
     >
       <planeGeometry args={[width, height, 96, 96]} />
@@ -212,7 +212,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
         side={THREE.DoubleSide}
         uniforms-uHeightMap-value={heightTexture}
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
-        uniforms-uWaterY-value={1.0}
+        uniforms-uWaterY-value={1.5}
       />
     </mesh>
   );

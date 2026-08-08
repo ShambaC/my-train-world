@@ -11,12 +11,15 @@ import { createForestBorder } from './environment/ForestBorder';
 import WaterSurface from './environment/WaterSurface';
 import FogWall from './environment/FogWall';
 import Effects from './postprocessing/Effects';
+import ScatterProps from './environment/ScatterProps';
+import StationRenderer from './stations/StationRenderer';
 
 // Scene component that contains the terrain
 function Scene({ 
   terrainSize, 
   onTerrainGenerated, 
   trackManager,
+  stationManager,
   trainManager,
   selectedTool, 
   rotation,
@@ -29,11 +32,24 @@ function Scene({
   tiltShiftEnabled,
   celShadingEnabled,
   trainDirection,
+  trackCount,
+  stationsVersion,
+  onStationsChange,
 }) {
   const terrainRef = useRef();
-  const { camera, scene } = useThree();
+  const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
+
+  // Dev-only test hook
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.__mtw = {
+        ...window.__mtw, camera, gl: gl.domElement, THREE,
+        terrainRef: terrainRef.current, terrainData: terrain?.userData, terrainGroup: terrain,
+      };
+    }
+  }, [camera, gl, terrain, terrainRef]);
   
   // Setup lighting based on time of day
   useEffect(() => {
@@ -140,6 +156,7 @@ function Scene({
         <TrackRenderer
           key={tracksVersion}
           trackManager={trackManager}
+          stationManager={stationManager}
           trainManager={trainManager}
           terrainRef={terrainRef}
           selectedTool={selectedTool}
@@ -147,6 +164,31 @@ function Scene({
           heightOffset={heightOffset}
           onTracksChange={onTracksChange}
           trainDirection={trainDirection}
+          onStationsChange={onStationsChange}
+        />
+      )}
+
+      {/* Station System */}
+      {terrain && (
+        <StationRenderer
+          stationManager={stationManager}
+          terrainRef={terrainRef}
+          selectedTool={selectedTool}
+          rotation={rotation}
+          terrainData={terrain?.userData}
+          stationsVersion={stationsVersion}
+          onStationsChange={onStationsChange}
+        />
+      )}
+
+      {/* Scattered Props */}
+      {terrain && (
+        <ScatterProps
+          terrainData={terrain?.userData}
+          trackManager={trackManager}
+          stationManager={stationManager}
+          trackCount={trackCount}
+          stationsVersion={stationsVersion}
         />
       )}
       
@@ -177,6 +219,7 @@ export default function GameScene({
   terrainSize, 
   showDebug, 
   trackManager,
+  stationManager,
   trainManager,
   selectedTool,
   rotation,
@@ -196,11 +239,33 @@ export default function GameScene({
   const [fps, setFps] = useState(0);
   const [trackCount, setTrackCount] = useState(0);
   const [trainCount, setTrainCount] = useState(0);
+  const [stationCount, setStationCount] = useState(0);
+  const [stationsVersion, setStationsVersion] = useState(0);
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
+    stationManager?.rebuildBindings(trackManager);
     if (onTracksChange) onTracksChange(tracks);
   };
+
+  const handleStationsChange = () => {
+    setStationsVersion((v) => v + 1);
+    setStationCount(stationManager?.getAllStations().length || 0);
+    stationManager?.rebuildBindings(trackManager);
+  };
+
+  // Stations are cleared by App on terrain change — re-sync versions
+  useEffect(() => {
+    setStationsVersion((v) => v + 1);
+    setStationCount(stationManager?.getAllStations().length || 0);
+  }, [terrainSize, stationManager]);
+
+  // Dev-only test hook
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.__mtw = { trackManager, stationManager, trainManager };
+    }
+  }, [trackManager, stationManager, trainManager]);
   
   // Update train count
   useEffect(() => {
@@ -221,6 +286,7 @@ export default function GameScene({
           terrainSize={terrainSize} 
           onTerrainGenerated={setSceneStats}
           trackManager={trackManager}
+          stationManager={stationManager}
           trainManager={trainManager}
           selectedTool={selectedTool}
           rotation={rotation}
@@ -233,6 +299,9 @@ export default function GameScene({
           tiltShiftEnabled={tiltShiftEnabled}
           celShadingEnabled={celShadingEnabled}
           trainDirection={trainDirection}
+          trackCount={trackCount}
+          stationsVersion={stationsVersion}
+          onStationsChange={handleStationsChange}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (
@@ -249,6 +318,7 @@ export default function GameScene({
           <div>Voxels: {sceneStats.voxelCount.toLocaleString()}</div>
           <div>Tracks: {trackCount}</div>
           <div>Trains: {trainCount}</div>
+          <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">

@@ -4,6 +4,11 @@ import { createNoise2D } from 'simplex-noise';
 // Voxel size - smaller than Minecraft for higher resolution
 const VOXEL_SIZE = 0.5;
 
+// Water surface world height (raised by one voxel layer from original 1.0)
+export const WATER_LEVEL = 1.5;
+// Voxel index at/under which columns are submerged (top of index 2 = 1.25 < 1.5)
+export const WATER_LEVEL_VOXEL = 2;
+
 // Terrain colors based on height
 const TERRAIN_COLORS = {
   water: 0x4a90e2,
@@ -18,7 +23,7 @@ const TERRAIN_COLORS = {
 };
 
 // --- generateVegetation function remains unchanged ---
-function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed) {
+function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed, waterLevel) {
   const noise2D = createNoise2D(() => seed * 2);
   const treeTrunks = [];
   const treeCones1 = [];
@@ -43,7 +48,7 @@ function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, 
     for (let z = 1; z < breadth - 1; z += 2) {
       const height = heightMap[x][z];
       
-      if (height <= 1) continue; // Skip water level
+      if (height <= waterLevel) continue; // Skip water level
       
       const vegetationNoise = noise2D(x * 0.1, z * 0.1);
       if (vegetationNoise < (1 - vegetationDensity * 2)) continue;
@@ -128,6 +133,42 @@ function generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, 
 
 
 /**
+ * Carve a meandering river from one edge of the map to the opposite edge.
+ * Flows along the longer axis; riverbed is carved to 0 with sloped banks.
+ * Works directly on the height map, so the existing water shader fills it.
+ */
+function carveRiver(heightMap, length, breadth, waterLevel, seed) {
+  const riverNoise = createNoise2D(() => seed * 7.7);
+  const horizontal = breadth >= length; // flow along Z axis when true
+  const along = horizontal ? breadth : length;
+  const across = horizontal ? length : breadth;
+  const acrossHalf = across / 2;
+
+  for (let t = 0; t < along; t++) {
+    const noise = riverNoise(t * 0.06, 0);
+    const meander = Math.sin(t * 0.05 + seed * 10) * 2.5 + noise * 3.5;
+    const center = Math.max(4, Math.min(across - 5, acrossHalf + meander));
+    const width = 2.5 + Math.abs(riverNoise(t * 0.15, 1)) * 1.5; // 2.5..4 voxels
+
+    for (let s = 0; s < across; s++) {
+      const d = Math.abs(s - center);
+      let target = null;
+      if (d <= width) {
+        target = 0; // riverbed
+      } else if (d <= width + 2) {
+        target = Math.max(1, Math.round((d - width) * 1.2)); // bank: 1, 2 (submerged), 3 (dry)
+      }
+      if (target === null) continue;
+      if (horizontal) {
+        heightMap[s][t] = Math.min(heightMap[s][t], target);
+      } else {
+        heightMap[t][s] = Math.min(heightMap[t][s], target);
+      }
+    }
+  }
+}
+
+/**
  * Generate voxel terrain using simplex noise (OPTIMIZED)
  * @param {number} length - Length of the terrain (X axis)
  * @param {number} breadth - Breadth of the terrain (Z axis)
@@ -143,7 +184,7 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
   
   const scale = 0.03;
   const heightMultiplier = 4;
-  const waterLevel = 1;
+  const waterLevel = WATER_LEVEL_VOXEL;
   
   const heightMap = [];
 
@@ -167,10 +208,14 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
       }
       
       height = (height + 1) * heightMultiplier;
-      height = Math.floor(height * 0.6 + 2);
+      // +3 bias keeps dry land after the water level rise (min dry height = 3)
+      height = Math.floor(height * 0.6 + 3);
       heightMap[x][z] = Math.max(0, height);
     }
   }
+
+  // Carve a meandering river from one edge to the opposite edge
+  carveRiver(heightMap, length, breadth, waterLevel, seed);
 
   // =================================================================
   // OPTIMIZATION PHASE 2: Iterate again and generate ONLY visible voxels.
@@ -216,8 +261,8 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
           color = TERRAIN_COLORS.sand;
         } else if (y < height) { // A side-block
           color = TERRAIN_COLORS.grass; 
-        } else if (y === height) { // The top-most block
-           if (height > 6) {
+         } else if (y === height) { // The top-most block
+           if (height > 5) {
              color = TERRAIN_COLORS.rock;
            } else {
              color = TERRAIN_COLORS.grass;
@@ -237,7 +282,7 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
   }
   
   // Generate trees and bushes on the now-generated terrain surface
-  generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed);
+  generateVegetation(terrain, heightMap, length, breadth, voxelGeometry, seed, waterLevel);
 
   // Attach height data for water shader
   terrain.userData = { heightMap, length, breadth, waterLevel };

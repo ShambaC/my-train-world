@@ -1,22 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-export default function LoadingScreen({ onLoadingComplete }) {
-  const [progress, setProgress] = useState(0);
+export default function LoadingScreen({ progress }) {
+  const [display, setDisplay] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => onLoadingComplete(), 300);
-          return 100;
-        }
-        return prev + 2;
+    const target = Math.round((progress || 0) * 100);
+    const t = setInterval(() => {
+      setDisplay((prev) => {
+        if (prev >= target) return prev;
+        return Math.min(target, prev + Math.max(1, Math.floor((target - prev) / 4)));
       });
-    }, 20);
-
-    return () => clearInterval(interval);
-  }, [onLoadingComplete]);
+    }, 30);
+    return () => clearInterval(t);
+  }, [progress]);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center z-50">
@@ -36,18 +32,20 @@ export default function LoadingScreen({ onLoadingComplete }) {
           <div className="bg-gray-700 rounded-full h-4 overflow-hidden">
             <div
               className="bg-gradient-to-r from-blue-500 to-green-500 h-full transition-all duration-300 ease-out rounded-full"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${display}%` }}
             />
           </div>
           <p className="text-gray-400 mt-3 text-sm">
-            {progress}% Complete
+            {display}% Complete
           </p>
         </div>
 
         {/* Loading Tips */}
         <div className="mt-8 text-gray-400 text-sm max-w-md mx-auto">
           <p className="italic">
-            Tip: Use mouse controls to navigate the 3D world
+            {display >= 100
+              ? 'Models loaded — entering the world...'
+              : 'Loading models and scenery...'}
           </p>
         </div>
       </div>

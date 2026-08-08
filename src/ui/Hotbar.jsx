@@ -6,6 +6,7 @@ const TOOL_KEYS = {
   '3': 2,
   '4': 3,
   '5': 4,
+  '6': 5,
   'Escape': -1, // Deselect
 };
 
@@ -78,7 +79,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate }) {
         
         {/* Instructions */}
         <div className="mt-2 text-xs text-gray-400 text-center">
-          Press <kbd className="bg-gray-900 px-1 rounded">1-5</kbd> to select • 
+          Press <kbd className="bg-gray-900 px-1 rounded">1-6</kbd> to select • 
           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
           <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
         </div>

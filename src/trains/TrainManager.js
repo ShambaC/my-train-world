@@ -15,10 +15,17 @@ const rotLocalToWorld = (local, rotationY) => {
 };
 
 export class TrainManager {
-  constructor(trackManager) {
+  constructor(trackManager, stationManager = null) {
     this.trackManager = trackManager;
+    this.stationManager = stationManager;
     this.trains = new Map();
     this.nextId = 0;
+    this.time = 0;
+    this.STOP_DURATION = 5; // seconds trains dwell at stations
+  }
+
+  setStationManager(stationManager) {
+    this.stationManager = stationManager;
   }
 
   /**
@@ -48,6 +55,8 @@ export class TrainManager {
       position: { ...startTrack.position },
       rotation: Math.atan2(heading.x, heading.z),
       active: false,
+      dwell: null,      // { stationId, until } while stopped at a station
+      cooldowns: new Map(), // stationId -> departure time (prevents re-stop)
     };
 
     this.trains.set(id, train);
@@ -60,6 +69,8 @@ export class TrainManager {
   }
 
   update(deltaTime) {
+    this.time += deltaTime;
+
     for (const train of this.trains.values()) {
       if (!train.active) continue;
 
@@ -68,6 +79,13 @@ export class TrainManager {
         console.warn('Train on invalid track:', train.currentTrackId);
         train.active = false;
         continue;
+      }
+
+      // Station dwell: hold position until the stop time is over
+      if (train.dwell) {
+        if (this.time < train.dwell.until) continue;
+        train.cooldowns.set(train.dwell.stationId, this.time);
+        train.dwell = null;
       }
 
       // Movement sign from heading vs track tangent
@@ -96,6 +114,32 @@ export class TrainManager {
       train.heading = { x: newTangent.x * newSign, z: newTangent.z * newSign };
 
       this.updateTrainPosition(train, currentTrack);
+
+      // Station stop detection: only on tracks bound to a station, while the
+      // train is inside the station zone and crossing the platform center.
+      const station = this.stationManager?.getStationForTrack(currentTrack.id);
+      if (!station) continue;
+
+      const r = station.worldRect;
+      const inside =
+        train.position.x >= r.minX && train.position.x <= r.maxX &&
+        train.position.z >= r.minZ && train.position.z <= r.maxZ &&
+        Math.abs(train.position.y - station.groundY) <= 0.5;
+
+      if (inside) {
+        if (!train.cooldowns.has(station.id)) {
+          const axial = Math.abs(
+            (train.position.x - station.centerWorld.x) * station.dir.x +
+            (train.position.z - station.centerWorld.z) * station.dir.z
+          );
+          if (axial < 0.25) {
+            train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
+          }
+        }
+      } else {
+        // Left the zone — allow a future stop again
+        train.cooldowns.delete(station.id);
+      }
     }
   }
 

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 /**
  * Custom hook for raycasting and track placement
  */
-export function useTrackPlacement(terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection) {
+export function useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection) {
   const { camera, gl } = useThree();
   const [ghostPosition, setGhostPosition] = useState(null);
   const [isValidPosition, setIsValidPosition] = useState(true);
@@ -21,6 +21,12 @@ export function useTrackPlacement(terrainRef, trackManager, trainManager, select
     
     // Hand tool: no ghost
     if (selectedTool.type === 'hand') {
+      setGhostPosition(null);
+      return;
+    }
+    
+    // Station tool: handled by StationRenderer
+    if (selectedTool.type === 'station') {
       setGhostPosition(null);
       return;
     }
@@ -81,6 +87,12 @@ export function useTrackPlacement(terrainRef, trackManager, trainManager, select
             const track = trackManager.getTrackAtPosition(point, 0.35);
             if (track) {
               target = { kind: 'track', id: track.id, position: track.position, rotation: track.rotation || 0, type: track.type };
+            }
+          }
+          if (!target) {
+            const station = stationManager?.getStationAtPosition(point, 0.9);
+            if (station) {
+              target = { kind: 'station', id: station.id, position: station.centerWorld, rect: station.worldRect };
             }
           }
           if (target) {

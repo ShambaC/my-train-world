@@ -7,6 +7,7 @@ import * as THREE from 'three';
 
 export default function TrackRenderer({
   trackManager,
+  stationManager,
   terrainRef,
   selectedTool,
   rotation,
@@ -14,6 +15,7 @@ export default function TrackRenderer({
   onTracksChange,
   trainManager,
   trainDirection,
+  onStationsChange,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -26,7 +28,7 @@ export default function TrackRenderer({
     updateGhostPosition,
     handlePlacement,
     handleDelete,
-  } = useTrackPlacement(terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection);
+  } = useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection);
 
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
@@ -71,7 +73,11 @@ export default function TrackRenderer({
         }
       } else if (selectedTool?.type === 'delete') {
         const target = ghostPosition?.target;
-        if (target?.kind === 'track') {
+        if (target?.kind === 'station') {
+          stationManager.removeStation(target.id);
+          setTracks(trackManager.getAllTracks());
+          onStationsChange?.();
+        } else if (target?.kind === 'track') {
           trainManager.getAllTrains()
             .filter(t => t.currentTrackId === target.id)
             .forEach(t => trainManager.removeTrain(t.id));
@@ -97,7 +103,7 @@ export default function TrackRenderer({
       canvas.removeEventListener('mousedown', handleMouseDown);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [selectedTool, ghostPosition, isValidPosition, handlePlacement, handleDelete, trackManager, onTracksChange]);
+  }, [selectedTool, ghostPosition, isValidPosition, handlePlacement, handleDelete, trackManager, stationManager, onTracksChange, onStationsChange]);
 
   useEffect(() => {
     const currentTrackIds = new Set(tracks.map(t => t.id));
@@ -138,8 +144,19 @@ export default function TrackRenderer({
     } else if (selectedTool.type === 'train') {
       mesh = makeGhost(createTrainEngine(0), isValidPosition ? GHOST_GREEN : GHOST_RED);
     } else if (selectedTool.type === 'delete') {
-      // Red silhouette of hovered target: track model or train engine
-      if (ghostPosition?.target?.kind === 'train') {
+      // Red silhouette of hovered target: train engine, track model or station
+      if (ghostPosition?.target?.kind === 'station') {
+        const r = ghostPosition.target.rect;
+        const w = r.maxX - r.minX;
+        const d = r.maxZ - r.minZ;
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(w, 1.2, d),
+          new THREE.MeshBasicMaterial({ color: GHOST_RED, transparent: true, opacity: 0.4, depthWrite: false })
+        );
+        box.position.set(ghostPosition.x, ghostPosition.y + 0.5, ghostPosition.z);
+        box.renderOrder = 10;
+        mesh = box;
+      } else if (ghostPosition?.target?.kind === 'train') {
         mesh = makeGhost(createTrainEngine(0), GHOST_RED, 0.5);
       } else if (ghostPosition?.type) {
         mesh = ghostPosition.type === 'straight'

@@ -5,6 +5,8 @@ import LoadingScreen from "./LoadingScreen";
 import Hotbar from "./ui/Hotbar";
 import { TrackManager } from "./tracks/TrackManager";
 import { TrainManager } from "./trains/TrainManager";
+import { StationManager } from "./stations/StationManager";
+import ModelLibrary from "./models/ModelLibrary";
 
 // Define available tools
 const TOOLS = [
@@ -39,6 +41,13 @@ const TOOLS = [
     type: 'train'
   },
   { 
+    id: 'station', 
+    name: 'Place Station', 
+    label: 'Station',
+    icon: '🚉', 
+    type: 'station'
+  },
+  { 
     id: 'delete', 
     name: 'Delete Tool', 
     label: 'Delete',
@@ -62,17 +71,30 @@ function App() {
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
+  const [loadProgress, setLoadProgress] = useState(0);
   
   const trackManagerRef = useRef(new TrackManager());
-  const trainManagerRef = useRef(new TrainManager(trackManagerRef.current));
+  const stationManagerRef = useRef(new StationManager());
+  const trainManagerRef = useRef(new TrainManager(trackManagerRef.current, stationManagerRef.current));
   const selectedTool = TOOLS[selectedToolIndex];
+
+  // Preload all GLB models with real progress
+  useEffect(() => {
+    ModelLibrary.preloadAll(setLoadProgress)
+      .then(() => setIsLoading(false))
+      .catch((err) => {
+        console.error('Model preload failed:', err);
+        setIsLoading(false);
+      });
+  }, []);
 
   const handleTerrainSizeChange = (newSize) => {
     setIsGenerating(true);
     setTerrainSize(newSize);
-    // Clear tracks AND trains when terrain changes
+    // Clear tracks, trains AND stations when terrain changes
     trackManagerRef.current.clear();
     trainManagerRef.current.clear();
+    stationManagerRef.current.clear();
     setTracksVersion(v => v + 1); // Trigger re-render
     // Simulate generation delay for UI feedback
     setTimeout(() => setIsGenerating(false), 500);
@@ -115,7 +137,7 @@ function App() {
   }, []);
 
   if (isLoading) {
-    return <LoadingScreen onLoadingComplete={() => setIsLoading(false)} />;
+    return <LoadingScreen progress={loadProgress} />;
   }
 
   return (
@@ -125,6 +147,7 @@ function App() {
         terrainSize={terrainSize} 
         showDebug={showDebug}
         trackManager={trackManagerRef.current}
+        stationManager={stationManagerRef.current}
         trainManager={trainManagerRef.current}
         selectedTool={selectedTool}
         rotation={rotation * (Math.PI / 180)}
