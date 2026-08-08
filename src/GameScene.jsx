@@ -37,6 +37,7 @@ function Scene({
   onStationsChange,
 }) {
   const terrainRef = useRef();
+  const orbitRef = useRef(null);
   const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
@@ -117,7 +118,7 @@ function Scene({
   return (
     <>
       <Skybox timeOfDay={timeOfDay} />
-      <CameraController terrainSize={terrainSize} enabled={false} />
+      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} />
       
       {/* Lighting */}
       <ambientLight name="ambientLight" intensity={0.5} />
@@ -204,6 +205,7 @@ function Scene({
       
       {/* Camera controls */}
       <OrbitControls
+        ref={orbitRef}
         enableDamping
         dampingFactor={0.05}
         minDistance={0.2}
@@ -241,6 +243,7 @@ export default function GameScene({
   const [trainCount, setTrainCount] = useState(0);
   const [stationCount, setStationCount] = useState(0);
   const [stationsVersion, setStationsVersion] = useState(0);
+  const [memoryMB, setMemoryMB] = useState(0);
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
@@ -307,7 +310,7 @@ export default function GameScene({
         {(tiltShiftEnabled || celShadingEnabled) && (
           <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
         )}
-        <FPSTracker show={showDebug} onFpsUpdate={setFps} />
+        <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemoryMB} />
       </Canvas>
       
       {/* Debug Overlay */}
@@ -320,6 +323,7 @@ export default function GameScene({
           <div>Trains: {trainCount}</div>
           <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
+          {memoryMB > 0 && <div>Memory: {memoryMB} MB</div>}
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">
               <div>Tool: {selectedTool.name}</div>
@@ -339,8 +343,8 @@ export default function GameScene({
   );
 }
 
-// Separate component to track FPS
-function FPSTracker({ show, onFpsUpdate }) {
+// Separate component to track FPS + JS heap memory (Chromium-only)
+function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
 
@@ -356,6 +360,12 @@ function FPSTracker({ show, onFpsUpdate }) {
       onFpsUpdate(currentFps);
       frameCount.current = 0;
       lastTime.current = currentTime;
+
+      // JS heap usage (Chrome/Edge only; other browsers return undefined)
+      const mem = performance.memory;
+      if (mem && typeof mem.usedJSHeapSize === 'number') {
+        onMemoryUpdate(Math.round(mem.usedJSHeapSize / (1024 * 1024)));
+      }
     }
   });
 

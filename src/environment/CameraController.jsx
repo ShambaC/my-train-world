@@ -1,71 +1,71 @@
 import { useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+
+const pressedKeys = new Set();
+
+function isKeyDown(code) {
+  return pressedKeys.has(code);
+}
 
 /**
- * Camera Controller with soft boundaries
- * Keeps camera within terrain bounds with gentle push-back
+ * Camera Controller — WASD camera-relative movement (Shift to sprint).
+ * The OrbitControls target moves with the camera so the view never
+ * pitches toward a static point.
  */
-export default function CameraController({ terrainSize, enabled = true }) {
+export default function CameraController({ terrainSize, enabled = true, orbitRef }) {
   const { camera } = useThree();
 
   useEffect(() => {
     if (!enabled) return;
-
-    const boundaryPadding = 10; // Extra space beyond terrain
-    const maxX = (terrainSize.length / 2) + boundaryPadding;
-    const maxZ = (terrainSize.breadth / 2) + boundaryPadding;
-    const minX = -(terrainSize.length / 2) - boundaryPadding;
-    const minZ = -(terrainSize.breadth / 2) - boundaryPadding;
-
-    const softBoundaryStrength = 0.1; // How hard to push back (0-1)
-    const boundaryBuffer = 5; // Start pushing before hard limit
-
-    const checkAndConstrainCamera = () => {
-      let needsUpdate = false;
-      const pos = camera.position;
-
-      // Soft X boundaries
-      if (pos.x > maxX - boundaryBuffer) {
-        const overshoot = pos.x - (maxX - boundaryBuffer);
-        pos.x -= overshoot * softBoundaryStrength;
-        needsUpdate = true;
-      } else if (pos.x < minX + boundaryBuffer) {
-        const overshoot = (minX + boundaryBuffer) - pos.x;
-        pos.x += overshoot * softBoundaryStrength;
-        needsUpdate = true;
-      }
-
-      // Soft Z boundaries
-      if (pos.z > maxZ - boundaryBuffer) {
-        const overshoot = pos.z - (maxZ - boundaryBuffer);
-        pos.z -= overshoot * softBoundaryStrength;
-        needsUpdate = true;
-      } else if (pos.z < minZ + boundaryBuffer) {
-        const overshoot = (minZ + boundaryBuffer) - pos.z;
-        pos.z += overshoot * softBoundaryStrength;
-        needsUpdate = true;
-      }
-
-      // Hard boundaries (safety net)
-      if (pos.x > maxX) pos.x = maxX;
-      if (pos.x < minX) pos.x = minX;
-      if (pos.z > maxZ) pos.z = maxZ;
-      if (pos.z < minZ) pos.z = minZ;
-
-      // Height constraints (don't let camera go underground or too high)
-      if (pos.y < 5) pos.y = 5;
-      if (pos.y > 150) pos.y = 150;
-
-      return needsUpdate;
+    const onKeyDown = (e) => {
+      pressedKeys.add(e.key.toLowerCase());
+      if (e.key === ' ') e.preventDefault();
     };
+    const onKeyUp = (e) => pressedKeys.delete(e.key.toLowerCase());
+    const onBlur = () => pressedKeys.clear();
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      pressedKeys.clear();
+    };
+  }, [enabled]);
 
-    // Check boundaries periodically
-    const interval = setInterval(() => {
-      checkAndConstrainCamera();
-    }, 50);
+  useFrame((state, delta) => {
+    if (!enabled) return;
 
-    return () => clearInterval(interval);
-  }, [camera, terrainSize, enabled]);
+    const move = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    if (forward.lengthSq() > 0) forward.normalize();
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+    if (isKeyDown('w')) move.add(forward);
+    if (isKeyDown('s')) move.sub(forward);
+    if (isKeyDown('d')) move.add(right);
+    if (isKeyDown('a')) move.sub(right);
+
+    if (move.lengthSq() === 0) return;
+
+    const speed = isKeyDown('shift') ? 15 : 6;
+    move.normalize().multiplyScalar(speed * Math.min(delta, 0.05));
+
+    camera.position.add(move);
+    if (orbitRef?.current) orbitRef.current.target.add(move);
+
+    // Boundaries
+    const pad = 10;
+    const maxX = terrainSize.length / 2 + pad;
+    const maxZ = terrainSize.breadth / 2 + pad;
+    camera.position.x = THREE.MathUtils.clamp(camera.position.x, -maxX, maxX);
+    camera.position.z = THREE.MathUtils.clamp(camera.position.z, -maxZ, maxZ);
+    camera.position.y = THREE.MathUtils.clamp(camera.position.y, 2.5, 150);
+  });
 
   return null;
 }

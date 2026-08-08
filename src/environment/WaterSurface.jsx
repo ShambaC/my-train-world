@@ -6,9 +6,9 @@ import { VOXEL_SIZE } from '../terrain.js';
 const WaterShader = {
   uniforms: {
     uTime: { value: 0 },
-    uColorDeep: { value: new THREE.Color(0x0a4a6e) },
-    uColorShallow: { value: new THREE.Color(0x2e9bba) },
-    uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
+    uColorDeep: { value: new THREE.Color(0x0a5d8c) },
+    uColorShallow: { value: new THREE.Color(0x2ba3c9) },
+    uColorFoam: { value: new THREE.Color(0xe8f8ff) },
     uSunColor: { value: new THREE.Color(0xfff8e0) },
     uSkyColor: { value: new THREE.Color(0x87ceeb) },
     uHeightMap: { value: null },
@@ -20,8 +20,6 @@ const WaterShader = {
     uniform float uTime;
     varying vec2 vUv;
     varying vec3 vWorldPos;
-    varying vec3 vNormal;
-    varying float vElevation;
 
     void main() {
       vUv = uv;
@@ -36,17 +34,6 @@ const WaterShader = {
       e += cos((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01;
 
       pos.z += e; // displace along local normal = world UP
-      vElevation = e;
-
-      // Local-space normal from partial derivatives
-      float de_dx = cos(pos.x * 4.0 + uTime * 2.0) * 0.035 * 4.0
-                  + cos((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.018 * 2.5
-                  - sin((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01 * 5.0;
-      float de_dy = -sin(pos.y * 3.5 - uTime * 1.5) * 0.03 * 3.5
-                  + cos((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.018 * 2.5
-                  + sin((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.01 * 5.0;
-      vec3 localNormal = normalize(vec3(-de_dx, -de_dy, 1.0));
-      vNormal = normalize((modelMatrix * vec4(localNormal, 0.0)).xyz);
 
       vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
 
@@ -57,7 +44,7 @@ const WaterShader = {
     uniform float uTime;
     uniform vec3 uColorDeep;
     uniform vec3 uColorShallow;
-    uniform vec3 uSunDir;
+    uniform vec3 uColorFoam;
     uniform vec3 uSunColor;
     uniform vec3 uSkyColor;
     uniform sampler2D uHeightMap;
@@ -66,8 +53,6 @@ const WaterShader = {
     uniform float uVoxel;
     varying vec2 vUv;
     varying vec3 vWorldPos;
-    varying vec3 vNormal;
-    varying float vElevation;
 
     // Simple hash-based noise
     float hash(vec2 p) {
@@ -98,43 +83,35 @@ const WaterShader = {
       // Shore factor: 0 = deep, 1 = near shore
       float shore = smoothstep(uWaterY - 0.4, uWaterY, terrainTopY);
 
-      // --- Base color (more blue) ---
-      float depthFactor = shore + abs(vElevation) * 20.0;
-      vec3 baseColor = mix(uColorDeep, uColorShallow, clamp(depthFactor, 0.0, 1.0));
+      // --- Low-poly flow streaks (low-poly-waterfall style) ---
+      vec2 flowUv = vWorldPos.xz * 0.35;
+      flowUv.y -= uTime * 0.12;
 
-      // --- Procedural detail normals ---
-      float n1 = noise(vWorldPos.xz * 10.0 + uTime * 0.5);
-      float n2 = noise(vWorldPos.xz * 15.0 - uTime * 0.4);
-      vec3 detailNormal = normalize(vNormal + vec3((n1 - 0.5) * 0.2, 0.0, (n2 - 0.5) * 0.2));
+      float n = noise(vec2(flowUv.x * 0.0, flowUv.y * 3.5));
+      float water = smoothstep(0.0, 0.2, n);
+      water = floor(water * 10.0 + 0.5) / 10.0; // quantized banding
 
-      // --- View direction ---
-      vec3 viewDir = normalize(cameraPosition - vWorldPos);
+      vec3 col = mix(uColorDeep, uColorShallow, clamp(shore + water * 0.6, 0.0, 1.0));
+      col = mix(col, uColorFoam, water * 0.4);
 
-      // --- Fresnel (sky reflection) ---
-      float fresnel = pow(1.0 - max(dot(viewDir, detailNormal), 0.0), 3.0);
-      baseColor = mix(baseColor, uSkyColor * 0.8, fresnel * 0.25);
+      // --- Animated near-shore ripple ---
+      float rippleMask = 1.0 - smoothstep(0.0, 0.6, shore);
+      float ripple = sin(shore * 60.0 - uTime * 3.0 + noise(vWorldPos.xz * 2.0) * 3.0);
+      ripple = smoothstep(0.4, 1.0, ripple * 0.5 + 0.5) * rippleMask;
+      col = mix(col, uColorFoam, ripple * 0.2);
 
-      // --- Sun glint (Blinn specular) ---
-      vec3 halfVec = normalize(viewDir + uSunDir);
-      float spec = pow(max(dot(detailNormal, halfVec), 0.0), 96.0);
-      baseColor += uSunColor * spec * 0.15;
+      // --- Shore foam ---
+      float shoreFoam = shore * (0.5 + 0.5 * noise(vWorldPos.xz * 8.0 + uTime * 0.8));
+      col = mix(col, uColorFoam, shoreFoam * 0.25);
 
-      // --- Foam ---
-      float crestFoam = smoothstep(0.8, 1.0, abs(vElevation) * 25.0);
-      float shoreFoam = shore * smoothstep(0.2, 0.55, shore);
-      shoreFoam *= 0.5 + 0.5 * noise(vWorldPos.xz * 20.0 + uTime);
-      float foam = max(crestFoam, shoreFoam) * 0.2;
-      baseColor = mix(baseColor, vec3(0.95, 0.98, 1.0), foam);
+      // --- Subtle sky/sun tint ---
+      col += uSkyColor * 0.04;
+      col += uSunColor * 0.05;
 
-      // --- Caustic shimmer (shallow areas) ---
-      float c1 = 1.0 - min(noise(vWorldPos.xz * 10.0 + uTime * 0.7), noise(vWorldPos.xz * 10.0 - uTime * 0.5));
-      float caustic = pow(c1, 5.0) * 0.3 * shore;
-      baseColor += vec3(caustic * 0.5, caustic * 0.8, caustic);
+      // More transparent water
+      float alpha = 0.7;
 
-      // --- Alpha ---
-      float alpha = 0.88 * (1.0 - shore * 0.3);
-
-      gl_FragColor = vec4(baseColor, alpha);
+      gl_FragColor = vec4(col, alpha);
     }
   `,
 };
@@ -172,26 +149,18 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
   // Update sky/sun uniforms when timeOfDay changes
   useEffect(() => {
     if (!materialRef.current) return;
-    const sunPositions = {
-      dawn: [0.5, 0.4, 0.3],
-      day:  [0.5, 0.8, 0.3],
-      dusk: [0.5, 0.3, -0.5],
-      night:[-0.3, 0.4, -0.3],
-    };
     const sunColors = {
       dawn: 0xffb347,
-      day:  0xfff8e0,
+      day: 0xfff8e0,
       dusk: 0xff8c47,
-      night:0x6495ed,
+      night: 0x6495ed,
     };
     const skyColors = {
       dawn: 0xffd4a8,
-      day:  0x87ceeb,
+      day: 0x87ceeb,
       dusk: 0xff9777,
-      night:0x2b3a5f,
+      night: 0x2b3a5f,
     };
-    const dir = sunPositions[timeOfDay] || sunPositions.day;
-    materialRef.current.uniforms.uSunDir.value.set(...dir).normalize();
     materialRef.current.uniforms.uSunColor.value.set(sunColors[timeOfDay] || sunColors.day);
     materialRef.current.uniforms.uSkyColor.value.set(skyColors[timeOfDay] || skyColors.day);
   }, [timeOfDay]);
@@ -200,7 +169,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
     <mesh
       ref={meshRef}
       rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 1.5, 0]}
+      position={[0, 2.0, 0]}
       receiveShadow
     >
       <planeGeometry args={[width, height, 96, 96]} />
@@ -212,7 +181,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
         side={THREE.DoubleSide}
         uniforms-uHeightMap-value={heightTexture}
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
-        uniforms-uWaterY-value={1.5}
+        uniforms-uWaterY-value={2.0}
       />
     </mesh>
   );

@@ -19,8 +19,8 @@ export default function ControlPanel({
   celShadingEnabled,
   onCelShadingChange
 }) {
-  const [length, setLength] = useState(50);
-  const [breadth, setBreadth] = useState(50);
+  const [length, setLength] = useState(100);
+  const [breadth, setBreadth] = useState(100);
   const [isPanelOpen, setIsPanelOpen] = useState(false); // Start closed
 
   const handleGenerate = () => {
@@ -75,16 +75,16 @@ export default function ControlPanel({
               </label>
               <input
                 type="range"
-                min="20"
-                max="200"
+                min="100"
+                max="512"
                 value={length}
                 onChange={(e) => setLength(e.target.value)}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 disabled={isGenerating}
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>20</span>
-                <span>200</span>
+                <span>100</span>
+                <span>512</span>
               </div>
             </div>
 
@@ -95,16 +95,16 @@ export default function ControlPanel({
               </label>
               <input
                 type="range"
-                min="20"
-                max="200"
+                min="100"
+                max="512"
                 value={breadth}
                 onChange={(e) => setBreadth(e.target.value)}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 disabled={isGenerating}
               />
               <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>20</span>
-                <span>200</span>
+                <span>100</span>
+                <span>512</span>
               </div>
             </div>
 
@@ -126,21 +126,21 @@ export default function ControlPanel({
               <p className="text-xs text-gray-400 mb-2">Quick Presets:</p>
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => handlePreset(50)}
+                  onClick={() => handlePreset(100)}
                   className="py-1 px-2 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-all"
                   disabled={isGenerating}
                 >
                   Small
                 </button>
                 <button
-                  onClick={() => handlePreset(100)}
+                  onClick={() => handlePreset(256)}
                   className="py-1 px-2 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-all"
                   disabled={isGenerating}
                 >
                   Medium
                 </button>
                 <button
-                  onClick={() => handlePreset(150)}
+                  onClick={() => handlePreset(512)}
                   className="py-1 px-2 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-all"
                   disabled={isGenerating}
                 >

@@ -30,6 +30,30 @@ export default function TrackRenderer({
     handleDelete,
   } = useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection);
 
+  // Latest values via refs — canvas listeners attach ONCE so re-renders
+  // during a click event never re-attach mid-dispatch (which made clicks
+  // recurse and double-place / crash).
+  const selectedToolRef = useRef(selectedTool);
+  const ghostRef = useRef({ ghostPosition, isValidPosition });
+  const updateGhostRef = useRef(updateGhostPosition);
+  const handlePlacementRef = useRef(handlePlacement);
+  const trackManagerRef = useRef(trackManager);
+  const stationManagerRef = useRef(stationManager);
+  const trainManagerRef = useRef(trainManager);
+  const trainDirectionRef = useRef(trainDirection);
+  const onTracksChangeRef = useRef(onTracksChange);
+  const onStationsChangeRef = useRef(onStationsChange);
+  selectedToolRef.current = selectedTool;
+  ghostRef.current = { ghostPosition, isValidPosition };
+  updateGhostRef.current = updateGhostPosition;
+  handlePlacementRef.current = handlePlacement;
+  trackManagerRef.current = trackManager;
+  stationManagerRef.current = stationManager;
+  trainManagerRef.current = trainManager;
+  trainDirectionRef.current = trainDirection;
+  onTracksChangeRef.current = onTracksChange;
+  onStationsChangeRef.current = onStationsChange;
+
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
   }, [trackManager]);
@@ -37,10 +61,10 @@ export default function TrackRenderer({
   useEffect(() => {
     const canvas = document.querySelector('canvas');
     if (!canvas) return;
-    const handleMouseMove = (e) => updateGhostPosition(e);
+    const handleMouseMove = (e) => updateGhostRef.current(e);
     canvas.addEventListener('mousemove', handleMouseMove);
     return () => canvas.removeEventListener('mousemove', handleMouseMove);
-  }, [updateGhostPosition]);
+  }, []);
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');
@@ -66,32 +90,35 @@ export default function TrackRenderer({
         }
       }
 
-      if (selectedTool?.type === 'train') {
+      const tool = selectedToolRef.current;
+      const { ghostPosition, isValidPosition } = ghostRef.current;
+
+      if (tool?.type === 'train') {
         if (ghostPosition?.isTrack) {
-          const track = trackManager.getTrackAtPosition(ghostPosition, 0.35);
-          if (track) trainManager.addTrain(track.id, trainDirection);
+          const track = trackManagerRef.current.getTrackAtPosition(ghostPosition, 0.35);
+          if (track) trainManagerRef.current.addTrain(track.id, trainDirectionRef.current);
         }
-      } else if (selectedTool?.type === 'delete') {
+      } else if (tool?.type === 'delete') {
         const target = ghostPosition?.target;
         if (target?.kind === 'station') {
-          stationManager.removeStation(target.id);
-          setTracks(trackManager.getAllTracks());
-          onStationsChange?.();
+          stationManagerRef.current.removeStation(target.id);
+          setTracks(trackManagerRef.current.getAllTracks());
+          onStationsChangeRef.current?.();
         } else if (target?.kind === 'track') {
-          trainManager.getAllTrains()
+          trainManagerRef.current.getAllTrains()
             .filter(t => t.currentTrackId === target.id)
-            .forEach(t => trainManager.removeTrain(t.id));
-          trackManager.removeTrack(target.id);
-          setTracks(trackManager.getAllTracks());
-          onTracksChange?.(trackManager.getAllTracks());
+            .forEach(t => trainManagerRef.current.removeTrain(t.id));
+          trackManagerRef.current.removeTrack(target.id);
+          setTracks(trackManagerRef.current.getAllTracks());
+          onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
         } else if (target?.kind === 'train') {
-          trainManager.removeTrain(target.id);
+          trainManagerRef.current.removeTrain(target.id);
         }
-      } else if (selectedTool && ghostPosition && isValidPosition) {
-        const track = handlePlacement(e);
+      } else if (tool && ghostPosition && isValidPosition) {
+        const track = handlePlacementRef.current(e);
         if (track) {
-          setTracks(trackManager.getAllTracks());
-          onTracksChange?.(trackManager.getAllTracks());
+          setTracks(trackManagerRef.current.getAllTracks());
+          onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
         }
       }
       mouseDownPosRef.current = null;
@@ -103,7 +130,7 @@ export default function TrackRenderer({
       canvas.removeEventListener('mousedown', handleMouseDown);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [selectedTool, ghostPosition, isValidPosition, handlePlacement, handleDelete, trackManager, stationManager, onTracksChange, onStationsChange]);
+  }, []);
 
   useEffect(() => {
     const currentTrackIds = new Set(tracks.map(t => t.id));

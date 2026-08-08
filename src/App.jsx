@@ -57,7 +57,7 @@ const TOOLS = [
 ];
 
 function App() {
-  const [terrainSize, setTerrainSize] = useState({ length: 50, breadth: 50 });
+  const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [showDebug, setShowDebug] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

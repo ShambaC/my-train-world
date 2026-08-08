@@ -1,11 +1,12 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+﻿import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } from '../stations/StationBuilder';
 
 /**
  * Station placement hook — two-click flow:
- * click 1 = start marker (rotatable in 4 directions), click 2 = end marker.
+ * click 1 = start marker, click 2 = end marker (cursor cell).
+ * The station axis follows the dominant direction of the two markers.
  * Validates flat same-height ground, no holes, no water, no overlap.
  */
 export function useStationPlacement(terrainRef, stationManager, rotation, terrainData) {
@@ -20,12 +21,17 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
   const breadth = terrainData?.breadth || 0;
   const heightMap = terrainData?.heightMap || null;
 
-  const dirFromRotation = useCallback((rot) => ({ x: Math.sin(rot), z: Math.cos(rot) }), []);
-
   const worldToCell = useCallback((p) => ({
     x: Math.round(p.x / 0.5 + length / 2 - 0.5),
     z: Math.round(p.z / 0.5 + breadth / 2 - 0.5),
   }), [length, breadth]);
+
+  // Axis from the marker delta — dominant direction, snapped to 4 directions.
+  // lengthCells counts cells between the markers (end cell excluded).
+  const axisFromDelta = useCallback((dx, dz) => {
+    if (Math.abs(dx) >= Math.abs(dz)) return { x: dx >= 0 ? 1 : -1, z: 0, lengthCells: Math.abs(dx) };
+    return { x: 0, z: dz >= 0 ? 1 : -1, lengthCells: Math.abs(dz) };
+  }, []);
 
   const validate = useCallback((start, lengthCells, dir) => {
     if (!heightMap) return { ok: false, reason: 'no terrain' };
@@ -67,6 +73,12 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     return { ok: true };
   }, [heightMap, length, breadth, stationManager]);
 
+  const cellToWorld = useCallback((cell, h) => ({
+    x: (cell.x - length / 2 + 0.5) * 0.5,
+    y: h * 0.5 + 0.25,
+    z: (cell.z - breadth / 2 + 0.5) * 0.5,
+  }), [length, breadth]);
+
   const computeGhost = useCallback((event) => {
     if (!terrainRef.current || !heightMap) {
       setGhost(null);
@@ -99,7 +111,7 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     }
 
     const height = heightMap[cell.x][cell.z];
-    if (height <= 2) {
+    if (height <= 3) {
       setGhost(null); // water
       return;
     }
@@ -108,38 +120,32 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
       setGhost({
         phase: 'start',
         cell,
-        world: { x: (cell.x - length / 2 + 0.5) * 0.5, y: height * 0.5 + 0.25, z: (cell.z - breadth / 2 + 0.5) * 0.5 },
+        world: cellToWorld(cell, height),
         height,
         valid: true,
       });
       return;
     }
 
-    // End marker: project cursor onto the station axis
-    const dir = dirFromRotation(rotation);
+    // End marker: follows the cursor cell; axis snaps to the dominant direction
     const dx = cell.x - stationStart.cell.x;
     const dz = cell.z - stationStart.cell.z;
-    const lengthCells = Math.round(dx * dir.x + dz * dir.z);
-    const lateral = Math.abs(dx * dir.z - dz * dir.x);
-
+    const { x: dirX, z: dirZ, lengthCells } = axisFromDelta(dx, dz);
+    const dir = { x: dirX, z: dirZ };
     const result = validate(stationStart, lengthCells, dir);
-    const endWorld = {
-      x: (stationStart.cell.x + dir.x * lengthCells - length / 2 + 0.5) * 0.5,
-      z: (stationStart.cell.z + dir.z * lengthCells - breadth / 2 + 0.5) * 0.5,
-    };
 
     setGhost({
       phase: 'end',
       dir,
       lengthCells,
-      lateral,
+      endCell: cell,
       startWorld: stationStart.world,
-      endWorld,
+      endWorld: cellToWorld(cell, height),
       height: stationStart.height,
-      valid: result.ok && lateral <= 2,
+      valid: result.ok && lengthCells > 0,
       reason: result.reason,
     });
-  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, rotation, dirFromRotation, worldToCell, validate]);
+  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, worldToCell, cellToWorld, axisFromDelta, validate]);
 
   // Recompute ghost when rotation changes
   useEffect(() => {
@@ -165,26 +171,33 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     const cell = worldToCell(point);
     if (cell.x < 0 || cell.x >= length || cell.z < 0 || cell.z >= breadth) return null;
     const height = heightMap[cell.x][cell.z];
-    if (height <= 2) return null;
+    if (height <= 3) return null;
 
     if (!stationStart) {
       setStationStart({
         cell,
         height,
-        world: { x: (cell.x - length / 2 + 0.5) * 0.5, y: height * 0.5 + 0.25, z: (cell.z - breadth / 2 + 0.5) * 0.5 },
+        world: cellToWorld(cell, height),
       });
       return null;
     }
 
-    // Place end marker — build the station
-    const dir = dirFromRotation(rotation);
+    // End marker — build the station between the two markers
     const dx = cell.x - stationStart.cell.x;
     const dz = cell.z - stationStart.cell.z;
-    const lengthCells = Math.round(dx * dir.x + dz * dir.z);
-    const lateral = Math.abs(dx * dir.z - dz * dir.x);
-    const result = validate(stationStart, lengthCells, dir);
-    if (!result.ok || lateral > 2) {
+    const { x: dirX, z: dirZ, lengthCells } = axisFromDelta(dx, dz);
+    const dir = { x: dirX, z: dirZ };
+
+    // Clicking near the start marker cancels placement
+    if (lengthCells === 0) {
       setStationStart(null);
+      setGhost(null);
+      return null;
+    }
+
+    const result = validate(stationStart, lengthCells, dir);
+    if (!result.ok) {
+      // Keep the start marker so the user can retry — no silent reset
       return null;
     }
 
@@ -208,7 +221,7 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     setStationStart(null);
     setGhost(null);
     return saved;
-  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, rotation, dirFromRotation, worldToCell, validate, stationManager]);
+  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, worldToCell, cellToWorld, axisFromDelta, validate, stationManager]);
 
   const reset = useCallback(() => {
     setStationStart(null);
@@ -217,3 +230,4 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
 
   return { ghost, stationStart, handleClick, computeGhost, reset };
 }
+

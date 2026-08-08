@@ -4,7 +4,43 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ─── Final Color Pass: applies ACES tone mapping + sRGB encoding exactly once.
+// The default OutputPass reads renderer.toneMapping/outputColorSpace, and R3F's
+// defaults (ACES + sRGB output) get applied by the RenderPass too — double
+// application crushed blacks and blew out brights. This pass is unconditional.
+const FinalShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    exposure: { value: 1.1 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float exposure;
+    varying vec2 vUv;
+
+    vec3 acesFilmic(vec3 x) {
+      x *= exposure;
+      return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+    }
+    vec3 linearToSRGB(vec3 c) {
+      return mix(1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, 12.92 * c, step(c, vec3(0.0031308)));
+    }
+
+    void main() {
+      vec4 color = texture2D(tDiffuse, vUv);
+      color.rgb = linearToSRGB(acesFilmic(color.rgb));
+      gl_FragColor = color;
+    }
+  `,
+};
 
 // ─── Tilt-Shift Shader ────────────────────────────────────────────────────
 const TiltShiftShader = {
@@ -152,8 +188,8 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     tiltPassRef.current = tiltPass;
     composer.addPass(tiltPass);
 
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
+    const finalPass = new ShaderPass(FinalShader);
+    composer.addPass(finalPass);
 
     composer.setSize(size.width, size.height);
     composer.setPixelRatio(gl.getPixelRatio());
@@ -163,6 +199,21 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
       composerRef.current = null;
     };
   }, [gl, scene, camera]);
+
+  // The composer's final pass does tone mapping + sRGB conversion itself.
+  // R3F defaults (ACES + sRGB output) would apply them a second time in the
+  // RenderPass, washing colors out, crushing blacks and turning bright
+  // transparent surfaces white/black. Switch them off while mounted.
+  useEffect(() => {
+    const prevToneMapping = gl.toneMapping;
+    const prevOutputColorSpace = gl.outputColorSpace;
+    gl.toneMapping = THREE.NoToneMapping;
+    gl.outputColorSpace = THREE.LinearSRGBColorSpace;
+    return () => {
+      gl.toneMapping = prevToneMapping;
+      gl.outputColorSpace = prevOutputColorSpace;
+    };
+  }, [gl]);
 
   // Update pass enabled states
   useEffect(() => {

@@ -4,11 +4,14 @@ import ModelLibrary from '../models/ModelLibrary';
 
 const VOXEL = 0.5;
 
+// Sink amount so model bases overlap the ground (hides slope overhang)
+const SINK = 0.08;
+
 // Scatter definitions — probability per 2x2 cell block (≈1 world sq unit)
 const SCATTER_DEFS = [
-  { key: 'lineside-oak', prob: 0.045, spacing: 3, scale: [0.85, 1.15], slope: 2 },
-  { key: 'lineside-pine', prob: 0.035, spacing: 3, scale: [0.85, 1.15], slope: 2 },
-  { key: 'lineside-shrub', prob: 0.09, spacing: 2, scale: [0.85, 1.15], slope: 2 },
+  { key: 'lineside-oak', prob: 0.045, spacing: 3, scale: [0.85, 1.15], slope: 1 },
+  { key: 'lineside-pine', prob: 0.035, spacing: 3, scale: [0.85, 1.15], slope: 1 },
+  { key: 'lineside-shrub', prob: 0.09, spacing: 2, scale: [0.85, 1.15], slope: 1 },
   { key: 'railway-boulder', prob: 0.05, spacing: 3, scale: [0.8, 1.3], slope: 0, rockyOnly: true },
   { key: 'railway-rock-cluster', prob: 0.04, spacing: 3, scale: [0.8, 1.3], slope: 0, rockyOnly: true },
   { key: 'big-red-barn', prob: 0.004, spacing: 10, scale: [1, 1], slope: 0, flat: 2 },
@@ -37,6 +40,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
 
     const { heightMap } = terrainData;
     const cells = [];
+    const sharedTreePlaced = [];
 
     for (let x = 2; x < length - 2; x += 2) {
       for (let z = 2; z < breadth - 2; z += 2) {
@@ -47,11 +51,14 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
     for (const def of SCATTER_DEFS) {
       const entry = ModelLibrary.getEntry(def.key);
       const instances = [];
-      const placedList = [];
+      // Trees (oak/pine) share one placement list so trees never overlap
+      // trees; bushes/shrubs may freely grow under or next to them.
+      const isTree = def.key === 'lineside-oak' || def.key === 'lineside-pine';
+      const placedList = isTree ? sharedTreePlaced : [];
 
       const isFlat = (x, z, r) => {
         const h = heightMap[x][z];
-        if (h <= 2) return false;
+        if (h <= 3) return false;
         for (let dx = -r; dx <= r; dx++) {
           for (let dz = -r; dz <= r; dz++) {
             if (heightMap[x + dx][z + dz] !== h) return false;
@@ -72,7 +79,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
 
       for (const { x, z } of cells) {
         const h = heightMap[x][z];
-        if (h <= 2) continue; // water/river
+        if (h <= 3) continue; // water/river
 
         const slope = slopeAt(x, z);
         if (def.slope !== undefined && slope > def.slope) continue;
@@ -101,7 +108,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
 
         instances.push({
           x: (x - length / 2 + 0.5) * VOXEL,
-          y: h * VOXEL + 0.25,
+          y: h * VOXEL + 0.25 - SINK,
           z: (z - breadth / 2 + 0.5) * VOXEL,
           rotY,
           scale: jitter,

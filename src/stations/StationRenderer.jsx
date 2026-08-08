@@ -38,6 +38,18 @@ export default function StationRenderer({
     terrainRef, stationManager, rotation, terrainData
   );
 
+  // Latest callbacks via refs — the canvas listeners attach ONCE so that
+  // re-renders during a click event never re-attach mid-dispatch (which
+  // made the same click recurse and crash placement).
+  const selectedToolRef = useRef(selectedTool);
+  const handleClickRef = useRef(handleClick);
+  const computeGhostRef = useRef(computeGhost);
+  const onStationsChangeRef = useRef(onStationsChange);
+  selectedToolRef.current = selectedTool;
+  handleClickRef.current = handleClick;
+  computeGhostRef.current = computeGhost;
+  onStationsChangeRef.current = onStationsChange;
+
   useEffect(() => {
     if (import.meta.env.DEV) {
       window.__mtw = { ...window.__mtw, stationGhost: { ghost, handleClick, computeGhost } };
@@ -54,18 +66,18 @@ export default function StationRenderer({
     if (selectedTool?.type !== 'station') reset();
   }, [selectedTool, reset]);
 
-  // Mouse events (only active for the station tool)
+  // Mouse events (only active for the station tool) — attached once
   useEffect(() => {
     const canvas = document.querySelector('canvas');
     if (!canvas) return;
     const handleMouseMove = (e) => {
-      if (selectedTool?.type === 'station') computeGhost(e);
+      if (selectedToolRef.current?.type === 'station') computeGhostRef.current(e);
     };
     const handleMouseDown = (e) => {
       mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     };
     const handleClick = (e) => {
-      if (selectedTool?.type !== 'station') return;
+      if (selectedToolRef.current?.type !== 'station') return;
       const rect = canvas.getBoundingClientRect();
       const isOnCanvas =
         e.clientX >= rect.left && e.clientX <= rect.right &&
@@ -76,8 +88,8 @@ export default function StationRenderer({
         const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
         if (dx > 5 || dy > 5) return;
       }
-      const station = handleClick(e);
-      if (station) onStationsChange?.();
+      const station = handleClickRef.current(e);
+      if (station) onStationsChangeRef.current?.();
     };
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);
@@ -87,7 +99,7 @@ export default function StationRenderer({
       canvas.removeEventListener('mousedown', handleMouseDown);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [selectedTool, computeGhost, handleClick, onStationsChange]);
+  }, []);
 
   // Ghost preview meshes
   const ghostMeshes = useMemo(() => {
@@ -118,6 +130,11 @@ export default function StationRenderer({
     const startMarker = makeGhostBox(STATION_WIDTH_WORLD, 0.15, 0.5, color);
     startMarker.position.set(ghost.startWorld.x, ghost.height * 0.5 + 0.25 + 0.3, ghost.startWorld.z);
     ghostMeshesRef.current.push(startMarker);
+
+    // End marker follows the cursor cell exactly
+    const endMarker = makeGhostBox(0.5, 0.5, 0.5, color);
+    endMarker.position.set(ghost.endWorld.x, ghost.endWorld.y + 0.35, ghost.endWorld.z);
+    ghostMeshesRef.current.push(endMarker);
 
     return ghostMeshesRef.current;
   }, [ghost, terrainData]);

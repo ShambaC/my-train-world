@@ -4,10 +4,10 @@ import { createNoise2D } from 'simplex-noise';
 // Voxel size - smaller than Minecraft for higher resolution
 const VOXEL_SIZE = 0.5;
 
-// Water surface world height (raised by one voxel layer from original 1.0)
-export const WATER_LEVEL = 1.5;
-// Voxel index at/under which columns are submerged (top of index 2 = 1.25 < 1.5)
-export const WATER_LEVEL_VOXEL = 2;
+// Water surface world height (raised twice: 1.0 -> 1.5 -> 2.0)
+export const WATER_LEVEL = 2.0;
+// Voxel index at/under which columns are submerged (top of index 3 = 1.75 < 2.0)
+export const WATER_LEVEL_VOXEL = 3;
 
 // Terrain colors based on height
 const TERRAIN_COLORS = {
@@ -148,15 +148,17 @@ function carveRiver(heightMap, length, breadth, waterLevel, seed) {
     const noise = riverNoise(t * 0.06, 0);
     const meander = Math.sin(t * 0.05 + seed * 10) * 2.5 + noise * 3.5;
     const center = Math.max(4, Math.min(across - 5, acrossHalf + meander));
-    const width = 2.5 + Math.abs(riverNoise(t * 0.15, 1)) * 1.5; // 2.5..4 voxels
+    const width = 1.2 + Math.abs(riverNoise(t * 0.15, 1)) * 0.8; // 1.2..2 half-width
 
     for (let s = 0; s < across; s++) {
       const d = Math.abs(s - center);
       let target = null;
       if (d <= width) {
         target = 0; // riverbed
+      } else if (d <= width + 1) {
+        target = 1; // submerged bank edge
       } else if (d <= width + 2) {
-        target = Math.max(1, Math.round((d - width) * 1.2)); // bank: 1, 2 (submerged), 3 (dry)
+        target = 3; // dry bank step
       }
       if (target === null) continue;
       if (horizontal) {
@@ -164,6 +166,45 @@ function carveRiver(heightMap, length, breadth, waterLevel, seed) {
       } else {
         heightMap[t][s] = Math.min(heightMap[t][s], target);
       }
+    }
+  }
+}
+
+/**
+ * Smooth the height map with a 5-cell cross average.
+ * Keeps rolling hills but removes single-voxel roughness so stations
+ * (which need a flat same-height strip) can actually be placed.
+ */
+function smoothHeightMap(heightMap, length, breadth) {
+  const next = heightMap.map((row) => row.slice());
+  for (let pass = 0; pass < 3; pass++) {
+    for (let x = 0; x < length; x++) {
+      for (let z = 0; z < breadth; z++) {
+        let sum = heightMap[x][z];
+        let count = 1;
+        if (x > 0) { sum += heightMap[x - 1][z]; count++; }
+        if (x < length - 1) { sum += heightMap[x + 1][z]; count++; }
+        if (z > 0) { sum += heightMap[x][z - 1]; count++; }
+        if (z < breadth - 1) { sum += heightMap[x][z + 1]; count++; }
+        next[x][z] = Math.round(sum / count);
+      }
+    }
+    for (let x = 0; x < length; x++) {
+      for (let z = 0; z < breadth; z++) {
+        heightMap[x][z] = next[x][z];
+      }
+    }
+  }
+}
+
+/**
+ * Quantize heights to even steps — turns the terrain into large flat
+ * plateaus that are perfect for station strips and track runs.
+ */
+function quantizeHeights(heightMap, length, breadth) {
+  for (let x = 0; x < length; x++) {
+    for (let z = 0; z < breadth; z++) {
+      heightMap[x][z] = Math.max(4, Math.round(heightMap[x][z] / 2) * 2);
     }
   }
 }
@@ -182,8 +223,8 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
   const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
   const voxelInstances = new Map();
   
-  const scale = 0.03;
-  const heightMultiplier = 4;
+  const scale = 0.045;
+  const heightMultiplier = 3;
   const waterLevel = WATER_LEVEL_VOXEL;
   
   const heightMap = [];
@@ -208,11 +249,15 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
       }
       
       height = (height + 1) * heightMultiplier;
-      // +3 bias keeps dry land after the water level rise (min dry height = 3)
-      height = Math.floor(height * 0.6 + 3);
+      // +4 bias keeps dry land above the raised water level (min dry height = 4)
+      height = Math.floor(height * 0.6 + 4);
       heightMap[x][z] = Math.max(0, height);
     }
   }
+
+  // Flatten the terrain into large plateaus so stations are placeable
+  smoothHeightMap(heightMap, length, breadth);
+  quantizeHeights(heightMap, length, breadth);
 
   // Carve a meandering river from one edge to the opposite edge
   carveRiver(heightMap, length, breadth, waterLevel, seed);
@@ -262,7 +307,7 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
         } else if (y < height) { // A side-block
           color = TERRAIN_COLORS.grass; 
          } else if (y === height) { // The top-most block
-           if (height > 5) {
+           if (height > 6) {
              color = TERRAIN_COLORS.rock;
            } else {
              color = TERRAIN_COLORS.grass;

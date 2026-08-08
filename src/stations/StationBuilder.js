@@ -6,10 +6,10 @@
 import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 
-export const STATION_WIDTH = 4; // voxels perpendicular to the track
-export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 2.0 units
+export const STATION_WIDTH = 3; // voxels perpendicular to the track
+export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
 export const PLATFORM_HEIGHT = 0.5; // one voxel slab
-export const MIN_STATION_LENGTH = 4; // voxels
+export const MIN_STATION_LENGTH = 8; // voxels
 export const MAX_STATION_LENGTH = 40; // voxels
 
 const VOXEL = 0.5;
@@ -122,7 +122,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   // --- clocks flanking the building ---
   for (const side of [-1, 1]) {
     const clock = ModelLibrary.getMesh('station-clock');
-    addPiece(clock, buildingAxial + side * 0.9, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0.15);
+    addPiece(clock, buildingAxial + side * 0.9, STATION_WIDTH_WORLD / 2 - 0.3, platformTop, 0.15);
     clock.rotation.y = Math.PI / 2;
   }
 
@@ -133,7 +133,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
       const i = 2 + k * 5;
       if (i >= lengthCells - 2) break;
       const canopy = ModelLibrary.getMesh('platform-canopy');
-      addPiece(canopy, i * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.55, platformTop, 0.05);
+      addPiece(canopy, i * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0.05);
       canopy.rotation.y = Math.PI;
     }
   }
@@ -144,24 +144,24 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     const type = propCycle[Math.floor(i / 3) % propCycle.length];
     const prop = ModelLibrary.getMesh(type);
     const jitter = (Math.random() - 0.5) * 0.2;
-    addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.5, platformTop, 0.05);
+    addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, 0.05);
     prop.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
   }
 
   // --- goods shed on long stations ---
   if (lengthCells >= 20) {
     const shed = ModelLibrary.getMesh('goods-shed');
-    addPiece(shed, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.75, platformTop, 0.2);
+    addPiece(shed, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.2);
     shed.rotation.y = Math.PI / 2;
   }
 
   // --- mandatory signals at both ends, facing outward ---
   const signalStart = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalStart, -0.55, STATION_WIDTH_WORLD / 2 - 0.6, platformTop, 0);
+  addPiece(signalStart, -0.55, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0);
   signalStart.rotation.y = Math.PI;
 
   const signalEnd = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalEnd, lengthCells * VOXEL + 0.55, STATION_WIDTH_WORLD / 2 - 0.6, platformTop, 0.05);
+  addPiece(signalEnd, lengthCells * VOXEL + 0.55, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0.05);
   signalEnd.rotation.y = 0;
 
   // Wave pops in distance-from-start order
