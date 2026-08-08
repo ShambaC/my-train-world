@@ -4,8 +4,17 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
+import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
 
-// ─── Final Color Pass: applies ACES tone mapping + sRGB encoding exactly once.
+// Tilt-shift settings (see tilt-shift-guide.md):
+//   r  — normalized screen Y of the sharp focus strip
+//   h/v — blur footprint = blurStrength / physical render size
+const FOCUS_Y = 0.5;
+const BLUR_STRENGTH = 2.4;
+
+// ─── Final Color Pass: applies ACES tone mapping + sRGB encoding exactly once,
+// plus a light saturation/vignette lift for the miniature look.
 // The default OutputPass reads renderer.toneMapping/outputColorSpace, and R3F's
 // defaults (ACES + sRGB output) get applied by the RenderPass too — double
 // application crushed blacks and blew out brights. This pass is unconditional.
@@ -13,6 +22,8 @@ const FinalShader = {
   uniforms: {
     tDiffuse: { value: null },
     exposure: { value: 1.1 },
+    saturation: { value: 1.2 },
+    vignette: { value: 0.15 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -24,6 +35,8 @@ const FinalShader = {
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform float exposure;
+    uniform float saturation;
+    uniform float vignette;
     varying vec2 vUv;
 
     vec3 acesFilmic(vec3 x) {
@@ -36,71 +49,18 @@ const FinalShader = {
 
     void main() {
       vec4 color = texture2D(tDiffuse, vUv);
-      color.rgb = linearToSRGB(acesFilmic(color.rgb));
-      gl_FragColor = color;
-    }
-  `,
-};
+      color.rgb = acesFilmic(color.rgb);
 
-// ─── Tilt-Shift Shader ────────────────────────────────────────────────────
-const TiltShiftShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-    resolution: { value: new THREE.Vector2(1, 1) },
-    focusY: { value: 0.5 },
-    focusWidth: { value: 0.18 },
-    maxBlur: { value: 5.0 },
-    saturation: { value: 1.3 },
-    vignette: { value: 0.35 },
-  },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform vec2 resolution;
-    uniform float focusY;
-    uniform float focusWidth;
-    uniform float maxBlur;
-    uniform float saturation;
-    uniform float vignette;
-    varying vec2 vUv;
-
-    void main() {
-      float dist = abs(vUv.y - focusY);
-      float blurFactor = smoothstep(focusWidth, focusWidth + 0.25, dist) * maxBlur;
-
-      vec4 color = vec4(0.0);
-      float totalWeight = 0.0;
-
-      for (float x = -3.0; x <= 3.0; x += 1.0) {
-        for (float y = -3.0; y <= 3.0; y += 1.0) {
-          vec2 offset = vec2(x, y) * blurFactor / resolution;
-          float r = length(vec2(x, y));
-          float weight = max(1.0 - r / 4.24, 0.0);
-          color += texture2D(tDiffuse, vUv + offset) * weight;
-          totalWeight += weight;
-        }
-      }
-
-      vec4 finalColor = color / totalWeight;
-
-      // Saturation boost for miniature look
-      float luma = dot(finalColor.rgb, vec3(0.299, 0.587, 0.114));
-      finalColor.rgb = mix(vec3(luma), finalColor.rgb, saturation);
-
-      // Slight contrast lift
-      finalColor.rgb = pow(finalColor.rgb, vec3(1.06));
+      // Saturation lift
+      float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+      color.rgb = mix(vec3(luma), color.rgb, saturation);
 
       // Vignette
       float vignetteDist = length(vUv - 0.5);
-      finalColor.rgb *= 1.0 - vignette * smoothstep(0.55, 0.95, vignetteDist);
+      color.rgb *= 1.0 - vignette * smoothstep(0.55, 0.95, vignetteDist);
 
-      gl_FragColor = finalColor;
+      color.rgb = linearToSRGB(color.rgb);
+      gl_FragColor = color;
     }
   `,
 };
@@ -183,10 +143,16 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     celPassRef.current = celPass;
     composer.addPass(celPass);
 
-    const tiltPass = new ShaderPass(TiltShiftShader);
-    tiltPass.enabled = tiltShiftEnabled;
-    tiltPassRef.current = tiltPass;
-    composer.addPass(tiltPass);
+    // Two separable tilt-shift passes (horizontal then vertical), per
+    // tilt-shift-guide.md — each modulates its blur by distance from the
+    // focus line using the stock three.js shaders.
+    const tiltHPass = new ShaderPass(HorizontalTiltShiftShader);
+    const tiltVPass = new ShaderPass(VerticalTiltShiftShader);
+    tiltHPass.enabled = tiltShiftEnabled;
+    tiltVPass.enabled = tiltShiftEnabled;
+    tiltPassRef.current = [tiltHPass, tiltVPass];
+    composer.addPass(tiltHPass);
+    composer.addPass(tiltVPass);
 
     const finalPass = new ShaderPass(FinalShader);
     composer.addPass(finalPass);
@@ -217,24 +183,33 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
 
   // Update pass enabled states
   useEffect(() => {
-    if (tiltPassRef.current) tiltPassRef.current.enabled = tiltShiftEnabled;
+    const passes = tiltPassRef.current;
+    if (passes) {
+      passes[0].enabled = tiltShiftEnabled;
+      passes[1].enabled = tiltShiftEnabled;
+    }
     if (celPassRef.current) celPassRef.current.enabled = celShadingEnabled;
   }, [tiltShiftEnabled, celShadingEnabled]);
 
-  // Update resolution uniforms on resize
+  // Update tilt-shift focus + blur footprint (physical render pixels) on resize
   useEffect(() => {
-    const w = size.width;
-    const h = size.height;
-    if (tiltPassRef.current) {
-      tiltPassRef.current.uniforms.resolution.value.set(w, h);
-    }
+    const pixelRatio = gl.getPixelRatio();
+    const renderW = size.width * pixelRatio;
+    const renderH = size.height * pixelRatio;
     if (celPassRef.current) {
-      celPassRef.current.uniforms.resolution.value.set(w, h);
+      celPassRef.current.uniforms.resolution.value.set(size.width, size.height);
+    }
+    const passes = tiltPassRef.current;
+    if (passes) {
+      passes[0].uniforms.h.value = BLUR_STRENGTH / renderW;
+      passes[0].uniforms.r.value = FOCUS_Y;
+      passes[1].uniforms.v.value = BLUR_STRENGTH / renderH;
+      passes[1].uniforms.r.value = FOCUS_Y;
     }
     if (composerRef.current) {
-      composerRef.current.setSize(w, h);
+      composerRef.current.setSize(size.width, size.height);
     }
-  }, [size]);
+  }, [size, gl]);
 
   // Render takeover (priority 1 disables R3F default render)
   useFrame(() => {

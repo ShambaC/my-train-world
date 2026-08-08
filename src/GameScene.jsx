@@ -243,7 +243,7 @@ export default function GameScene({
   const [trainCount, setTrainCount] = useState(0);
   const [stationCount, setStationCount] = useState(0);
   const [stationsVersion, setStationsVersion] = useState(0);
-  const [memoryMB, setMemoryMB] = useState(0);
+  const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0 });
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
@@ -310,7 +310,7 @@ export default function GameScene({
         {(tiltShiftEnabled || celShadingEnabled) && (
           <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
         )}
-        <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemoryMB} />
+        <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
       
       {/* Debug Overlay */}
@@ -323,7 +323,8 @@ export default function GameScene({
           <div>Trains: {trainCount}</div>
           <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
-          {memoryMB > 0 && <div>Memory: {memoryMB} MB</div>}
+          {memStats.jsHeapMB >= 0 && <div>Memory: {memStats.jsHeapMB} MB</div>}
+          <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">
               <div>Tool: {selectedTool.name}</div>
@@ -343,10 +344,13 @@ export default function GameScene({
   );
 }
 
-// Separate component to track FPS + JS heap memory (Chromium-only)
+// Separate component to track FPS + memory stats.
+// JS heap is Chromium-only (performance.memory); three.js WebGL resource
+// counts work in every browser, including Firefox.
 function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
+  const gl = useThree((state) => state.gl);
 
   useFrame(() => {
     if (!show) return;
@@ -361,11 +365,17 @@ function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
       frameCount.current = 0;
       lastTime.current = currentTime;
 
-      // JS heap usage (Chrome/Edge only; other browsers return undefined)
+      // JS heap usage (Chrome/Edge only; Firefox exposes no heap API)
       const mem = performance.memory;
-      if (mem && typeof mem.usedJSHeapSize === 'number') {
-        onMemoryUpdate(Math.round(mem.usedJSHeapSize / (1024 * 1024)));
-      }
+      const info = gl?.info;
+      onMemoryUpdate({
+        jsHeapMB: mem && typeof mem.usedJSHeapSize === 'number'
+          ? Math.round(mem.usedJSHeapSize / (1024 * 1024))
+          : -1,
+        geometries: info?.memory?.geometries ?? 0,
+        textures: info?.memory?.textures ?? 0,
+        programs: info?.programs?.length ?? 0,
+      });
     }
   });
 

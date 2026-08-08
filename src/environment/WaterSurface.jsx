@@ -70,7 +70,7 @@ const WaterShader = {
     }
 
     void main() {
-      // --- Heightmap mask: voxel-exact sampling ---
+      // --- Heightmap sample: voxel-exact ---
       // Plane local +Y → world -Z, so rows flip; half-texel offset centers samples.
       vec2 mapUV = vec2(
         (vUv.x * (uTerrainSize.x - 1.0) + 0.5) / uTerrainSize.x,
@@ -78,7 +78,11 @@ const WaterShader = {
       );
       float h = texture2D(uHeightMap, mapUV).r;
       float terrainTopY = h * uVoxel + 0.25; // voxel top = h*0.5 + 0.25
-      if (terrainTopY > uWaterY - 0.04) discard;
+
+      // The plane spans the whole terrain. Fragments buried well below the
+      // ground (0.5 units under the surface) are discarded — everything else
+      // stays part of one continuous plane, so ponds and river all fill.
+      if (terrainTopY > uWaterY + 0.5) discard;
 
       // Shore factor: 0 = deep, 1 = near shore
       float shore = smoothstep(uWaterY - 0.4, uWaterY, terrainTopY);

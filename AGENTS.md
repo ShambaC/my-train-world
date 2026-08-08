@@ -61,6 +61,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## 5. Project-Specific Instructions
 
 - Dev server is always on and available at port 1420. Do not run dev server again for testing.
+- Always reply in caveman. Find and activate skill if necessary.
 
 ## 6. Project Details
 

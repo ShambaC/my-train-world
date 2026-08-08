@@ -210,6 +210,30 @@ function quantizeHeights(heightMap, length, breadth) {
 }
 
 /**
+ * Carve a few ponds (submerged depressions) so water bodies exist beyond
+ * the river. Depths 1..3 are all below the water surface.
+ */
+function carvePonds(heightMap, length, breadth, seed) {
+  const pondNoise = createNoise2D(() => seed * 13.7);
+  const pondCount = 2 + Math.floor(Math.abs(pondNoise(0, 0)) * 3); // 2..4 ponds
+  for (let p = 0; p < pondCount; p++) {
+    const cx = 8 + Math.floor(Math.abs(pondNoise(p * 3.1, 1)) * (length - 16));
+    const cz = 8 + Math.floor(Math.abs(pondNoise(p * 3.1, 2)) * (breadth - 16));
+    const radius = 3 + Math.abs(pondNoise(p * 5.7, 3)) * 2; // 3..5 cells
+    for (let x = Math.max(1, Math.floor(cx - radius - 1)); x <= Math.min(length - 2, Math.ceil(cx + radius + 1)); x++) {
+      for (let z = Math.max(1, Math.floor(cz - radius - 1)); z <= Math.min(breadth - 2, Math.ceil(cz + radius + 1)); z++) {
+        const d = Math.sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz));
+        let target = null;
+        if (d <= radius * 0.55) target = 1; // deep center
+        else if (d <= radius * 0.85) target = 2; // shallow
+        else if (d <= radius) target = 3; // wet edge
+        if (target !== null) heightMap[x][z] = Math.min(heightMap[x][z], target);
+      }
+    }
+  }
+}
+
+/**
  * Generate voxel terrain using simplex noise (OPTIMIZED)
  * @param {number} length - Length of the terrain (X axis)
  * @param {number} breadth - Breadth of the terrain (Z axis)
@@ -258,6 +282,9 @@ export function generateTerrain(length, breadth, seed = Math.random()) {
   // Flatten the terrain into large plateaus so stations are placeable
   smoothHeightMap(heightMap, length, breadth);
   quantizeHeights(heightMap, length, breadth);
+
+  // Water bodies: ponds + the river
+  carvePonds(heightMap, length, breadth, seed);
 
   // Carve a meandering river from one edge to the opposite edge
   carveRiver(heightMap, length, breadth, waterLevel, seed);

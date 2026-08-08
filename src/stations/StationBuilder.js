@@ -8,7 +8,7 @@ import ModelLibrary from '../models/ModelLibrary';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
-export const PLATFORM_HEIGHT = 0.5; // one voxel slab
+export const PLATFORM_HEIGHT = 0.15; // very low base (was 0.5, then 0.25)
 export const MIN_STATION_LENGTH = 8; // voxels
 export const MAX_STATION_LENGTH = 40; // voxels
 
@@ -126,22 +126,23 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     clock.rotation.y = Math.PI / 2;
   }
 
-  // --- canopies over the prop row ---
-  if (lengthCells >= 8) {
-    const canopyCount = Math.min(3, Math.max(1, Math.floor((lengthCells - 4) / 5)));
-    for (let k = 0; k < canopyCount; k++) {
-      const i = 2 + k * 5;
-      if (i >= lengthCells - 2) break;
-      const canopy = ModelLibrary.getMesh('platform-canopy');
-      addPiece(canopy, i * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0.05);
-      canopy.rotation.y = Math.PI;
-    }
+  // --- canopies at the far ends, clear of the building and the signals.
+  // The model's own base is sunk 0.35 into the platform deck. ---
+  const canopyCells = [];
+  if (lengthCells >= 22) canopyCells.push(3, lengthCells - 4);
+  else if (lengthCells >= 14) canopyCells.push(lengthCells - 4);
+  for (const i of canopyCells) {
+    const canopy = ModelLibrary.getMesh('platform-canopy');
+    addPiece(canopy, i * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.4, platformTop - 0.35, 0.05);
+    canopy.rotation.y = Math.PI / 2;
   }
 
-  // --- prop row (bench / lamp / bin cycle) ---
+  // --- prop row (bench / lamp / bin cycle) — one block forward from the
+  // building, and never directly under a canopy so support beams stay clear ---
   const propCycle = ['platform-bench', 'platform-gas-lamp', 'platform-litter-bin'];
-  for (let i = 1; i < lengthCells - 1; i += 3) {
-    const type = propCycle[Math.floor(i / 3) % propCycle.length];
+  for (let i = 2; i < lengthCells - 2; i += 3) {
+    if (canopyCells.some((c) => Math.abs(c - i) <= 1)) continue;
+    const type = propCycle[Math.floor((i - 2) / 3) % propCycle.length];
     const prop = ModelLibrary.getMesh(type);
     const jitter = (Math.random() - 0.5) * 0.2;
     addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, 0.05);
@@ -155,14 +156,15 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     shed.rotation.y = Math.PI / 2;
   }
 
-  // --- mandatory signals at both ends, facing outward ---
+  // --- mandatory signals at both ends, ON the platform edges, facing
+  // INWARD toward the station ---
   const signalStart = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalStart, -0.55, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0);
-  signalStart.rotation.y = Math.PI;
+  addPiece(signalStart, 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0);
+  signalStart.rotation.y = 0;
 
   const signalEnd = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalEnd, lengthCells * VOXEL + 0.55, STATION_WIDTH_WORLD / 2 - 0.4, platformTop, 0.05);
-  signalEnd.rotation.y = 0;
+  addPiece(signalEnd, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.05);
+  signalEnd.rotation.y = Math.PI;
 
   // Wave pops in distance-from-start order
   station.pieces.sort((a, b) => a.delay - b.delay);
