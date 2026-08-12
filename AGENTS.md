@@ -69,6 +69,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Framework & Runtime**: React 19, Vite 7, Tauri 2 (`@tauri-apps/api`, `@tauri-apps/cli`)
 - **3D & Graphics**: Three.js (r180), `@react-three/fiber` (v9), `@react-three/drei` (v10)
 - **Styling & Math**: Tailwind CSS v3, `simplex-noise` (v4)
+- **Assets**: Draco-compressed GLB models loaded via `GLTFLoader`/`DRACOLoader` through `src/models/ModelLibrary.js` (`MODEL_SCALE = 0.3`)
 
 ### Core Systems & Architecture
 
@@ -77,7 +78,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - Instanced rendering (`InstancedMesh`) for performance across terrain voxels and procedural trees/bushes.
   - `WaterSurface.jsx`: Custom Gerstner wave shader with depth-based foam, fresnel, caustics, and terrain heightmap masking.
   - `ForestBorder.js` & `FogWall.jsx`: Instanced border tree ring and animated cylindrical cloud wall hiding map edges.
-  - `Skybox.jsx`: Time-of-day lighting and skybox presets (day, golden, sunset, night).
+  - `Skybox.jsx`: Time-of-day lighting and skybox presets (dawn, day, dusk, night) via `getLightingForTime`.
+  - `ScatterProps.jsx`: Probability-based scattering of instanced GLB props (trees, rocks, buildings, fences), excluding water, slopes, tracks, and station zones.
+  - `CameraController.jsx`: WASD camera-relative movement (Shift sprint) that moves the `OrbitControls` target with the camera.
 
 - **Track System (`src/tracks/`)**:
   - `trackGeometry.js`: Central geometric math for straight/curved tracks (0.5 voxel grid, 0.25 arc radius, tangent calculations, Three.js world transforms).
@@ -88,11 +91,21 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Train Simulation (`src/trains/`)**:
   - `TrainModel.js`: Low-poly procedural voxel locomotive (boiler, cab, smokestack, cowcatcher, headlight).
   - `TrainManager.js`: Physics-free path traversal across connected track graphs, progress interpolation, fallback reverse handling on dead ends, and speed control.
+  - Coach system: `addCoach` attaches coaches behind engines (`coachTypes.js` defines `COACH_TYPES`/`COACH_LENGTH`); trains with coaches never reverse at dead ends. Procedural per-type coach models (`PassengerCoachModel.js`, `GoodsCoachModel.js`, `GasCoachModel.js`, `ContainerCoachModel.js`, `ViewdeckCoachModel.js`, `CoalCartModel.js`).
   - `TrainRenderer.jsx` & `SmokeParticles.jsx`: Train rendering and instanced particle system (wobble, spin, cubic ease scale, color fade).
+
+- **Station System (`src/stations/`)**:
+  - `StationManager.js`: Station storage and track binding (tracks running beside a station become stops; lateral 0.75..2.5 units, same ground height, axially overlapping).
+  - `StationBuilder.js`: Composes decorated station groups from two marker cells (`STATION_WIDTH` 3 voxels, `PLATFORM_HEIGHT` 0.15, min/max length 8..40 voxels) with pop-animation metadata.
+  - `StationRenderer.jsx` & `src/hooks/useStationPlacement.js`: Two-marker placement ghost with green/red validation and wave pop-out reveal.
+
+- **Model Library (`src/models/ModelLibrary.js`)**:
+  - Loads, normalizes and caches all Draco-compressed GLB props (buildings, props, rocks, trees, trains) at `MODEL_SCALE = 0.3`; bakes node transforms and centers bases at y=0.
 
 - **Post-Processing (`src/postprocessing/Effects.jsx`)**:
   - Custom `EffectComposer` pipeline with toggleable `TiltShiftShader` (miniature depth of field + saturation + vignette) and `CelShader` (posterized luminance + Sobel edge detection).
 
 - **UI & Controls (`src/ui/`, `src/ControlPanel.jsx`, `src/hooks/useTrackPlacement.js`)**:
-  - `Hotbar.jsx`: Tool switcher (Hand, Straight, Curved, Train, Delete) with keyboard shortcuts (1-5, R to rotate, Q/E/X for bridge heights).
-  - `ControlPanel.jsx` & `TrainControl.jsx`: Terrain sizing, train speed/dispatch controls, environment adjustments, and debug statistics.
+  - `Hotbar.jsx`: Tool switcher (Hand, Straight, Curved, Train, Station, Coach, Delete) with keyboard shortcuts (1-7, Escape to deselect, R to rotate, Q/E/X for bridge heights).
+  - `ControlPanel.jsx`, `TrainControl.jsx` & `EnvironmentSettings.jsx`: Terrain sizing, train speed/dispatch controls, time-of-day (dawn/day/dusk/night), fog, and debug statistics.
+  - `CoachMenu.jsx`: Radial coach picker (thumbnails in a circle) opened by clicking an engine with the Coach tool; `GameScene.jsx` orchestrates scene composition and `LoadingScreen.jsx` shows asset-load progress.
