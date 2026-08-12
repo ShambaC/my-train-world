@@ -5,6 +5,7 @@ import { createPassengerCoach } from './PassengerCoachModel';
 import { createCoalCart } from './CoalCartModel';
 import { createGasCoach } from './GasCoachModel';
 import { createGoodsCoach } from './GoodsCoachModel';
+import { createContainerCoach } from './ContainerCoachModel';
 import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 
@@ -88,6 +89,8 @@ export default function TrainRenderer({ trainManager }) {
               ? createGasCoach()
               : (coach.type === 'goods-coach' || coach.type === 'freight-van')
               ? createGoodsCoach()
+              : (coach.type === 'container-coach' || coach.type === 'container-flat-wagon')
+              ? createContainerCoach()
               : ModelLibrary.getMesh(coach.type);
             coachMeshesRef.current.set(coach.id, mesh);
           }

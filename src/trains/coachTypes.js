@@ -12,6 +12,7 @@ export const COACH_TYPES = [
   { key: 'coal-cart', label: 'Coal Cart' },
   { key: 'gas-coach', label: 'Gas Tanker' },
   { key: 'goods-coach', label: 'Goods Coach' },
+  { key: 'container-coach', label: 'Container Coach' },
 ];
 
 export const COACH_LENGTH = {
@@ -19,10 +20,11 @@ export const COACH_LENGTH = {
   'freight-van': 1.12,
   'mail-coach': 1.13,
   'open-coal-wagon': 0.99,
-  'container-flat-wagon': 1.09,
+  'container-flat-wagon': 1.12,
   'coal-cart': 1.12,
   'gas-coach': 1.12,
   'goods-coach': 1.12,
+  'container-coach': 1.12,
 };
 
 // Engine-relative spacing (used for the placement ghost): engine half (0.5)
@@ -36,6 +38,7 @@ export const COACH_SPACING = {
   'coal-cart': 0.5 + COACH_LENGTH['coal-cart'] / 2 + 0.15,
   'gas-coach': 0.5 + COACH_LENGTH['gas-coach'] / 2 + 0.15,
   'goods-coach': 0.5 + COACH_LENGTH['goods-coach'] / 2 + 0.15,
+  'container-coach': 0.5 + COACH_LENGTH['container-coach'] / 2 + 0.15,
 };
 
 export const DEFAULT_COACH = 'passenger-coach';
