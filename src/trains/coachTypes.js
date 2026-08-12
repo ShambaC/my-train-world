@@ -18,7 +18,7 @@ export const COACH_LENGTH = {
   'mail-coach': 1.13,
   'open-coal-wagon': 0.99,
   'container-flat-wagon': 1.09,
-  'coal-cart': 0.90,
+  'coal-cart': 1.12,
 };
 
 // Engine-relative spacing (used for the placement ghost): engine half (0.5)
