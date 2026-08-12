@@ -5,10 +5,6 @@
 
 export const COACH_TYPES = [
   { key: 'passenger-coach', label: 'Passenger Coach' },
-  { key: 'freight-van', label: 'Freight Van' },
-  { key: 'mail-coach', label: 'Mail Coach' },
-  { key: 'open-coal-wagon', label: 'Open Coal Wagon' },
-  { key: 'container-flat-wagon', label: 'Container Wagon' },
   { key: 'coal-cart', label: 'Coal Cart' },
   { key: 'gas-coach', label: 'Gas Tanker' },
   { key: 'goods-coach', label: 'Goods Coach' },
@@ -18,10 +14,6 @@ export const COACH_TYPES = [
 
 export const COACH_LENGTH = {
   'passenger-coach': 1.12,
-  'freight-van': 1.12,
-  'mail-coach': 1.12,
-  'open-coal-wagon': 0.99,
-  'container-flat-wagon': 1.12,
   'coal-cart': 1.12,
   'gas-coach': 1.12,
   'goods-coach': 1.12,
@@ -33,10 +25,6 @@ export const COACH_LENGTH = {
 // + coach half + 0.15 gap. Real per-pair spacing is computed in addCoach.
 export const COACH_SPACING = {
   'passenger-coach': 0.5 + COACH_LENGTH['passenger-coach'] / 2 + 0.15,
-  'freight-van': 0.5 + COACH_LENGTH['freight-van'] / 2 + 0.15,
-  'mail-coach': 0.5 + COACH_LENGTH['mail-coach'] / 2 + 0.15,
-  'open-coal-wagon': 0.5 + COACH_LENGTH['open-coal-wagon'] / 2 + 0.15,
-  'container-flat-wagon': 0.5 + COACH_LENGTH['container-flat-wagon'] / 2 + 0.15,
   'coal-cart': 0.5 + COACH_LENGTH['coal-cart'] / 2 + 0.15,
   'gas-coach': 0.5 + COACH_LENGTH['gas-coach'] / 2 + 0.15,
   'goods-coach': 0.5 + COACH_LENGTH['goods-coach'] / 2 + 0.15,

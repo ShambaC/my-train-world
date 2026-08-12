@@ -1,22 +1,15 @@
 import { useState } from 'react';
 import { COACH_TYPES } from '../trains/coachTypes';
-import passengerImg from '../assets/Images/passenger-coach.png';
-import freightImg from '../assets/Images/freight-van.png';
-import mailImg from '../assets/Images/mail-coach.png';
-import coalImg from '../assets/Images/open-coal-wagon.png';
-import containerImg from '../assets/Images/container-flat-wagon.png';
-import coalCartImg from '../assets/ModelImages/coal_coach_sheet.png';
-import gasImg from '../assets/ModelImages/gas_coach_sheet.png';
-import goodsImg from '../assets/ModelImages/goods_coach_sheet.png';
-import containerCoachImg from '../assets/ModelImages/container_coach_sheet.png';
-import viewdeckImg from '../assets/ModelImages/viewdeck_coach_sheet.png';
+import passengerImg from '../assets/Images/passenger_coach.png';
+import coalCartImg from '../assets/Images/coal_coach.png';
+import gasImg from '../assets/Images/gas_coach.png';
+import goodsImg from '../assets/Images/goods_coach.png';
+import containerCoachImg from '../assets/Images/container_coach.png';
+import viewdeckImg from '../assets/Images/viewdeck_coach.png';
 
 const COACH_IMAGES = {
   'passenger-coach': passengerImg,
-  'freight-van': goodsImg,
   'mail-coach': viewdeckImg,
-  'open-coal-wagon': coalImg,
-  'container-flat-wagon': containerCoachImg,
   'coal-cart': coalCartImg,
   'gas-coach': gasImg,
   'goods-coach': goodsImg,
