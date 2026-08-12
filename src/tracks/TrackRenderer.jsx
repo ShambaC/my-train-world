@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { createStraightTrack, createCurvedTrack, createSupportBeams } from './TrackModels';
 import { createTrainEngine } from '../trains/TrainModel';
+import { createPassengerCoach } from '../trains/PassengerCoachModel';
+import { createCoalCart } from '../trains/CoalCartModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import ModelLibrary from '../models/ModelLibrary';
@@ -198,7 +200,12 @@ export default function TrackRenderer({
           z: ghostPosition.z - head.z * spacing,
         };
         ghostOffsetRef.current = ghostPos;
-        mesh = makeGhost(ModelLibrary.getMesh(DEFAULT_COACH), GHOST_GREEN);
+        const coachMesh = DEFAULT_COACH === 'passenger-coach'
+          ? createPassengerCoach()
+          : DEFAULT_COACH === 'coal-cart'
+          ? createCoalCart()
+          : ModelLibrary.getMesh(DEFAULT_COACH);
+        mesh = makeGhost(coachMesh, GHOST_GREEN);
       }
     } else if (selectedTool.type === 'delete') {
       // Red silhouette of hovered target: train engine, track model or station

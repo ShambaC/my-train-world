@@ -12,6 +12,7 @@ const COACH_IMAGES = {
   'mail-coach': mailImg,
   'open-coal-wagon': coalImg,
   'container-flat-wagon': containerImg,
+  'coal-cart': coalImg,
 };
 
 const MENU_ITEMS = COACH_TYPES.map((t) => ({ ...t, img: COACH_IMAGES[t.key] }));

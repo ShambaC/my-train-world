@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { createTrainEngine } from './TrainModel';
+import { createPassengerCoach } from './PassengerCoachModel';
+import { createCoalCart } from './CoalCartModel';
 import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 
@@ -53,6 +55,10 @@ export default function TrainRenderer({ trainManager }) {
     for (const [id, mesh] of coachMeshesRef.current.entries()) {
       if (!currentCoachIds.has(id)) {
         if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.traverse((child) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
         coachMeshesRef.current.delete(id);
       }
     }
@@ -68,11 +74,16 @@ export default function TrainRenderer({ trainManager }) {
         }
         const trainMesh = trainMeshesRef.current.get(train.id);
 
-        // Coach meshes (shared geometry from ModelLibrary — not disposed)
+        // Coach meshes
         const coachNodes = (train.coaches || []).map((coach) => {
           if (!coach.position) return null;
           if (!coachMeshesRef.current.has(coach.id)) {
-            coachMeshesRef.current.set(coach.id, ModelLibrary.getMesh(coach.type));
+            const mesh = coach.type === 'passenger-coach'
+              ? createPassengerCoach()
+              : coach.type === 'coal-cart'
+              ? createCoalCart()
+              : ModelLibrary.getMesh(coach.type);
+            coachMeshesRef.current.set(coach.id, mesh);
           }
           const mesh = coachMeshesRef.current.get(coach.id);
           return (
