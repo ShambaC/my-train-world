@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import TrainControl from './ui/TrainControl';
 import EnvironmentSettings from './ui/EnvironmentSettings';
 
 export default function ControlPanel({ 
   onTerrainSizeChange, 
+  terrainSeed,
+  onSeedChange,
   onToggleDebug, 
   showDebug,
   isGenerating,
@@ -22,15 +24,32 @@ export default function ControlPanel({
   const [length, setLength] = useState(100);
   const [breadth, setBreadth] = useState(100);
   const [isPanelOpen, setIsPanelOpen] = useState(false); // Start closed
+  const [seedText, setSeedText] = useState(String(terrainSeed ?? 1337));
+
+  // Keep the input in sync when the world seed changes from elsewhere
+  useEffect(() => {
+    setSeedText(String(terrainSeed ?? 1337));
+  }, [terrainSeed]);
+
+  const readSeed = () => {
+    const s = parseInt(seedText, 10);
+    return Number.isFinite(s) ? s : 0;
+  };
 
   const handleGenerate = () => {
+    onSeedChange(readSeed());
     onTerrainSizeChange({ length: parseInt(length), breadth: parseInt(breadth) });
   };
 
   const handlePreset = (size) => {
     setLength(size);
     setBreadth(size);
+    onSeedChange(readSeed());
     onTerrainSizeChange({ length: size, breadth: size });
+  };
+
+  const handleRandomSeed = () => {
+    onSeedChange(Math.floor(Math.random() * 1000000));
   };
 
   return (
@@ -105,6 +124,30 @@ export default function ControlPanel({
               <div className="flex justify-between text-xs text-gray-400 mt-1">
                 <span>100</span>
                 <span>512</span>
+              </div>
+            </div>
+
+            {/* World Seed */}
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                World Seed (same seed = same world)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={seedText}
+                  onChange={(e) => setSeedText(e.target.value)}
+                  disabled={isGenerating}
+                  className="flex-1 min-w-0 bg-gray-700 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={handleRandomSeed}
+                  disabled={isGenerating}
+                  title="Random seed"
+                  className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-all disabled:opacity-50"
+                >
+                  🎲
+                </button>
               </div>
             </div>
 

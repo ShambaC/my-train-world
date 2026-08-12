@@ -15,6 +15,7 @@ const WaterShader = {
     uTerrainSize: { value: new THREE.Vector2(50, 50) },
     uWaterY: { value: 1.0 },
     uVoxel: { value: VOXEL_SIZE },
+    uFlowDir: { value: new THREE.Vector2(0, 1) },
   },
   vertexShader: `
     uniform float uTime;
@@ -51,6 +52,7 @@ const WaterShader = {
     uniform vec2 uTerrainSize;
     uniform float uWaterY;
     uniform float uVoxel;
+    uniform vec2 uFlowDir;
     varying vec2 vUv;
     varying vec3 vWorldPos;
 
@@ -87,11 +89,21 @@ const WaterShader = {
       // Shore factor: 0 = deep, 1 = near shore
       float shore = smoothstep(uWaterY - 0.4, uWaterY, terrainTopY);
 
+      // Steep heightmap gradient → churn/foam at waterfalls and rocky banks
+      vec2 texel = 1.0 / uTerrainSize;
+      float gradN = texture2D(uHeightMap, mapUV + vec2(0.0, texel.y)).r;
+      float gradS = texture2D(uHeightMap, mapUV - vec2(0.0, texel.y)).r;
+      float gradE = texture2D(uHeightMap, mapUV + vec2(texel.x, 0.0)).r;
+      float gradW = texture2D(uHeightMap, mapUV - vec2(texel.x, 0.0)).r;
+      float steep = max(max(abs(gradN - h), abs(gradS - h)), max(abs(gradE - h), abs(gradW - h)));
+      float churn = smoothstep(1.5, 3.5, steep);
+
       // --- Low-poly flow streaks (low-poly-waterfall style) ---
       vec2 flowUv = vWorldPos.xz * 0.35;
-      flowUv.y -= uTime * 0.12;
+      flowUv -= uFlowDir * uTime * 0.12;
 
-      float n = noise(vec2(flowUv.x * 0.0, flowUv.y * 3.5));
+      float along = abs(uFlowDir.x) > abs(uFlowDir.y) ? flowUv.x : flowUv.y;
+      float n = noise(vec2(0.0, along * 3.5));
       float water = smoothstep(0.0, 0.2, n);
       water = floor(water * 10.0 + 0.5) / 10.0; // quantized banding
 
@@ -107,6 +119,9 @@ const WaterShader = {
       // --- Shore foam ---
       float shoreFoam = shore * (0.5 + 0.5 * noise(vWorldPos.xz * 8.0 + uTime * 0.8));
       col = mix(col, uColorFoam, shoreFoam * 0.25);
+
+      // --- Waterfall / steep-bank churn ---
+      col = mix(col, uColorFoam, churn * 0.4);
 
       // --- Subtle sky/sun tint ---
       col += uSkyColor * 0.04;
@@ -142,6 +157,14 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
     tex.minFilter = THREE.NearestFilter;
     tex.needsUpdate = true;
     return tex;
+  }, [heightData]);
+
+  // River flows along the map's longer axis (directional streaks)
+  const flowDir = useMemo(() => {
+    if (heightData?.riverPlan) {
+      return new THREE.Vector2(heightData.riverPlan.horizontal ? 0 : 1, heightData.riverPlan.horizontal ? 1 : 0);
+    }
+    return new THREE.Vector2(0, 1);
   }, [heightData]);
 
   useFrame((state, delta) => {
@@ -186,6 +209,7 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay }) {
         uniforms-uHeightMap-value={heightTexture}
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
         uniforms-uWaterY-value={2.0}
+        uniforms-uFlowDir-value={flowDir}
       />
     </mesh>
   );

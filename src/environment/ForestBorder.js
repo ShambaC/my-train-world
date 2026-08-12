@@ -1,14 +1,16 @@
 import * as THREE from 'three';
-import { VOXEL_SIZE } from '../terrain.js';
+import { VOXEL_SIZE, mulberry32 } from '../terrain.js';
 
 /**
  * Creates an optimized forest border using InstancedMesh.
- * Uses world units (terrainSize × VOXEL_SIZE).
+ * Uses world units (terrainSize × VOXEL_SIZE). Seeded for determinism.
  * @param {object} terrainSize - { length, breadth } in voxels
+ * @param {number} seed - world seed for tree placement
  * @param {number} rows - number of tree rows (default 6)
  * @param {number} rowSpacing - world units between rows (default 1.2)
  */
-export function createForestBorder(terrainSize, rows = 6, rowSpacing = 1.2) {
+export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacing = 1.2) {
+  const rng = mulberry32((((seed * 40503) >>> 0) ^ 613) >>> 0);
   const borderGroup = new THREE.Group();
   borderGroup.name = 'forestBorder';
 
@@ -17,11 +19,12 @@ export function createForestBorder(terrainSize, rows = 6, rowSpacing = 1.2) {
   const worldHalfB = (terrainSize.breadth / 2) * VOXEL_SIZE;
   const worldL = worldHalfL * 2;
   const worldB = worldHalfB * 2;
-  const borderDepth = rows * rowSpacing;
 
-  // --- 1. Ground Plane ---
-  const groundSize = Math.max(worldL, worldB) + borderDepth * 2 + 4;
-  const groundGeometry = new THREE.PlaneGeometry(groundSize, groundSize);
+  // --- 1. Ground disc: just past the outermost tree row, circular so no
+  // oversized corner plane peeks out past the fog wall ---
+  const borderDepth = rows * rowSpacing;
+  const groundRadius = Math.max(worldHalfL, worldHalfB) + borderDepth + 1.5;
+  const groundGeometry = new THREE.CircleGeometry(groundRadius, 48);
   const groundMaterial = new THREE.MeshStandardMaterial({
     color: 0x41503a,
     roughness: 0.9,
@@ -79,11 +82,11 @@ export function createForestBorder(terrainSize, rows = 6, rowSpacing = 1.2) {
     const d = Math.abs(endZ - startZ);
     for (let i = 0; i < count; i++) {
       if (treeIndex >= totalTrees) return;
-      const x = startX + Math.random() * w;
-      const z = startZ + Math.random() * d;
-      const scale = 0.7 + Math.random() * 0.9;
-      const rotY = Math.random() * Math.PI * 2;
-      const tilt = (Math.random() - 0.5) * 0.1; // slight tilt
+      const x = startX + rng() * w;
+      const z = startZ + rng() * d;
+      const scale = 0.7 + rng() * 0.9;
+      const rotY = rng() * Math.PI * 2;
+      const tilt = (rng() - 0.5) * 0.1; // slight tilt
       quaternion.setFromEuler(new THREE.Euler(tilt, rotY, tilt * 0.5));
 
       const setPart = (mesh, yOff) => {

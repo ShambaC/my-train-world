@@ -18,6 +18,7 @@ import CoachMenu from './ui/CoachMenu';
 // Scene component that contains the terrain
 function Scene({ 
   terrainSize, 
+  terrainSeed,
   onTerrainGenerated, 
   trackManager,
   stationManager,
@@ -87,12 +88,12 @@ function Scene({
 
 
   useEffect(() => {
-    // Generate terrain when size changes
-    const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth);
+    // Generate terrain when size or seed changes
+    const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth, terrainSeed);
     setTerrain(newTerrain);
     
     // Generate forest border around terrain (world-unit based)
-    const border = createForestBorder(terrainSize);
+    const border = createForestBorder(terrainSize, terrainSeed);
     setForestBorder(border);
     
     if (onTerrainGenerated) {
@@ -103,7 +104,7 @@ function Scene({
           voxelCount += mesh.count;
         }
       });
-      onTerrainGenerated({ voxelCount });
+      onTerrainGenerated({ voxelCount, diagnostics: newTerrain.userData.diagnostics });
     }
 
     // Cleanup old border on unmount
@@ -115,7 +116,7 @@ function Scene({
         });
       }
     };
-  }, [terrainSize, onTerrainGenerated]);
+  }, [terrainSize, terrainSeed, onTerrainGenerated]);
 
   return (
     <>
@@ -222,6 +223,7 @@ function Scene({
 // Main Game Scene Component
 export default function GameScene({ 
   terrainSize, 
+  terrainSeed = 1337,
   showDebug, 
   trackManager,
   stationManager,
@@ -305,6 +307,7 @@ export default function GameScene({
       >
         <Scene 
           terrainSize={terrainSize} 
+          terrainSeed={terrainSeed}
           onTerrainGenerated={setSceneStats}
           trackManager={trackManager}
           stationManager={stationManager}
@@ -352,6 +355,12 @@ export default function GameScene({
           <div>Trains: {trainCount}</div>
           <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
+          {sceneStats.diagnostics && (
+            <div className="text-xs text-gray-400">
+              <div>Flat regions: {sceneStats.diagnostics.regionCount} • Build spots: {sceneStats.diagnostics.candidates}</div>
+              <div>Largest flat: {sceneStats.diagnostics.largestArea} cells • Corridor: {sceneStats.diagnostics.longestCorridor} cells</div>
+            </div>
+          )}
           {memStats.jsHeapMB >= 0 && <div>Memory: {memStats.jsHeapMB} MB</div>}
           <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
           {selectedTool && (

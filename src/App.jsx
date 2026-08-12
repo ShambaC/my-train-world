@@ -65,6 +65,7 @@ const TOOLS = [
 
 function App() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
+  const [terrainSeed, setTerrainSeed] = useState(1337);
   const [showDebug, setShowDebug] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -110,14 +111,27 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleTerrainSizeChange = (newSize) => {
-    setIsGenerating(true);
-    setTerrainSize(newSize);
+  const clearWorld = () => {
     // Clear tracks, trains AND stations when terrain changes
     trackManagerRef.current.clear();
     trainManagerRef.current.clear();
     stationManagerRef.current.clear();
     setTracksVersion(v => v + 1); // Trigger re-render
+  };
+
+  const handleTerrainSizeChange = (newSize) => {
+    setIsGenerating(true);
+    setTerrainSize(newSize);
+    clearWorld();
+    // Simulate generation delay for UI feedback
+    setTimeout(() => setIsGenerating(false), 500);
+  };
+
+  const handleSeedChange = (newSeed) => {
+    if (newSeed === terrainSeed) return;
+    setIsGenerating(true);
+    clearWorld();
+    setTerrainSeed(newSeed);
     // Simulate generation delay for UI feedback
     setTimeout(() => setIsGenerating(false), 500);
   };
@@ -167,6 +181,7 @@ function App() {
       {/* 3D Game Scene */}
       <GameScene 
         terrainSize={terrainSize} 
+        terrainSeed={terrainSeed}
         showDebug={showDebug}
         trackManager={trackManagerRef.current}
         stationManager={stationManagerRef.current}
@@ -186,6 +201,8 @@ function App() {
       {/* Control Panel */}
       <ControlPanel
         onTerrainSizeChange={handleTerrainSizeChange}
+        terrainSeed={terrainSeed}
+        onSeedChange={handleSeedChange}
         onToggleDebug={setShowDebug}
         showDebug={showDebug}
         isGenerating={isGenerating}
