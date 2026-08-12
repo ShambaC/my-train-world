@@ -7,15 +7,17 @@ import coalImg from '../assets/Images/open-coal-wagon.png';
 import containerImg from '../assets/Images/container-flat-wagon.png';
 import coalCartImg from '../assets/ModelImages/coal_coach_sheet.png';
 import gasImg from '../assets/ModelImages/gas_coach_sheet.png';
+import goodsImg from '../assets/ModelImages/goods_coach_sheet.png';
 
 const COACH_IMAGES = {
   'passenger-coach': passengerImg,
-  'freight-van': freightImg,
+  'freight-van': goodsImg,
   'mail-coach': mailImg,
   'open-coal-wagon': coalImg,
   'container-flat-wagon': containerImg,
   'coal-cart': coalCartImg,
   'gas-coach': gasImg,
+  'goods-coach': goodsImg,
 };
 
 const MENU_ITEMS = COACH_TYPES.map((t) => ({ ...t, img: COACH_IMAGES[t.key] }));

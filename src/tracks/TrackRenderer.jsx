@@ -4,6 +4,7 @@ import { createTrainEngine } from '../trains/TrainModel';
 import { createPassengerCoach } from '../trains/PassengerCoachModel';
 import { createCoalCart } from '../trains/CoalCartModel';
 import { createGasCoach } from '../trains/GasCoachModel';
+import { createGoodsCoach } from '../trains/GoodsCoachModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import ModelLibrary from '../models/ModelLibrary';
@@ -207,6 +208,8 @@ export default function TrackRenderer({
           ? createCoalCart()
           : DEFAULT_COACH === 'gas-coach'
           ? createGasCoach()
+          : (DEFAULT_COACH === 'goods-coach' || DEFAULT_COACH === 'freight-van')
+          ? createGoodsCoach()
           : ModelLibrary.getMesh(DEFAULT_COACH);
         mesh = makeGhost(coachMesh, GHOST_GREEN);
       }
