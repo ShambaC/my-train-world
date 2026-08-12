@@ -6,6 +6,7 @@ import { createCoalCart } from './CoalCartModel';
 import { createGasCoach } from './GasCoachModel';
 import { createGoodsCoach } from './GoodsCoachModel';
 import { createContainerCoach } from './ContainerCoachModel';
+import { createViewdeckCoach } from './ViewdeckCoachModel';
 import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 
@@ -91,6 +92,8 @@ export default function TrainRenderer({ trainManager }) {
               ? createGoodsCoach()
               : (coach.type === 'container-coach' || coach.type === 'container-flat-wagon')
               ? createContainerCoach()
+              : (coach.type === 'viewdeck-coach' || coach.type === 'mail-coach')
+              ? createViewdeckCoach()
               : ModelLibrary.getMesh(coach.type);
             coachMeshesRef.current.set(coach.id, mesh);
           }

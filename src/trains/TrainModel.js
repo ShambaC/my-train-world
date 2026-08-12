@@ -124,3 +124,4 @@ export { createCoalCart } from './CoalCartModel';
 export { createGasCoach } from './GasCoachModel';
 export { createGoodsCoach } from './GoodsCoachModel';
 export { createContainerCoach } from './ContainerCoachModel';
+export { createViewdeckCoach } from './ViewdeckCoachModel';
