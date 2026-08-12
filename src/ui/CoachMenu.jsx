@@ -5,6 +5,8 @@ import freightImg from '../assets/Images/freight-van.png';
 import mailImg from '../assets/Images/mail-coach.png';
 import coalImg from '../assets/Images/open-coal-wagon.png';
 import containerImg from '../assets/Images/container-flat-wagon.png';
+import coalCartImg from '../assets/ModelImages/coal_coach_sheet.png';
+import gasImg from '../assets/ModelImages/gas_coach_sheet.png';
 
 const COACH_IMAGES = {
   'passenger-coach': passengerImg,
@@ -12,7 +14,8 @@ const COACH_IMAGES = {
   'mail-coach': mailImg,
   'open-coal-wagon': coalImg,
   'container-flat-wagon': containerImg,
-  'coal-cart': coalImg,
+  'coal-cart': coalCartImg,
+  'gas-coach': gasImg,
 };
 
 const MENU_ITEMS = COACH_TYPES.map((t) => ({ ...t, img: COACH_IMAGES[t.key] }));

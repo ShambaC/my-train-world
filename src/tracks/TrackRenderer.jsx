@@ -3,6 +3,7 @@ import { createStraightTrack, createCurvedTrack, createSupportBeams } from './Tr
 import { createTrainEngine } from '../trains/TrainModel';
 import { createPassengerCoach } from '../trains/PassengerCoachModel';
 import { createCoalCart } from '../trains/CoalCartModel';
+import { createGasCoach } from '../trains/GasCoachModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import ModelLibrary from '../models/ModelLibrary';
@@ -204,6 +205,8 @@ export default function TrackRenderer({
           ? createPassengerCoach()
           : DEFAULT_COACH === 'coal-cart'
           ? createCoalCart()
+          : DEFAULT_COACH === 'gas-coach'
+          ? createGasCoach()
           : ModelLibrary.getMesh(DEFAULT_COACH);
         mesh = makeGhost(coachMesh, GHOST_GREEN);
       }

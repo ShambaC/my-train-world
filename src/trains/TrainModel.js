@@ -121,3 +121,4 @@ export function getTrainDimensions() {
 export { ENGINE_LENGTH, ENGINE_WIDTH, ENGINE_HEIGHT };
 export { createPassengerCoach } from './PassengerCoachModel';
 export { createCoalCart } from './CoalCartModel';
+export { createGasCoach } from './GasCoachModel';

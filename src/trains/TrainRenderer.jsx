@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { createTrainEngine } from './TrainModel';
 import { createPassengerCoach } from './PassengerCoachModel';
 import { createCoalCart } from './CoalCartModel';
+import { createGasCoach } from './GasCoachModel';
 import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 
@@ -82,6 +83,8 @@ export default function TrainRenderer({ trainManager }) {
               ? createPassengerCoach()
               : coach.type === 'coal-cart'
               ? createCoalCart()
+              : coach.type === 'gas-coach'
+              ? createGasCoach()
               : ModelLibrary.getMesh(coach.type);
             coachMeshesRef.current.set(coach.id, mesh);
           }
