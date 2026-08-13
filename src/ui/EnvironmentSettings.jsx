@@ -7,6 +7,12 @@ const TIME_OPTIONS = [
   { value: 'night', label: '🌙 Night', color: '#2c3e50' }
 ];
 
+const SHADOW_OPTIONS = [
+  { value: 'none', label: '🚫 Off' },
+  { value: 'hard', label: '🔦 Hard' },
+  { value: 'soft', label: '☁️ Soft' },
+];
+
 function EnvironmentSettings({ 
   timeOfDay, 
   onTimeChange, 
@@ -14,6 +20,8 @@ function EnvironmentSettings({
   onFogEnabledChange,
   fogDensity,
   onFogDensityChange,
+  shadowMode,
+  onShadowModeChange,
   tiltShiftEnabled,
   onTiltShiftChange,
   celShadingEnabled,
@@ -77,18 +85,18 @@ function EnvironmentSettings({
             </button>
           </div>
 
-          {/* Fog Density Slider */}
-          {fogEnabled && fogDensity !== undefined && onFogDensityChange && (
+          {/* Fog Density Slider — override; null uses the time-of-day preset */}
+          {fogEnabled && onFogDensityChange && (
             <div>
               <label className="block text-sm font-medium mb-2">
-                Fog Density: {(fogDensity * 100).toFixed(0)}%
+                Fog Density: {((fogDensity ?? 0.012) * 100).toFixed(0)}%
               </label>
               <input
                 type="range"
                 min="0.005"
                 max="0.035"
                 step="0.001"
-                value={fogDensity}
+                value={fogDensity ?? 0.012}
                 onChange={(e) => onFogDensityChange(parseFloat(e.target.value))}
                 className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
@@ -98,6 +106,28 @@ function EnvironmentSettings({
               </div>
             </div>
           )}
+
+          {/* Shadow Mode Selector */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Shadows (Realtime)
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {SHADOW_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => onShadowModeChange(option.value)}
+                  className={`p-2 rounded text-sm font-medium transition-all ${
+                    shadowMode === option.value
+                      ? 'bg-blue-600 hover:bg-blue-500 ring-2 ring-blue-400'
+                      : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Miniature Tilt-Shift Toggle */}
           <div className="flex items-center justify-between">
@@ -141,6 +171,7 @@ function EnvironmentSettings({
           <div className="pt-2 border-t border-gray-700 text-xs text-gray-400">
             <div>Current: {TIME_OPTIONS.find(t => t.value === timeOfDay)?.label}</div>
             <div>Fog: {fogEnabled ? 'Enabled' : 'Disabled'}</div>
+            <div>Shadows: {SHADOW_OPTIONS.find(s => s.value === shadowMode)?.label}</div>
             <div>Miniature: {tiltShiftEnabled ? 'Active' : 'Off'}</div>
             <div>Cel: {celShadingEnabled ? 'On' : 'Off'}</div>
           </div>

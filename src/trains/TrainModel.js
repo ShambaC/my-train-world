@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createContactPatch } from '../utils/contactPatch';
 
 const VOXEL_SIZE = 0.5;
 // Train engine is 2 voxels long, 1 voxel wide, 1 voxel high
@@ -70,12 +71,27 @@ export function createTrainEngine(colorIndex = 0) {
   stack.castShadow = true;
   group.add(stack);
 
-  // Headlight (front)
+  // Headlight (front) — bright core + soft additive glow + beam cone.
+  // Emissive-style so the engine reads as a lit lamp at night.
   const lightGeo = new THREE.SphereGeometry(0.05, 8, 8);
-  const lightMat = new THREE.MeshBasicMaterial({ color: 0xffea00, toneMapped: false });
+  const lightMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, toneMapped: false });
   const light = new THREE.Mesh(lightGeo, lightMat);
   light.position.set(0, 0.24, 0.36);
   group.add(light);
+
+  const glowGeo = new THREE.SphereGeometry(0.09, 8, 8);
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: 0xffd9a0,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  glow.position.set(0, 0.24, 0.36);
+  glow.userData.lightGlow = 'glow'; // nightness-scaled by TrainRenderer
+  group.add(glow);
   
   // Wheels (4 wheels)
   const wheelGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 10);
@@ -103,6 +119,10 @@ export function createTrainEngine(colorIndex = 0) {
   const catcher = new THREE.Mesh(catcherGeo, catcherMat);
   catcher.position.set(0, 0.095, 0.44);
   group.add(catcher);
+
+  // Fake contact shadow patch under the engine (see utils/contactPatch.js)
+  const patch = createContactPatch(0.32, 0.3, -0.088);
+  group.add(patch);
   
   return group;
 }

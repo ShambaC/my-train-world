@@ -1,11 +1,14 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Sky } from '@react-three/drei';
 import * as THREE from 'three';
-import { generateTerrain, createGrid } from './terrain';
+import { generateTerrain, createGrid, VOXEL_SIZE } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
 import TrainRenderer from './trains/TrainRenderer';
-import Skybox, { getLightingForTime } from './environment/Skybox';
+import Skybox from './environment/Skybox';
+import LightingState from './environment/LightingState';
+import Fireflies from './environment/Fireflies';
+import { advanceWind } from './environment/wind';
 import CameraController from './environment/CameraController';
 import { createForestBorder } from './environment/ForestBorder';
 import WaterSurface from './environment/WaterSurface';
@@ -31,6 +34,7 @@ function Scene({
   timeOfDay,
   fogEnabled,
   fogDensity,
+  shadowMode = 'soft',
   tiltShiftEnabled,
   celShadingEnabled,
   trainDirection,
@@ -45,46 +49,90 @@ function Scene({
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
 
+  // Realtime shadow mode: none / hard (BasicShadowMap) / soft (PCFSoft).
+  // The shadow type is baked into every receiving shader, so toggling
+  // requires recompiling materials; 'none' also drops castShadow from the
+  // light (a stale shadow map would otherwise keep shading the scene).
+  useEffect(() => {
+    const dir = scene.getObjectByName('directionalLight');
+    if (dir) dir.castShadow = shadowMode !== 'none';
+    gl.shadowMap.enabled = shadowMode !== 'none';
+    gl.shadowMap.type =
+      shadowMode === 'hard' ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+    scene.traverse((obj) => {
+      if (obj.isMesh) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) m.needsUpdate = true;
+      }
+    });
+  }, [shadowMode, gl, scene]);
+
+  // Interpolated lighting state — one stable object shared by the lights,
+  // fog, water shader, fog wall, train lights and fireflies.
+  const lighting = useMemo(() => new LightingState(timeOfDay), []);
+  useEffect(() => {
+    lighting.setTarget(timeOfDay);
+  }, [timeOfDay, lighting]);
+
+  // Shadow camera covers the active playable region, not the whole map.
+  const shadowHalf = Math.max(40, Math.min(Math.max(terrainSize.length, terrainSize.breadth) * 0.5 * VOXEL_SIZE * 0.85, 110));
+
+  useEffect(() => {
+    const dir = scene.getObjectByName('directionalLight');
+    if (!dir) return;
+    dir.shadow.camera.left = -shadowHalf;
+    dir.shadow.camera.right = shadowHalf;
+    dir.shadow.camera.top = shadowHalf;
+    dir.shadow.camera.bottom = -shadowHalf;
+    dir.shadow.camera.updateProjectionMatrix();
+  }, [scene, shadowHalf]);
+
+  // Shadow softness follows the light mood (long soft dawn shadows, crisp day)
+  useEffect(() => {
+    const dir = scene.getObjectByName('directionalLight');
+    if (dir) dir.shadow.radius = lighting.target?.shadowRadius ?? 4;
+  }, [timeOfDay, lighting, scene]);
+
   // Dev-only test hook
   useEffect(() => {
     if (import.meta.env.DEV) {
       window.__mtw = {
-        ...window.__mtw, camera, gl: gl.domElement, THREE,
+        ...window.__mtw, camera, gl: gl.domElement, renderer: gl, THREE,
         terrainRef: terrainRef.current, terrainData: terrain?.userData, terrainGroup: terrain,
       };
     }
   }, [camera, gl, terrain, terrainRef]);
-  
-  // Setup lighting based on time of day
-  useEffect(() => {
-    const lighting = getLightingForTime(timeOfDay);
-    
-    // Update ambient light
-    const existingAmbient = scene.getObjectByName('ambientLight');
-    if (existingAmbient) {
-      existingAmbient.intensity = lighting.ambient.intensity;
+
+  // Per-frame lighting: ease the current values toward the target preset
+  // (no abrupt color/intensity jumps), then apply to lights and fog.
+  useFrame((_, delta) => {
+    lighting.update(delta);
+    advanceWind(delta);
+
+    const amb = scene.getObjectByName('ambientLight');
+    if (amb) {
+      amb.color.copy(lighting.ambient.color);
+      amb.intensity = lighting.ambient.intensity;
     }
-    
-    // Update directional light
-    const existingDirectional = scene.getObjectByName('directionalLight');
-    if (existingDirectional) {
-      existingDirectional.color.set(lighting.directional.color);
-      existingDirectional.intensity = lighting.directional.intensity;
-      existingDirectional.position.set(...lighting.directional.position);
+
+    const dir = scene.getObjectByName('directionalLight');
+    if (dir) {
+      dir.color.copy(lighting.sun.color);
+      dir.intensity = lighting.sun.intensity;
+      dir.position.copy(lighting.sun.position);
     }
-    
-    // Update fog - using FogExp2 for more natural distance-based fog
-    if (fogEnabled && lighting.fog) {
-      // Use custom density if provided, otherwise use preset
-      const density = fogDensity !== undefined ? fogDensity : lighting.fog.density;
-      scene.fog = new THREE.FogExp2(
-        lighting.fog.color,
-        density
-      );
-    } else {
+
+    if (fogEnabled) {
+      if (!scene.fog) {
+        scene.fog = new THREE.FogExp2(lighting.fog.color.getHex(), lighting.fog.density);
+      }
+      scene.fog.color.copy(lighting.fog.color);
+      // null (from App default) = use the time-of-day preset density
+      scene.fog.density = fogDensity != null ? fogDensity : lighting.fog.density;
+    } else if (scene.fog) {
       scene.fog = null;
     }
-  }, [timeOfDay, fogEnabled, fogDensity, scene]);
+  });
 
 
   useEffect(() => {
@@ -127,16 +175,18 @@ function Scene({
       <ambientLight name="ambientLight" intensity={0.5} />
       <directionalLight
         name="directionalLight"
-        position={[50, 50, 25]}
-        intensity={1}
+        position={[50, 60, 30]}
+        intensity={1.15}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
         shadow-camera-far={200}
-        shadow-camera-left={-50}
-        shadow-camera-right={50}
-        shadow-camera-top={50}
-        shadow-camera-bottom={-50}
+        shadow-camera-left={-shadowHalf}
+        shadow-camera-right={shadowHalf}
+        shadow-camera-top={shadowHalf}
+        shadow-camera-bottom={-shadowHalf}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.03}
       />
       
       {/* Terrain */}
@@ -145,7 +195,7 @@ function Scene({
       )}
 
       {/* Water Surface */}
-      <WaterSurface terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} />
+      <WaterSurface terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} lighting={lighting} />
 
       {/* Forest Border */}
       {forestBorder && (
@@ -153,7 +203,12 @@ function Scene({
       )}
 
       {/* Fog Wall */}
-      <FogWall terrainSize={terrainSize} fogColor={getLightingForTime(timeOfDay).fog?.color || 0xd4e8f7} />
+      <FogWall terrainSize={terrainSize} fogColor={lighting.fog.color} />
+
+      {/* Night fireflies above water */}
+      {terrain && (
+        <Fireflies terrainData={terrain?.userData} lighting={lighting} />
+      )}
       
       {/* Track System */}
       {terrain && (
@@ -201,6 +256,7 @@ function Scene({
       {terrain && (
         <TrainRenderer
           trainManager={trainManager}
+          lighting={lighting}
         />
       )}
       
@@ -236,6 +292,7 @@ export default function GameScene({
   timeOfDay = 'day',
   fogEnabled = true,
   fogDensity,
+  shadowMode = 'soft',
   tiltShiftEnabled = false,
   celShadingEnabled = false,
   trainDirection = 1,
@@ -320,6 +377,7 @@ export default function GameScene({
           timeOfDay={timeOfDay}
           fogEnabled={fogEnabled}
           fogDensity={fogDensity}
+          shadowMode={shadowMode}
           tiltShiftEnabled={tiltShiftEnabled}
           celShadingEnabled={celShadingEnabled}
           trainDirection={trainDirection}

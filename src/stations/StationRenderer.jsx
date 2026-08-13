@@ -142,10 +142,11 @@ export default function StationRenderer({
     return ghostMeshesRef.current;
   }, [ghost, terrainData]);
 
-  // Wave pop-out animation
-  useFrame((state) => {
+  // Wave pop-out animation + chimney smoke
+  useFrame((state, delta) => {
     for (const station of stations) {
       if (!station.group) continue;
+      if (station.smoke) station.smoke.update(delta, true);
       if (station.animStart === null) station.animStart = state.clock.elapsedTime;
       const t0 = state.clock.elapsedTime - station.animStart;
       for (const piece of station.pieces) {

@@ -27,7 +27,14 @@ export function createPassengerCoach() {
   const chassisMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.chassisDark, flatShading: true });
   const wheelMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.wheelDark, flatShading: true });
   const hubMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.wheelHub, flatShading: true });
-  const glassMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.windowGlass, flatShading: true });
+  const glassMat = new THREE.MeshLambertMaterial({
+    color: COACH_COLORS.windowGlass,
+    flatShading: true,
+    // Warm emissive so lit coach windows read at night without any dynamic
+    // light cost; washed out by daylight, glowing after dark.
+    emissive: 0xffa54d,
+    emissiveIntensity: 0.6,
+  });
   const railingMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.railingDark, flatShading: true });
   const brassMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.accentBrass, flatShading: true });
 

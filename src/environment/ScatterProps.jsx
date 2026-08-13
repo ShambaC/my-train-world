@@ -2,11 +2,48 @@ import { useRef, useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 import { BIOME, mulberry32, isClearingCell } from '../terrain.js';
+import { applyWindSway } from './wind.js';
 
 const VOXEL = 0.5;
 
 // Sink amount so model bases overlap the ground (hides slope overhang)
 const SINK = 0.08;
+
+// Defs that are major buildings — the only scattered props allowed to cast
+// real shadows. Everything else relies on fake contact patches.
+const BUILDING_DEFS = new Set(['big-red-barn', 'goods-shed', 'crossing-keeper-hut']);
+
+// Defs that get wind sway (instanced GLB trees/shrubs).
+const WIND_DEFS = new Set(['lineside-oak', 'lineside-pine', 'lineside-shrub']);
+
+// Shared fake-contact and window-glow resources.
+const PATCH_GEO = new THREE.CircleGeometry(0.3, 16);
+const PATCH_MAT = new THREE.MeshBasicMaterial({
+  color: 0x000000,
+  transparent: true,
+  // Disabled: these instanced discs can sort in front of distant terrain and
+  // appear as floating black circles against the sky.
+  opacity: 0,
+  depthWrite: false,
+  toneMapped: false,
+});
+const GLOW_GEO = new THREE.PlaneGeometry(0.13, 0.15);
+const GLOW_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffd9a0,
+  transparent: true,
+  opacity: 0.6,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  toneMapped: false,
+});
+// [localX dir, localZ dir, quad yaw] for the four vertical sides
+const GLOW_SIDES = [
+  [1, 0, Math.PI / 2],
+  [-1, 0, Math.PI / 2],
+  [0, 1, 0],
+  [0, -1, 0],
+];
 
 // Scatter definitions — per-biome probability per 2x2 cell block (≈1 world
 // sq unit). Everything is seeded via terrainData.seed, so a fixed seed
@@ -60,6 +97,9 @@ const SCATTER_DEFS = [
  * flat fields, fences along field boundaries. Reserved construction
  * plateaus and the track corridor stay clear of trees. Excludes water,
  * steep slopes (per def), existing tracks and station zones.
+ *
+ * Shadow policy: only major buildings cast real shadows; every prop gets a
+ * fake contact patch; trees sway in the shared wind clock.
  */
 export default function ScatterProps({ terrainData, trackManager, stationManager, trackCount, stationsVersion }) {
   const groupRef = useRef(new THREE.Group());
@@ -67,6 +107,11 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
 
   const length = terrainData?.length || 0;
   const breadth = terrainData?.breadth || 0;
+
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scaleVec = new THREE.Vector3();
 
   // Build scatter layout whenever terrain changes
   useMemo(() => {
@@ -129,7 +174,6 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       }
       return false;
     };
-
     for (const [defIndex, def] of SCATTER_DEFS.entries()) {
       const entry = ModelLibrary.getEntry(def.key);
       const instances = [];
@@ -186,15 +230,75 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
         });
       }
 
-      if (instances.length > 0) {
-        const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        instances.forEach((inst, i) => {
-          layoutRef.current.push({ mesh, index: i, ...inst });
-        });
-        groupRef.current.add(mesh);
+      if (instances.length === 0) continue;
+
+      const isBuilding = BUILDING_DEFS.has(def.key);
+      const isWindy = WIND_DEFS.has(def.key);
+
+      const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);
+      // Instanced casters cost one draw call per def in the shadow pass —
+      // cheap enough to give every scattered prop realtime shadows.
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (isWindy) applyWindSway(entry.material, { strength: 1 });
+
+      const patchMesh = new THREE.InstancedMesh(PATCH_GEO, PATCH_MAT, instances.length);
+      patchMesh.rotation.x = -Math.PI / 2;
+      patchMesh.renderOrder = 1;
+
+      let glowMesh = null;
+      if (isBuilding) {
+        glowMesh = new THREE.InstancedMesh(GLOW_GEO, GLOW_MAT, instances.length * 4);
+        glowMesh.renderOrder = 2;
       }
+      const b = entry.bounds;
+      const hx = (b.max.x - b.min.x) / 2;
+      const hz = (b.max.z - b.min.z) / 2;
+      const yMid = b.max.y * 0.55;
+
+      instances.forEach((inst, i) => {
+        // Model instance
+        position.set(inst.x, inst.y, inst.z);
+        quaternion.setFromEuler(new THREE.Euler(0, inst.rotY, 0));
+        scaleVec.set(inst.scale, inst.scale, inst.scale);
+        matrix.compose(position, quaternion, scaleVec);
+        mesh.setMatrixAt(i, matrix);
+        layoutRef.current.push({ mesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
+
+        // Fake contact patch
+        position.set(inst.x, inst.y + 0.013, inst.z);
+        matrix.compose(position, quaternion, scaleVec);
+        patchMesh.setMatrixAt(i, matrix);
+        layoutRef.current.push({ mesh: patchMesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y + 0.013, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
+
+        // Window glows (4 sides)
+        if (glowMesh) {
+          const cos = Math.cos(inst.rotY);
+          const sin = Math.sin(inst.rotY);
+          for (let s = 0; s < 4; s++) {
+            const side = GLOW_SIDES[s];
+            const localX = side[0] * hx * 0.62;
+            const localZ = side[1] * hz * 0.62;
+            const ox = inst.x + localX * cos + localZ * sin;
+            const oz = inst.z - localX * sin + localZ * cos;
+            const oy = inst.y + yMid * inst.scale + (rng() - 0.5) * 0.05;
+            position.set(ox, oy, oz);
+            quaternion.setFromEuler(new THREE.Euler(0, inst.rotY + side[2], 0));
+            scaleVec.set(inst.scale, inst.scale, inst.scale);
+            matrix.compose(position, quaternion, scaleVec);
+            const idx = i * 4 + s;
+            glowMesh.setMatrixAt(idx, matrix);
+            layoutRef.current.push({ mesh: glowMesh, index: idx, cellX: inst.cellX, cellZ: inst.cellZ, ox, oy, oz, rotQ: quaternion.clone(), scale: inst.scale });
+          }
+        }
+      });
+
+      mesh.instanceMatrix.needsUpdate = true;
+      patchMesh.instanceMatrix.needsUpdate = true;
+      if (glowMesh) glowMesh.instanceMatrix.needsUpdate = true;
+
+      groupRef.current.add(mesh, patchMesh);
+      if (glowMesh) groupRef.current.add(glowMesh);
     }
 
     layoutRef.current._needsExclusion = true;
@@ -229,25 +333,14 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       }
     }
 
-    const matrix = new THREE.Matrix4();
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scaleVec = new THREE.Vector3();
-
     for (const inst of layout) {
       const isExcluded = excluded.has(`${inst.cellX},${inst.cellZ}`);
       if (isExcluded === inst.hidden) continue;
       inst.hidden = isExcluded;
 
-      if (isExcluded) {
-        position.set(inst.x, inst.y, inst.z);
-        quaternion.setFromEuler(new THREE.Euler(0, inst.rotY, 0));
-        scaleVec.set(0, 0, 0);
-      } else {
-        position.set(inst.x, inst.y, inst.z);
-        quaternion.setFromEuler(new THREE.Euler(0, inst.rotY, 0));
-        scaleVec.set(inst.scale, inst.scale, inst.scale);
-      }
+      position.set(inst.ox, inst.oy, inst.oz);
+      quaternion.copy(inst.rotQ);
+      scaleVec.set(isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale);
       matrix.compose(position, quaternion, scaleVec);
       inst.mesh.setMatrixAt(inst.index, matrix);
       inst.mesh.instanceMatrix.needsUpdate = true;

@@ -218,6 +218,19 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     if (composerRef.current) {
       composerRef.current.render();
     }
+    // Tilt-shift blur scales with camera distance: tight and readable at
+    // close construction range, stronger miniature blur from overviews.
+    const passes = tiltPassRef.current;
+    if (passes && passes[0].enabled && composerRef.current) {
+      const pixelRatio = gl.getPixelRatio();
+      const renderW = size.width * pixelRatio;
+      const renderH = size.height * pixelRatio;
+      const dist = THREE.MathUtils.clamp(camera.position.length() / 30, 0.4, 1.5);
+      passes[0].uniforms.h.value = (BLUR_STRENGTH * dist) / renderW;
+      passes[0].uniforms.r.value = FOCUS_Y;
+      passes[1].uniforms.v.value = (BLUR_STRENGTH * dist) / renderH;
+      passes[1].uniforms.r.value = FOCUS_Y;
+    }
   }, 1);
 
   return null;

@@ -2,8 +2,6 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const PARTICLE_COUNT = 35;
-
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
@@ -13,21 +11,53 @@ function smoothstep(edge0, edge1, x) {
   return t * t * (3 - 2 * t);
 }
 
+// Per-kind particle tuning. Smoke: thick puffs from the smokestack.
+// Dust: low brown puffs kicked up behind the wheels of a moving train.
+const KINDS = {
+  smoke: {
+    count: 20,
+    spawnY: 0.52,
+    spawnZ: 0.25,
+    size: [0.05, 0.1],
+    rise: [0.16, 0.32],
+    life: [1.0, 1.5],
+    color: 0xc9c9c9, // light steam gray
+    emissive: 0x9a9a9a, // stays visible (soft steam) even at night
+    opacity: 0.3,
+    spin: true,
+  },
+  dust: {
+    count: 18,
+    spawnY: 0.06,
+    spawnZ: -0.38,
+    size: [0.04, 0.09],
+    rise: [0.08, 0.2],
+    life: [0.6, 1.0],
+    color: 0x9a8568,
+    emissive: 0x000000,
+    opacity: 0.4,
+    spin: false,
+  },
+};
+
 /**
- * Low-poly smoke particle system for trains.
- * Thick, dark, visible puffs.
+ * Low-poly instanced particle system for trains.
+ * - smoke: puffs vary with speed — fast trains trail smaller, quicker
+ *   puffs; parked engines chuff big lazy clouds.
+ * - dust: brown ground haze behind the wheels while moving.
  */
-export default function SmokeParticles({ position, rotation, active }) {
+export default function SmokeParticles({ position, rotation, active, speed = 0.5, kind = 'smoke' }) {
   const meshRef = useRef();
+  const cfg = KINDS[kind] || KINDS.smoke;
 
   const particles = useMemo(() => {
-    return Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+    return Array.from({ length: cfg.count }, (_, i) => ({
       x: 0, y: 0, z: 0,
-      size: 0.05 + Math.random() * 0.06, // Bigger particles
-      life: i / PARTICLE_COUNT,
-      maxLife: 1.0 + Math.random() * 0.5,
+      size: cfg.size[0] + Math.random() * (cfg.size[1] - cfg.size[0]),
+      life: i / cfg.count,
+      maxLife: cfg.life[0] + Math.random() * (cfg.life[1] - cfg.life[0]),
       vx: 0,
-      vy: 0.3 + Math.random() * 0.25,
+      vy: cfg.rise[0] + Math.random() * (cfg.rise[1] - cfg.rise[0]),
       vz: 0,
       spinAxis: new THREE.Vector3(
         Math.random() - 0.5,
@@ -39,15 +69,18 @@ export default function SmokeParticles({ position, rotation, active }) {
       driftX: (Math.random() - 0.5) * 0.06,
       driftZ: (Math.random() - 0.5) * 0.06,
     }));
-  }, []);
+  }, [cfg]);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const colorA = useMemo(() => new THREE.Color(0x333333), []); // Dark smoke
-  const colorB = useMemo(() => new THREE.Color(0x888888), []); // Lighter as it fades
-  const tempColor = useMemo(() => new THREE.Color(), []);
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
+
+    // Speed factor: fast trains shed quicker, smaller particles
+    const spd = Math.max(0, Math.min(1.5, speed));
+    const speedRise = 1 + spd * 0.9;
+    const speedSize = 1.15 - Math.min(1, spd) * 0.4;
+    const speedLife = 1 - Math.min(1, spd) * 0.35;
 
     particles.forEach((p, i) => {
       if (active) {
@@ -56,10 +89,10 @@ export default function SmokeParticles({ position, rotation, active }) {
           // Respawn
           p.life = 0;
           p.x = (Math.random() - 0.5) * 0.03;
-          p.y = 0.52;
-          p.z = 0.25 + (Math.random() - 0.5) * 0.03;
+          p.y = cfg.spawnY;
+          p.z = cfg.spawnZ + (Math.random() - 0.5) * 0.03;
           p.vx = p.driftX;
-          p.vy = 0.3 + Math.random() * 0.25;
+          p.vy = (cfg.rise[0] + Math.random() * (cfg.rise[1] - cfg.rise[0])) * speedRise;
           p.vz = p.driftZ;
         }
 
@@ -72,21 +105,20 @@ export default function SmokeParticles({ position, rotation, active }) {
 
         const progress = p.life / p.maxLife;
         // Ease-out growth - thicker
-        const growthScale = 1 + easeOutCubic(progress) * 3.0;
+        const growthScale = 1 + easeOutCubic(progress) * 2.2;
         // Fade-out scale
         const fadeScale = 1 - smoothstep(0.7, 1.0, progress);
-        const currentScale = p.size * growthScale * fadeScale;
+        const currentScale = p.size * growthScale * fadeScale * speedSize;
 
         dummy.position.set(p.x, p.y, p.z);
         dummy.scale.set(currentScale, currentScale, currentScale);
-        // Spin rotation
-        dummy.quaternion.setFromAxisAngle(p.spinAxis, p.spinSpeed * p.life);
+        if (cfg.spin) {
+          dummy.quaternion.setFromAxisAngle(p.spinAxis, p.spinSpeed * p.life);
+        } else {
+          dummy.quaternion.identity();
+        }
         dummy.updateMatrix();
         meshRef.current.setMatrixAt(i, dummy.matrix);
-
-        // Color fade: dark gray → lighter gray
-        tempColor.copy(colorA).lerp(colorB, progress);
-        meshRef.current.setColorAt(i, tempColor);
       } else {
         // When inactive: scale to zero (no instant hide)
         dummy.scale.set(0, 0, 0);
@@ -96,22 +128,21 @@ export default function SmokeParticles({ position, rotation, active }) {
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-    if (meshRef.current.instanceColor) {
-      meshRef.current.instanceColor.needsUpdate = true;
-    }
   });
 
   return (
     <group position={position} rotation={rotation}>
       <instancedMesh
         ref={meshRef}
-        args={[null, null, PARTICLE_COUNT]}
+        args={[null, null, cfg.count]}
       >
         <dodecahedronGeometry args={[0.06, 0]} />
         <meshLambertMaterial
-          color={0xffffff}
+          color={cfg.color}
+          emissive={cfg.emissive}
+          emissiveIntensity={0.45}
           transparent
-          opacity={0.65}
+          opacity={cfg.opacity}
           flatShading
         />
       </instancedMesh>

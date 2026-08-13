@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
+import { PuffSystem } from '../environment/PuffSystem';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
@@ -14,7 +15,122 @@ export const MAX_STATION_LENGTH = 40; // voxels
 
 const VOXEL = 0.5;
 const DECK_COLOR = 0x9a9a9a;
-const EDGE_COLOR = 0x6f6f6f;
+const EDGE_COLOR = 0x929292; // brighter platform edges for readability
+
+// Shared practical-light materials (additive, toneMapped off — cheap glow
+// that reads as a lit lamp/window without dynamic lights).
+const LAMP_GLOW_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffd9a0,
+  transparent: true,
+  opacity: 0.95,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  toneMapped: false,
+});
+
+const LAMP_HALO_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffb86a,
+  transparent: true,
+  opacity: 0.4,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  toneMapped: false,
+});
+
+const WINDOW_GLOW_MAT = new THREE.MeshBasicMaterial({
+  color: 0xffd9a0,
+  transparent: true,
+  opacity: 0.65,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  toneMapped: false,
+});
+
+const makeLampGlow = (radius = 0.05) => {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(radius, 8, 8), LAMP_GLOW_MAT);
+  core.renderOrder = 2;
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(radius * 2.1, 8, 8), LAMP_HALO_MAT);
+  halo.renderOrder = 2;
+  group.add(core, halo);
+  return group;
+};
+
+const makeSignalLamp = (color) => {
+  const group = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.04, 8, 8),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    })
+  );
+  core.renderOrder = 2;
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(0.085, 8, 8),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    })
+  );
+  halo.renderOrder = 2;
+  group.add(core, halo);
+  return group;
+};
+
+// Glow quads stuck to the four vertical sides of a building — reads as
+// lit windows at night, stays subtle during the day.
+const addWindowGlows = (building, modelKey = 'station-building') => {
+  const bounds = ModelLibrary.getEntry(modelKey).bounds;
+  const hx = (bounds.max.x - bounds.min.x) / 2;
+  const hz = (bounds.max.z - bounds.min.z) / 2;
+  const y = bounds.min.y + (bounds.max.y - bounds.min.y) * 0.62;
+  const geo = new THREE.PlaneGeometry(0.13, 0.15);
+  const sides = [
+    [1, 0, Math.PI / 2],
+    [-1, 0, Math.PI / 2],
+    [0, 1, 0],
+    [0, -1, 0],
+  ];
+  for (const [dx, dz, rotY] of sides) {
+    const quad = new THREE.Mesh(geo, WINDOW_GLOW_MAT);
+    quad.position.set(dx * hx * 0.62, y, dz * hz * 0.62);
+    quad.rotation.y = rotY;
+    quad.renderOrder = 2;
+    building.add(quad);
+  }
+};
+
+// Lamp post beside a bench: pole + lamp head with a small warm point
+// light pool. One per bench, on the platform edge opposite the bench.
+const addLampPost = (addPiece, axial, side, groundY) => {
+  const post = new THREE.Group();
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.55, 6), poleMat);
+  pole.position.y = 0.275;
+  post.add(pole);
+  const headMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a, flatShading: true });
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), headMat);
+  head.position.y = 0.58;
+  post.add(head);
+  const glow = makeLampGlow();
+  glow.position.y = 0.58;
+  post.add(glow);
+  const light = new THREE.PointLight(0xffd9a0, 4.5, 6, 2);
+  light.position.y = 0.58;
+  post.add(light);
+  addPiece(post, axial, side, groundY, 0.05);
+  return post;
+};
 
 const easeOutBack = (t) => {
   const c1 = 1.70158;
@@ -118,6 +234,19 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   const buildingAxial = ((lengthCells - 1) * 0.5) * VOXEL + 0.25;
   addPiece(building, buildingAxial, 0, platformTop, 0.1);
   building.rotation.y = -Math.PI / 2; // face the track side
+  addWindowGlows(building);
+
+  // Chimney smoke puffs above the station building
+  const buildingBounds = ModelLibrary.getEntry('station-building').bounds;
+  const chimney = new PuffSystem({
+    position: [buildingAxial, platformTop + buildingBounds.max.y * 0.5, 0],
+    count: 12,
+    size: 0.07,
+    rise: 0.3,
+    life: 2.6,
+  });
+  group.add(chimney.mesh);
+  station.smoke = chimney;
 
   // --- clocks flanking the building ---
   for (const side of [-1, 1]) {
@@ -138,7 +267,8 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   }
 
   // --- prop row (bench / lamp / bin cycle) — one block forward from the
-  // building, and never directly under a canopy so support beams stay clear ---
+  // building, and never directly under a canopy so support beams stay clear.
+  // Every bench gets a lamp post with a warm point light on the far edge. ---
   const propCycle = ['platform-bench', 'platform-gas-lamp', 'platform-litter-bin'];
   for (let i = 2; i < lengthCells - 2; i += 3) {
     if (canopyCells.some((c) => Math.abs(c - i) <= 1)) continue;
@@ -147,6 +277,19 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     const jitter = (Math.random() - 0.5) * 0.2;
     addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, 0.05);
     prop.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+
+    // Warm glow at the head of each gas lamp
+    if (type === 'platform-gas-lamp') {
+      const lampBounds = ModelLibrary.getEntry('platform-gas-lamp').bounds;
+      const glow = makeLampGlow();
+      glow.position.set(0, lampBounds.max.y * 0.82, 0);
+      prop.add(glow);
+    }
+
+    // Lamp post with point light opposite every bench
+    if (type === 'platform-bench') {
+      addLampPost(addPiece, i * VOXEL + 0.25 + jitter, -STATION_WIDTH_WORLD / 2 + 0.1, groundY);
+    }
   }
 
   // --- goods shed on long stations ---
@@ -154,17 +297,44 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     const shed = ModelLibrary.getMesh('goods-shed');
     addPiece(shed, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.2);
     shed.rotation.y = Math.PI / 2;
+    addWindowGlows(shed, 'goods-shed');
   }
 
   // --- mandatory signals at both ends, ON the platform edges, facing
   // INWARD toward the station ---
+  const addSignalLamps = (signal) => {
+    const sb = ModelLibrary.getEntry('colour-light-signal').bounds;
+    const lampY = sb.max.y * 0.85;
+    const red = makeSignalLamp(0xff4040);
+    red.position.set(0, lampY, 0.03);
+    const green = makeSignalLamp(0x40ff70);
+    green.position.set(0, lampY - 0.05, 0.03);
+    signal.add(red, green);
+  };
+
   const signalStart = ModelLibrary.getMesh('colour-light-signal');
   addPiece(signalStart, 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0);
   signalStart.rotation.y = 0;
+  addSignalLamps(signalStart);
 
   const signalEnd = ModelLibrary.getMesh('colour-light-signal');
   addPiece(signalEnd, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.05);
   signalEnd.rotation.y = Math.PI;
+  addSignalLamps(signalEnd);
+
+  // Fake contact shadow slab under the whole platform
+  const patchGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD + 0.18, 0.02, lengthCells * VOXEL + 0.18);
+  const patchMat = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.25,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const patch = new THREE.Mesh(patchGeo, patchMat);
+  patch.position.set(0, groundY + 0.006, (lengthCells - 1) * VOXEL * 0.5 + 0.25);
+  patch.renderOrder = 1;
+  group.add(patch);
 
   // Wave pops in distance-from-start order
   station.pieces.sort((a, b) => a.delay - b.delay);

@@ -13,12 +13,23 @@ const RAIL_OFFSET = 0.15; // Shared gauge for straight AND curved tracks
 const COLORS = {
   rail: 0x4a4a4a,
   sleeper: 0x8b4513,
-  gravel: 0x808080,
+  gravel: 0x6d6d6d, // darker ballast — reads as a dark edge against terrain
   beam: 0x5a3d28,
-  deck: 0x7c5a3c,
-  brace: 0x4a3220,
+  deck: 0x55402c, // dark underside for bridges
+  brace: 0x3a281a,
   cap: 0x3a2618,
 };
+
+// Moonlit rail highlight: a faint blue emissive keeps rails distinguishable
+// from terrain at night without dynamic lights.
+function createRailMaterial() {
+  return new THREE.MeshLambertMaterial({
+    color: COLORS.rail,
+    emissive: 0x24365c,
+    emissiveIntensity: 0.55,
+    flatShading: true,
+  });
+}
 
 /**
  * Create a straight track piece (real model only — no ghost branch).
@@ -48,7 +59,7 @@ export function createStraightTrack() {
 
   // Rails
   const railGeo = new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH);
-  const railMat = new THREE.MeshLambertMaterial({ color: COLORS.rail, flatShading: true });
+  const railMat = createRailMaterial();
   const rail1 = new THREE.Mesh(railGeo, railMat);
   rail1.position.set(-RAIL_OFFSET, RAIL_HEIGHT, 0);
   rail1.castShadow = true;
@@ -126,7 +137,7 @@ export function createCurvedTrack() {
     return new THREE.TubeGeometry(curve, segments, RAIL_HEIGHT * 0.4, 4, false);
   };
 
-  const railMat = new THREE.MeshLambertMaterial({ color: COLORS.rail, flatShading: true });
+  const railMat = createRailMaterial();
 
   const rail1 = new THREE.Mesh(buildRailMesh(innerRadius), railMat);
   rail1.castShadow = true;

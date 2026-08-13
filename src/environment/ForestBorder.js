@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VOXEL_SIZE, mulberry32 } from '../terrain.js';
+import { applyWindSway } from './wind.js';
 
 /**
  * Creates an optimized forest border using InstancedMesh.
@@ -53,20 +54,23 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
   // --- 3. Instanced meshes ---
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+  applyWindSway(trunkMat, { leaves: false, strength: 0.6 });
   const coneGeos = [
     new THREE.ConeGeometry(0.8, 1.5, 6),
     new THREE.ConeGeometry(0.6, 1.3, 6),
     new THREE.ConeGeometry(0.4, 1.0, 6),
   ];
   const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3a6b1f, flatShading: true });
+  applyWindSway(foliageMat, { strength: 1 });
 
   const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, totalTrees);
   const cone1Inst = new THREE.InstancedMesh(coneGeos[0], foliageMat, totalTrees);
   const cone2Inst = new THREE.InstancedMesh(coneGeos[1], foliageMat, totalTrees);
   const cone3Inst = new THREE.InstancedMesh(coneGeos[2], foliageMat, totalTrees);
 
+  // Border trees sit outside the play area — they never cast shadows
+  // (shadow-map budget goes to the buildable region) but still receive.
   [trunkInst, cone1Inst, cone2Inst, cone3Inst].forEach(m => {
-    m.castShadow = true;
     m.receiveShadow = true;
   });
 

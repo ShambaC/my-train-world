@@ -7,14 +7,14 @@ const FogWallShader = {
   uniforms: {
     uTime: { value: 0 },
     uColor: { value: new THREE.Color(0xd4e8f7) },
-    uOpacity: { value: 1.0 },
+    uOpacity: { value: 0.42 },
   },
   vertexShader: `
     varying vec2 vUv;
     varying float vHeight;
     void main() {
       vUv = uv;
-      vHeight = position.y / 10.0; // normalized height
+      vHeight = position.y / 8.0; // normalized height
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
@@ -40,14 +40,14 @@ const FogWallShader = {
     }
 
     void main() {
-      // Multiple layers of cloud noise for thickness
-      float n1 = noise(vec2(vUv.x * 20.0 + uTime * 0.02, vUv.y * 3.0));
-      float n2 = noise(vec2(vUv.x * 12.0 - uTime * 0.015, vUv.y * 2.0 + uTime * 0.01));
-      float n3 = noise(vec2(vUv.x * 8.0 + uTime * 0.01, vUv.y * 4.0));
-      float cloud = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+      // Gentle layered clouds — low contrast so the wall reads as soft
+      // haze, never dark blobs against the sky.
+      float n1 = noise(vec2(vUv.x * 14.0 + uTime * 0.02, vUv.y * 2.2));
+      float n2 = noise(vec2(vUv.x * 8.0 - uTime * 0.015, vUv.y * 1.6 + uTime * 0.01));
+      float cloud = 0.35 + n1 * 0.4 + n2 * 0.25;
 
       // Height fade: more opaque at bottom/middle, fade at very top
-      float heightFade = smoothstep(0.0, 0.15, vHeight) * (1.0 - smoothstep(0.8, 1.0, vHeight));
+      float heightFade = smoothstep(0.0, 0.15, vHeight) * (1.0 - smoothstep(0.75, 1.0, vHeight));
 
       float alpha = cloud * heightFade * uOpacity;
 
@@ -69,10 +69,14 @@ export default function FogWall({ terrainSize, fogColor = 0xd4e8f7 }) {
   const worldHalfB = (terrainSize.breadth / 2) * VOXEL_SIZE;
   const R0 = Math.max(worldHalfL, worldHalfB) + 8;
   const R1 = R0 + 30;
-  const wallHeight = 10;
+  const wallHeight = 8;
 
-  // Update color
-  const color = useMemo(() => new THREE.Color(fogColor), [fogColor]);
+  // Update color — accept a mutable THREE.Color (interpolated by the
+  // lighting state) or a static hex/number preset.
+  const color = useMemo(() => {
+    if (fogColor instanceof THREE.Color) return fogColor;
+    return new THREE.Color(fogColor);
+  }, [fogColor]);
 
   useFrame((state, delta) => {
     if (materialRef.current) {

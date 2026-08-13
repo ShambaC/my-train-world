@@ -70,6 +70,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **3D & Graphics**: Three.js (r180), `@react-three/fiber` (v9), `@react-three/drei` (v10)
 - **Styling & Math**: Tailwind CSS v3, `simplex-noise` (v4)
 - **Assets**: Draco-compressed GLB models loaded via `GLTFLoader`/`DRACOLoader` through `src/models/ModelLibrary.js` (`MODEL_SCALE = 0.3`)
+- **Sub-Agents**: If you do not have vision capabilities. Use Mimo V2.5 or other vision capable models as sub agents for your vision related tasks like browser screenshotting or reading image attachments.
 
 ### Core Systems & Architecture
 

@@ -16,6 +16,8 @@ export default function ControlPanel({
   onFogEnabledChange,
   fogDensity,
   onFogDensityChange,
+  shadowMode,
+  onShadowModeChange,
   tiltShiftEnabled,
   onTiltShiftChange,
   celShadingEnabled,
@@ -218,6 +220,8 @@ export default function ControlPanel({
               onFogEnabledChange={onFogEnabledChange}
               fogDensity={fogDensity}
               onFogDensityChange={onFogDensityChange}
+              shadowMode={shadowMode}
+              onShadowModeChange={onShadowModeChange}
               tiltShiftEnabled={tiltShiftEnabled}
               onTiltShiftChange={onTiltShiftChange}
               celShadingEnabled={celShadingEnabled}

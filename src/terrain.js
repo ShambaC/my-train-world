@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
+import { applyWindSway } from './environment/wind.js';
 
 // Voxel size - smaller than Minecraft for higher resolution
 export const VOXEL_SIZE = 0.5;
@@ -22,11 +23,11 @@ export const BIOME = {
 // Terrain colors based on height + biome
 const TERRAIN_COLORS = {
   water: 0x4a90e2,
-  sand: 0xddc490,
+  sand: 0xd9b878, // warm sand — shallow water reads warm near the shore
   grass: 0x5cb85c,
   rock: 0x808080,
   snow: 0xffffff,
-  dirt: 0x7b5b3a, // vertical sides and cut faces
+  dirt: 0x6a4d33, // darker vertical dirt faces — more depth contrast
   // Biome surface colors
   forest: 0x4d9444, // darker ground under forest
   highland: 0x7a7a7a, // rock grey
@@ -97,6 +98,12 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
   const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x3a7a3a, flatShading: true });
   const bushMat = new THREE.MeshLambertMaterial({ color: 0x448844, flatShading: true });
 
+  // Wind sway — vegetation breathes together, driven by the shared wind clock
+  applyWindSway(trunkMat, { leaves: false, strength: 0.5 });
+  applyWindSway(leafMat1, { strength: 1 });
+  applyWindSway(leafMat2, { strength: 1 });
+  applyWindSway(bushMat, { strength: 0.7 });
+
   for (let x = 1; x < length - 1; x += 2) {
     for (let z = 1; z < breadth - 1; z += 2) {
       const height = heightMap[x][z];
@@ -154,6 +161,7 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
       trunkMesh.setMatrixAt(i, matrix);
     });
     trunkMesh.instanceMatrix.needsUpdate = true;
+    trunkMesh.receiveShadow = true;
     trunkMesh.castShadow = true;
     terrain.add(trunkMesh);
   }
@@ -166,6 +174,7 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
       cone1Mesh.setMatrixAt(i, matrix);
     });
     cone1Mesh.instanceMatrix.needsUpdate = true;
+    cone1Mesh.receiveShadow = true;
     cone1Mesh.castShadow = true;
     terrain.add(cone1Mesh);
   }
@@ -178,6 +187,7 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
       cone2Mesh.setMatrixAt(i, matrix);
     });
     cone2Mesh.instanceMatrix.needsUpdate = true;
+    cone2Mesh.receiveShadow = true;
     cone2Mesh.castShadow = true;
     terrain.add(cone2Mesh);
   }
@@ -190,6 +200,7 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
       bushMesh.setMatrixAt(i, matrix);
     });
     bushMesh.instanceMatrix.needsUpdate = true;
+    bushMesh.receiveShadow = true;
     bushMesh.castShadow = true;
     terrain.add(bushMesh);
   }
@@ -931,8 +942,7 @@ export function generateTerrain(length, breadth, seed = 1337) {
     });
 
     instancedMesh.instanceMatrix.needsUpdate = true;
-    instancedMesh.castShadow = true;
-    instancedMesh.receiveShadow = true;
+    instancedMesh.receiveShadow = true; // terrain receives but never casts
 
     terrain.add(instancedMesh);
   });

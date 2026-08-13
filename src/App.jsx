@@ -74,7 +74,8 @@ function App() {
   const [heightOffset, setHeightOffset] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState('day');
   const [fogEnabled, setFogEnabled] = useState(true);
-  const [fogDensity, setFogDensity] = useState(0.012); // Default medium density
+  const [fogDensity, setFogDensity] = useState(null); // null = use time-of-day preset density
+  const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
   const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
   const [tracksVersion, setTracksVersion] = useState(0);
@@ -193,6 +194,7 @@ function App() {
         timeOfDay={timeOfDay}
         fogEnabled={fogEnabled}
         fogDensity={fogDensity}
+        shadowMode={shadowMode}
         tiltShiftEnabled={tiltShiftEnabled}
         celShadingEnabled={celShadingEnabled}
         trainDirection={trainDirection}
@@ -213,6 +215,8 @@ function App() {
         onFogEnabledChange={setFogEnabled}
         fogDensity={fogDensity}
         onFogDensityChange={setFogDensity}
+        shadowMode={shadowMode}
+        onShadowModeChange={setShadowMode}
         tiltShiftEnabled={tiltShiftEnabled}
         onTiltShiftChange={setTiltShiftEnabled}
         celShadingEnabled={celShadingEnabled}

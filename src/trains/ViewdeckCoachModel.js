@@ -26,7 +26,12 @@ export function createViewdeckCoach() {
   const frameMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.frameOchre, flatShading: true });
   const roofMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.roofCrimson, flatShading: true });
   const doorMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.doorWood, flatShading: true });
-  const glassMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.windowGlass, flatShading: true });
+  const glassMat = new THREE.MeshLambertMaterial({
+    color: VIEWDECK_COACH_COLORS.windowGlass,
+    flatShading: true,
+    emissive: 0xffa54d,
+    emissiveIntensity: 0.6,
+  });
   const railMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.railingDark, flatShading: true });
   const chassisMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.chassisDark, flatShading: true });
   const wheelMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.wheelDark, flatShading: true });
