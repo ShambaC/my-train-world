@@ -7,6 +7,7 @@ import { TrackManager } from "./tracks/TrackManager";
 import { TrainManager } from "./trains/TrainManager";
 import { StationManager } from "./stations/StationManager";
 import ModelLibrary from "./models/ModelLibrary";
+import { loadSettings, saveSettings } from "./utils/settings";
 
 // Define available tools
 const TOOLS = [
@@ -78,6 +79,16 @@ function App() {
   const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
   const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
+  // Render pacing prefs — persisted, never touch world state.
+  // Defaults: 120 FPS limit, vsync on (see PerformanceSettings.jsx).
+  const [frameLimit, setFrameLimit] = useState(() => {
+    const v = loadSettings().frameLimit;
+    return v === undefined || v === null ? 120 : v;
+  });
+  const [vsync, setVsync] = useState(() => {
+    const v = loadSettings().vsync;
+    return v === undefined || v === null ? true : v;
+  });
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
   const [loadProgress, setLoadProgress] = useState(0);
@@ -97,6 +108,11 @@ function App() {
         setIsLoading(false);
       });
   }, []);
+
+  // Persist render pacing prefs
+  useEffect(() => {
+    saveSettings({ frameLimit, vsync });
+  }, [frameLimit, vsync]);
 
   // Track engine count so the coach tool can be gated on it
   useEffect(() => {
@@ -198,6 +214,8 @@ function App() {
         tiltShiftEnabled={tiltShiftEnabled}
         celShadingEnabled={celShadingEnabled}
         trainDirection={trainDirection}
+        frameLimit={frameLimit}
+        vsync={vsync}
       />
       
       {/* Control Panel */}
@@ -221,6 +239,10 @@ function App() {
         onTiltShiftChange={setTiltShiftEnabled}
         celShadingEnabled={celShadingEnabled}
         onCelShadingChange={setCelShadingEnabled}
+        frameLimit={frameLimit}
+        onFrameLimitChange={setFrameLimit}
+        vsync={vsync}
+        onVsyncChange={setVsync}
       />
       
       {/* Hotbar */}

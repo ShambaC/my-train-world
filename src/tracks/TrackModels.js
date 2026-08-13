@@ -31,44 +31,122 @@ function createRailMaterial() {
   });
 }
 
+// ── Shared resources ──────────────────────────────────────────────────────
+// Geometries and materials are cached per track type and reused by every
+// track piece, so adding tracks never duplicates GPU buffers or shader
+// programs. Bridge supports are cached per quantized height.
+
+const RAIL_MAT = createRailMaterial();
+
+let straightAssets = null;
+function getStraightAssets() {
+  if (straightAssets) return straightAssets;
+  straightAssets = {
+    gravelGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH),
+    gravelMat: new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true }),
+    sleeperGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
+    sleeperMat: new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true }),
+    railGeo: new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH),
+  };
+  return straightAssets;
+}
+
+let curvedAssets = null;
+function getCurvedAssets() {
+  if (curvedAssets) return curvedAssets;
+  const segments = 8;
+  const angleStep = (Math.PI / 2) / segments;
+  curvedAssets = {
+    segments,
+    angleStep,
+    gravelGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, CURVE.r * angleStep * 1.1),
+    gravelMat: new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true }),
+    sleeperGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
+    sleeperMat: new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true }),
+    railGeos: (() => {
+      const innerRadius = CURVE.r - RAIL_OFFSET;
+      const outerRadius = CURVE.r + RAIL_OFFSET;
+      const build = (radius) => {
+        const points = [];
+        for (let i = 0; i <= segments; i++) {
+          const angle = Math.PI + i * angleStep;
+          points.push(new THREE.Vector3(
+            CURVE.cx + Math.cos(angle) * radius,
+            RAIL_HEIGHT * 0.8,
+            CURVE.cz + Math.sin(angle) * radius,
+          ));
+        }
+        const curve = new THREE.CatmullRomCurve3(points);
+        return new THREE.TubeGeometry(curve, segments, RAIL_HEIGHT * 0.4, 4, false);
+      };
+      return [build(innerRadius), build(outerRadius)];
+    })(),
+  };
+  return curvedAssets;
+}
+
+// Bridge supports — geometry varies with height, so cache per quantized
+// height step (0.125) instead of creating a new pillar per placement.
+const pillarGeoCache = new Map();
+function getPillarGeo(height) {
+  const key = Math.max(0.125, Math.round(height * 8) / 8);
+  let geo = pillarGeoCache.get(key);
+  if (!geo) {
+    geo = new THREE.CylinderGeometry(0.032, 0.04, key, 6);
+    pillarGeoCache.set(key, geo);
+  }
+  return geo;
+}
+
+let bridgeAssets = null;
+function getBridgeAssets() {
+  if (bridgeAssets) return bridgeAssets;
+  bridgeAssets = {
+    pillarMat: new THREE.MeshLambertMaterial({ color: COLORS.beam, flatShading: true }),
+    deckMat: new THREE.MeshLambertMaterial({ color: COLORS.deck, flatShading: true }),
+    braceMat: new THREE.MeshLambertMaterial({ color: COLORS.brace, flatShading: true }),
+    capMat: new THREE.MeshLambertMaterial({ color: COLORS.cap, flatShading: true }),
+    deckGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 1.1, 0.08, TRACK_LENGTH),
+    capGeo: new THREE.BoxGeometry(0.12, 0.04, 0.12),
+    braceGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.7, 0.04, 0.04),
+    curvedCapGeo: new THREE.BoxGeometry(0.18, 0.08, 0.18),
+  };
+  return bridgeAssets;
+}
+
+// Track pieces receive and cast realtime shadows (original behavior).
+const TRACK_MESH = { castShadow: true, receiveShadow: true };
+const BRIDGE_MESH = { castShadow: true, receiveShadow: true };
+
 /**
  * Create a straight track piece (real model only — no ghost branch).
  */
 export function createStraightTrack() {
   const group = new THREE.Group();
+  const a = getStraightAssets();
 
   // Gravel base
-  const gravelGeo = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH);
-  const gravelMat = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
-  const gravel = new THREE.Mesh(gravelGeo, gravelMat);
+  const gravel = new THREE.Mesh(a.gravelGeo, a.gravelMat);
   gravel.position.y = RAIL_HEIGHT * 0.25;
-  gravel.castShadow = true;
-  gravel.receiveShadow = true;
+  Object.assign(gravel, TRACK_MESH);
   group.add(gravel);
 
   // Sleepers
-  const sleeperGeo = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
-  const sleeperMat = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
   for (let z = -TRACK_LENGTH / 2 + 0.05; z <= TRACK_LENGTH / 2 - 0.05; z += SLEEPER_SPACING) {
-    const sleeper = new THREE.Mesh(sleeperGeo, sleeperMat);
+    const sleeper = new THREE.Mesh(a.sleeperGeo, a.sleeperMat);
     sleeper.position.set(0, RAIL_HEIGHT * 0.5, z);
-    sleeper.castShadow = true;
-    sleeper.receiveShadow = true;
+    Object.assign(sleeper, TRACK_MESH);
     group.add(sleeper);
   }
 
   // Rails
-  const railGeo = new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH);
-  const railMat = createRailMaterial();
-  const rail1 = new THREE.Mesh(railGeo, railMat);
+  const rail1 = new THREE.Mesh(a.railGeo, RAIL_MAT);
   rail1.position.set(-RAIL_OFFSET, RAIL_HEIGHT, 0);
-  rail1.castShadow = true;
-  rail1.receiveShadow = true;
+  Object.assign(rail1, TRACK_MESH);
   group.add(rail1);
-  const rail2 = new THREE.Mesh(railGeo, railMat);
+  const rail2 = new THREE.Mesh(a.railGeo, RAIL_MAT);
   rail2.position.set(RAIL_OFFSET, RAIL_HEIGHT, 0);
-  rail2.castShadow = true;
-  rail2.receiveShadow = true;
+  Object.assign(rail2, TRACK_MESH);
   group.add(rail2);
 
   return group;
@@ -81,72 +159,43 @@ export function createStraightTrack() {
  */
 export function createCurvedTrack() {
   const group = new THREE.Group();
-  const cx = CURVE.cx;  // 0.25
-  const cz = CURVE.cz;  // 0.25
-  const r  = CURVE.r;   // 0.25
-  const segments = 8;
-  const angleStep = (Math.PI / 2) / segments;
+  const a = getCurvedAssets();
+  const segments = a.segments;
+  const angleStep = a.angleStep;
 
   // Gravel and sleepers along arc
   for (let i = 0; i <= segments; i++) {
     const angle = Math.PI + i * angleStep; // 180° → 270°
-    const x = cx + Math.cos(angle) * r;
-    const z = cz + Math.sin(angle) * r;
+    const x = CURVE.cx + Math.cos(angle) * CURVE.r;
+    const z = CURVE.cz + Math.sin(angle) * CURVE.r;
     // Local Z (box depth) must align with tangent (sin θ, -cos θ)
     // rotation.y = φ maps local Z to (sin φ, cos φ) → φ = π - θ
     const rotY = Math.PI - angle;
 
     // Gravel segment
-    const gravelGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, r * angleStep * 1.1);
-    const gravelMat = new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true });
-    const gravel = new THREE.Mesh(gravelGeo, gravelMat);
+    const gravel = new THREE.Mesh(a.gravelGeo, a.gravelMat);
     gravel.position.set(x, RAIL_HEIGHT * 0.25, z);
     gravel.rotation.y = rotY;
-    gravel.castShadow = true;
-    gravel.receiveShadow = true;
+    Object.assign(gravel, TRACK_MESH);
     group.add(gravel);
 
     // Sleepers - fewer, every 2 segments
     if (i % 2 === 0) {
-      const sleeperGeo = new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5);
-      const sleeperMat = new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true });
-      const sleeper = new THREE.Mesh(sleeperGeo, sleeperMat);
+      const sleeper = new THREE.Mesh(a.sleeperGeo, a.sleeperMat);
       sleeper.position.set(x, RAIL_HEIGHT * 0.5, z);
       sleeper.rotation.y = rotY;
-      sleeper.castShadow = true;
-      sleeper.receiveShadow = true;
+      Object.assign(sleeper, TRACK_MESH);
       group.add(sleeper);
     }
   }
 
   // Curved Rails — inner and outer arcs (shared gauge)
-  const innerRadius = r - RAIL_OFFSET;
-  const outerRadius = r + RAIL_OFFSET;
-
-  const buildRailMesh = (radius) => {
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-      const angle = Math.PI + i * angleStep;
-      points.push(new THREE.Vector3(
-        cx + Math.cos(angle) * radius,
-        RAIL_HEIGHT * 0.8,
-        cz + Math.sin(angle) * radius,
-      ));
-    }
-    const curve = new THREE.CatmullRomCurve3(points);
-    return new THREE.TubeGeometry(curve, segments, RAIL_HEIGHT * 0.4, 4, false);
-  };
-
-  const railMat = createRailMaterial();
-
-  const rail1 = new THREE.Mesh(buildRailMesh(innerRadius), railMat);
-  rail1.castShadow = true;
-  rail1.receiveShadow = true;
+  const rail1 = new THREE.Mesh(a.railGeos[0], RAIL_MAT);
+  Object.assign(rail1, TRACK_MESH);
   group.add(rail1);
 
-  const rail2 = new THREE.Mesh(buildRailMesh(outerRadius), railMat);
-  rail2.castShadow = true;
-  rail2.receiveShadow = true;
+  const rail2 = new THREE.Mesh(a.railGeos[1], RAIL_MAT);
+  Object.assign(rail2, TRACK_MESH);
   group.add(rail2);
 
   return group;
@@ -154,27 +203,21 @@ export function createCurvedTrack() {
 
 /**
  * Create trestle bridges & support beams under elevated tracks.
+ * Support geometries are cached per quantized height.
  */
 export function createSupportBeams(height, trackType = 'straight') {
   if (height <= 0.05) return null;
 
   const group = new THREE.Group();
-  const pillarRadius = 0.04;
+  const b = getBridgeAssets();
   const pillarHeight = height;
-
-  const pillarMat = new THREE.MeshLambertMaterial({ color: COLORS.beam, flatShading: true });
-  const deckMat   = new THREE.MeshLambertMaterial({ color: COLORS.deck, flatShading: true });
-  const braceMat  = new THREE.MeshLambertMaterial({ color: COLORS.brace, flatShading: true });
-  const capMat    = new THREE.MeshLambertMaterial({ color: COLORS.cap, flatShading: true });
-  const pillarGeo = new THREE.CylinderGeometry(pillarRadius * 0.8, pillarRadius, pillarHeight, 6);
+  const pillarGeo = getPillarGeo(pillarHeight);
 
   if (trackType === 'straight') {
     // Deck beam
-    const deckBeamGeo = new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 1.1, 0.08, TRACK_LENGTH);
-    const deckBeam = new THREE.Mesh(deckBeamGeo, deckMat);
+    const deckBeam = new THREE.Mesh(b.deckGeo, b.deckMat);
     deckBeam.position.set(0, -0.04, 0);
-    deckBeam.castShadow = true;
-    deckBeam.receiveShadow = true;
+    Object.assign(deckBeam, BRIDGE_MESH);
     group.add(deckBeam);
 
     const offsetX = STRAIGHT_TRACK_WIDTH * 0.35;
@@ -188,14 +231,12 @@ export function createSupportBeams(height, trackType = 'straight') {
     ];
 
     pillarPositions.forEach(pos => {
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      const pillar = new THREE.Mesh(pillarGeo, b.pillarMat);
       pillar.position.set(...pos);
-      pillar.castShadow = true;
-      pillar.receiveShadow = true;
+      Object.assign(pillar, BRIDGE_MESH);
       group.add(pillar);
 
-      const capGeo = new THREE.BoxGeometry(pillarRadius * 3, 0.04, pillarRadius * 3);
-      const cap = new THREE.Mesh(capGeo, capMat);
+      const cap = new THREE.Mesh(b.capGeo, b.capMat);
       cap.position.set(pos[0], -0.08, pos[2]);
       group.add(cap);
     });
@@ -204,8 +245,7 @@ export function createSupportBeams(height, trackType = 'straight') {
       const braceLevels = Math.floor(height / 0.8);
       for (let l = 0; l < braceLevels; l++) {
         const yPos = -height + (l + 0.5) * (height / braceLevels);
-        const horizBraceGeo = new THREE.BoxGeometry(offsetX * 2, 0.04, 0.04);
-        const hBrace = new THREE.Mesh(horizBraceGeo, braceMat);
+        const hBrace = new THREE.Mesh(b.braceGeo, b.braceMat);
         hBrace.position.set(0, yPos, -offsetZ);
         group.add(hBrace);
         const hBrace2 = hBrace.clone();
@@ -223,15 +263,13 @@ export function createSupportBeams(height, trackType = 'straight') {
       const cx = CURVE.cx + Math.cos(angle) * CURVE.r;
       const cz = CURVE.cz + Math.sin(angle) * CURVE.r;
 
-      const capGeo = new THREE.BoxGeometry(0.18, 0.08, 0.18);
-      const cap = new THREE.Mesh(capGeo, deckMat);
+      const cap = new THREE.Mesh(b.curvedCapGeo, b.deckMat);
       cap.position.set(cx, -0.04, cz);
       group.add(cap);
 
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+      const pillar = new THREE.Mesh(pillarGeo, b.pillarMat);
       pillar.position.set(cx, -pillarHeight / 2, cz);
-      pillar.castShadow = true;
-      pillar.receiveShadow = true;
+      Object.assign(pillar, BRIDGE_MESH);
       group.add(pillar);
     }
   }

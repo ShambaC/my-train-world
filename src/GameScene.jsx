@@ -17,6 +17,7 @@ import Effects from './postprocessing/Effects';
 import ScatterProps from './environment/ScatterProps';
 import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
+import RenderScheduler from './render/RenderScheduler';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -42,6 +43,8 @@ function Scene({
   stationsVersion,
   onStationsChange,
   onCoachPick,
+  frameLimit,
+  vsync,
 }) {
   const terrainRef = useRef();
   const orbitRef = useRef(null);
@@ -109,6 +112,18 @@ function Scene({
     lighting.update(delta);
     advanceWind(delta);
 
+    // OrbitControls scales wheel/pan motion with camera distance. That makes
+    // close construction work feel almost frozen. Compensate only at close
+    // range; normal overview sensitivity stays unchanged.
+    const controls = orbitRef.current;
+    if (controls) {
+      const distance = camera.position.distanceTo(controls.target);
+      const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
+      controls.zoomSpeed = 1.5 * closeRangeBoost;
+      controls.panSpeed = 1.5 * closeRangeBoost;
+      if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
+    }
+
     const amb = scene.getObjectByName('ambientLight');
     if (amb) {
       amb.color.copy(lighting.ambient.color);
@@ -137,13 +152,14 @@ function Scene({
 
   useEffect(() => {
     // Generate terrain when size or seed changes
+    const t0 = performance.now();
     const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth, terrainSeed);
     setTerrain(newTerrain);
-    
+
     // Generate forest border around terrain (world-unit based)
     const border = createForestBorder(terrainSize, terrainSeed);
     setForestBorder(border);
-    
+
     if (onTerrainGenerated) {
       // Count voxels for debug info
       let voxelCount = 0;
@@ -152,7 +168,11 @@ function Scene({
           voxelCount += mesh.count;
         }
       });
-      onTerrainGenerated({ voxelCount, diagnostics: newTerrain.userData.diagnostics });
+      onTerrainGenerated({
+        voxelCount,
+        genTimeMs: Math.round(performance.now() - t0),
+        diagnostics: newTerrain.userData.diagnostics,
+      });
     }
 
     // Cleanup old border on unmount
@@ -296,16 +316,19 @@ export default function GameScene({
   tiltShiftEnabled = false,
   celShadingEnabled = false,
   trainDirection = 1,
+  frameLimit = 120,
+  vsync = true,
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
+    genTimeMs: 0,
   });
   const [fps, setFps] = useState(0);
   const [trackCount, setTrackCount] = useState(0);
   const [trainCount, setTrainCount] = useState(0);
   const [stationCount, setStationCount] = useState(0);
   const [stationsVersion, setStationsVersion] = useState(0);
-  const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0 });
+  const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
@@ -360,8 +383,13 @@ export default function GameScene({
       <Canvas
         camera={{ position: [20, 15, 20], fov: 60 }}
         shadows
+        frameloop="never"
         gl={{ antialias: true }}
       >
+        {/* Render pacing driven by the performance settings (frame limit +
+            vsync). Simulation stays delta-based, so limits never change
+            train speed or animation. */}
+        <RenderScheduler frameLimit={frameLimit} vsync={vsync} />
         <Scene 
           terrainSize={terrainSize} 
           terrainSeed={terrainSeed}
@@ -385,6 +413,8 @@ export default function GameScene({
           stationsVersion={stationsVersion}
           onStationsChange={handleStationsChange}
           onCoachPick={handleCoachPick}
+          frameLimit={frameLimit}
+          vsync={vsync}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (
@@ -413,6 +443,7 @@ export default function GameScene({
           <div>Trains: {trainCount}</div>
           <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
+          {sceneStats.genTimeMs > 0 && <div>Terrain gen: {sceneStats.genTimeMs} ms</div>}
           {sceneStats.diagnostics && (
             <div className="text-xs text-gray-400">
               <div>Flat regions: {sceneStats.diagnostics.regionCount} • Build spots: {sceneStats.diagnostics.candidates}</div>
@@ -421,6 +452,8 @@ export default function GameScene({
           )}
           {memStats.jsHeapMB >= 0 && <div>Memory: {memStats.jsHeapMB} MB</div>}
           <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
+          <div>Draw calls: {memStats.drawCalls} • Tris: {memStats.triangles.toLocaleString()}</div>
+          <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">
               <div>Tool: {selectedTool.name}</div>
@@ -471,6 +504,8 @@ function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
         geometries: info?.memory?.geometries ?? 0,
         textures: info?.memory?.textures ?? 0,
         programs: info?.programs?.length ?? 0,
+        drawCalls: info?.render?.calls ?? 0,
+        triangles: info?.render?.triangles ?? 0,
       });
     }
   });

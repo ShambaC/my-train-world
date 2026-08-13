@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import TrainControl from './ui/TrainControl';
 import EnvironmentSettings from './ui/EnvironmentSettings';
+import PerformanceSettings from './ui/PerformanceSettings';
 
 export default function ControlPanel({ 
   onTerrainSizeChange, 
@@ -21,7 +22,11 @@ export default function ControlPanel({
   tiltShiftEnabled,
   onTiltShiftChange,
   celShadingEnabled,
-  onCelShadingChange
+  onCelShadingChange,
+  frameLimit,
+  onFrameLimitChange,
+  vsync,
+  onVsyncChange
 }) {
   const [length, setLength] = useState(100);
   const [breadth, setBreadth] = useState(100);
@@ -226,6 +231,16 @@ export default function ControlPanel({
               onTiltShiftChange={onTiltShiftChange}
               celShadingEnabled={celShadingEnabled}
               onCelShadingChange={onCelShadingChange}
+            />
+          </div>
+
+          {/* Performance Settings */}
+          <div className="pt-4 border-t border-gray-700">
+            <PerformanceSettings
+              frameLimit={frameLimit}
+              vsync={vsync}
+              onFrameLimitChange={onFrameLimitChange}
+              onVsyncChange={onVsyncChange}
             />
           </div>
 

@@ -3,12 +3,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BIOME, mulberry32 } from '../terrain.js';
 
-const FLY_COUNT = 120;
-const CENTER_COUNT = 12;
+const FLY_COUNT = 360;
+const CENTER_COUNT = 24;
 const FLIES_PER_CENTER = FLY_COUNT / CENTER_COUNT;
 
 /**
- * Low-density fireflies at night, placed in loose clusters. Half the
+ * Fireflies at night, placed in more numerous loose clusters. Half the
  * clusters hover over water, the rest gather on land near trees (forest
  * biome) and random meadow spots. Instanced additive spheres with per-point
  * drift; opacity follows LightingState.nightness so they fade out entirely

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { createTrainEngine } from './TrainModel';
 import { createPassengerCoach } from './PassengerCoachModel';
 import { createCoalCart } from './CoalCartModel';
@@ -11,47 +12,91 @@ import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 import { createContactPatch } from '../utils/contactPatch';
 
+// Coach model factories, keyed by coach type.
+function createCoachMesh(type) {
+  if (type === 'passenger-coach') return createPassengerCoach();
+  if (type === 'coal-cart') return createCoalCart();
+  if (type === 'gas-coach') return createGasCoach();
+  if (type === 'goods-coach' || type === 'freight-van') return createGoodsCoach();
+  if (type === 'container-coach' || type === 'container-flat-wagon') return createContainerCoach();
+  if (type === 'viewdeck-coach' || type === 'mail-coach') return createViewdeckCoach();
+  return ModelLibrary.getMesh(type);
+}
+
 /**
- * Train Renderer - Renders all trains + their trailing coaches.
- * Each engine carries one warm point light (small budget — engines are few)
- * plus smoke and wheel dust. Coach windows are emissive; a fake contact
- * patch grounds every vehicle.
+ * Train Renderer — renders all trains + their trailing coaches.
+ *
+ * Performance: React only reconciles when entity TOPOLOGY changes (trains
+ * added/removed, coaches attached). Per-frame movement is applied
+ * imperatively to cached Object3D groups in useFrame, so moving trains and
+ * coaches never trigger React re-renders.
  */
 export default function TrainRenderer({ trainManager, lighting }) {
-  const [trains, setTrains] = useState([]);
-  const trainMeshesRef = useRef(new Map());
-  const coachMeshesRef = useRef(new Map());
-  const headlightsRef = useRef(new Map());
-  const coachPatchesRef = useRef(new Map());
+  const rootRef = useRef();
+  const trainNodesRef = useRef(new Map()); // trainId -> THREE.Group (world)
+  const coachNodesRef = useRef(new Map()); // coachId -> THREE.Group (world)
+  const headlightsRef = useRef(new Map()); // trainId -> pointLight
+  const lastSigRef = useRef('');
+  const [snapshot, setSnapshot] = useState(null);
 
-  // Update trains list
+  // Topology poll — state updates only when the train/coach set changes.
   useEffect(() => {
-    const updateTrains = () => {
-      setTrains(trainManager.getAllTrains());
+    const sync = () => {
+      const trains = trainManager.getAllTrains();
+      const sig = trains
+        .map((t) =>
+          `${t.id}:${(t.coaches || []).map((c) => c.id + (c.position ? 'p' : 'x')).join(',')}`
+        )
+        .join('|');
+      if (sig !== lastSigRef.current) {
+        lastSigRef.current = sig;
+        setSnapshot({
+          trains: trains.map((t) => ({
+            id: t.id,
+            coaches: (t.coaches || []).map((c) => ({
+              id: c.id,
+              type: c.type,
+              placed: !!c.position,
+            })),
+          })),
+        });
+      }
     };
 
-    // Update initially
-    updateTrains();
-
-    // Set up interval to check for new trains
-    const interval = setInterval(updateTrains, 500);
+    sync();
+    const interval = setInterval(sync, 500);
     return () => clearInterval(interval);
   }, [trainManager]);
 
-  // Animate trains
+  // Animate trains imperatively — no React state involved.
   useFrame((state, delta) => {
     trainManager.update(delta);
-    setTrains([...trainManager.getAllTrains()]); // Force re-render with updated positions
 
-    // Night-scaled headlight pool: dim during the day, warm after dark.
-    // The beam cone and glow halo fade out almost entirely in daylight.
+    for (const train of trainManager.getAllTrains()) {
+      const node = trainNodesRef.current.get(train.id);
+      if (node) {
+        node.position.set(train.position.x, train.position.y + 0.1, train.position.z);
+        node.rotation.y = train.rotation;
+      }
+      for (const coach of train.coaches || []) {
+        const cnode = coachNodesRef.current.get(coach.id);
+        if (cnode && coach.position) {
+          cnode.position.set(coach.position.x, coach.position.y + 0.1, coach.position.z);
+          cnode.rotation.y = coach.rotation;
+        }
+      }
+    }
+
+    // Night-scaled headlight pool: fully off in daylight (saves dynamic
+    // light cost), warm and bright after dark. Beam cone and glow halo fade
+    // out almost entirely in daylight too.
     const nightness = lighting ? lighting.nightness : 0.6;
-    const intensity = 0.7 + nightness * 8.5;
+    const intensity = nightness * 9.2;
     for (const light of headlightsRef.current.values()) {
       light.intensity = intensity;
     }
-    for (const mesh of trainMeshesRef.current.values()) {
-      mesh.traverse((child) => {
+    for (const node of trainNodesRef.current.values()) {
+      node.traverse((child) => {
         const kind = child.userData?.lightGlow;
         if (!kind) return;
         const mat = child.material;
@@ -62,115 +107,91 @@ export default function TrainRenderer({ trainManager, lighting }) {
     }
   });
 
-  // Cleanup old train meshes + coach meshes + lights + patches
+  // Remove + dispose meshes that left the topology.
   useEffect(() => {
-    const currentTrainIds = new Set(trains.map(t => t.id));
-    const currentCoachIds = new Set();
-    for (const t of trains) {
-      for (const c of t.coaches || []) currentCoachIds.add(c.id);
+    if (!snapshot) return;
+    const trainIds = new Set(snapshot.trains.map((t) => t.id));
+    const coachIds = new Set();
+    for (const t of snapshot.trains) {
+      for (const c of t.coaches) coachIds.add(c.id);
     }
 
-    for (const [id, mesh] of trainMeshesRef.current.entries()) {
-      if (!currentTrainIds.has(id)) {
-        if (mesh.parent) mesh.parent.remove(mesh);
-        mesh.traverse((child) => {
+    for (const [id, node] of trainNodesRef.current.entries()) {
+      if (!trainIds.has(id)) {
+        if (node.parent) node.parent.remove(node);
+        node.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
-        trainMeshesRef.current.delete(id);
+        trainNodesRef.current.delete(id);
         headlightsRef.current.delete(id);
       }
     }
-    for (const [id, mesh] of coachMeshesRef.current.entries()) {
-      if (!currentCoachIds.has(id)) {
-        if (mesh.parent) mesh.parent.remove(mesh);
-        mesh.traverse((child) => {
+    for (const [id, node] of coachNodesRef.current.entries()) {
+      if (!coachIds.has(id)) {
+        if (node.parent) node.parent.remove(node);
+        node.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
           if (child.material) child.material.dispose();
         });
-        coachMeshesRef.current.delete(id);
-        const patch = coachPatchesRef.current.get(id);
-        if (patch?.parent) patch.parent.remove(patch);
-        coachPatchesRef.current.delete(id);
+        coachNodesRef.current.delete(id);
       }
     }
-  }, [trains]);
+  }, [snapshot]);
 
   return (
-    <group>
-      {trains.map((train) => {
-        // Engine mesh
-        if (!trainMeshesRef.current.has(train.id)) {
-          const trainMesh = createTrainEngine(trainMeshesRef.current.size);
-          trainMeshesRef.current.set(train.id, trainMesh);
-        }
-        const trainMesh = trainMeshesRef.current.get(train.id);
+    <group ref={rootRef}>
+      {snapshot?.trains.map((train) => {
+        // Engine node (created once, updated imperatively)
+        if (!trainNodesRef.current.has(train.id)) {
+          const node = new THREE.Group();
+          node.name = `train_${train.id}`;
 
-        // Coach meshes
-        const coachNodes = (train.coaches || []).map((coach) => {
-          if (!coach.position) return null;
-          if (!coachMeshesRef.current.has(coach.id)) {
-            const mesh = coach.type === 'passenger-coach'
-              ? createPassengerCoach()
-              : coach.type === 'coal-cart'
-              ? createCoalCart()
-              : coach.type === 'gas-coach'
-              ? createGasCoach()
-              : (coach.type === 'goods-coach' || coach.type === 'freight-van')
-              ? createGoodsCoach()
-              : (coach.type === 'container-coach' || coach.type === 'container-flat-wagon')
-              ? createContainerCoach()
-              : (coach.type === 'viewdeck-coach' || coach.type === 'mail-coach')
-              ? createViewdeckCoach()
-              : ModelLibrary.getMesh(coach.type);
-            coachMeshesRef.current.set(coach.id, mesh);
-            coachPatchesRef.current.set(coach.id, createContactPatch(0.34, 0.26, 0.012));
-          }
-          const mesh = coachMeshesRef.current.get(coach.id);
-          const patch = coachPatchesRef.current.get(coach.id);
-          return (
-            <group
-              key={coach.id}
-              position={[coach.position.x, coach.position.y + 0.1, coach.position.z]}
-              rotation={[0, coach.rotation, 0]}
-            >
-              <primitive object={patch} />
-              <primitive object={mesh} />
-            </group>
-          );
-        });
+          const engineMesh = createTrainEngine(trainNodesRef.current.size);
+          node.add(engineMesh);
+
+          // One warm point light per engine (engines are few).
+          const headlight = new THREE.PointLight(0xffd9a0, 0, 9, 2);
+          headlight.position.set(0, 0.3, 0.42);
+          node.add(headlight);
+          headlightsRef.current.set(train.id, headlight);
+
+          trainNodesRef.current.set(train.id, node);
+        }
+        const trainNode = trainNodesRef.current.get(train.id);
+
+        // Coach nodes
+        const coachNodes = train.coaches
+          .filter((c) => c.placed)
+          .map((coach) => {
+            if (!coachNodesRef.current.has(coach.id)) {
+              const node = new THREE.Group();
+              node.name = `coach_${coach.id}`;
+              node.add(createCoachMesh(coach.type));
+              node.add(createContactPatch(0.34, 0.26, 0.012));
+              coachNodesRef.current.set(coach.id, node);
+            }
+            return (
+              <primitive key={coach.id} object={coachNodesRef.current.get(coach.id)} />
+            );
+          });
 
         return (
           <group key={train.id}>
-            <group
-              position={[train.position.x, train.position.y + 0.1, train.position.z]}
-              rotation={[0, train.rotation, 0]}
-            >
-              <pointLight
-                ref={(l) => {
-                  if (l) headlightsRef.current.set(train.id, l);
-                }}
-                position={[0, 0.3, 0.42]}
-                color={0xffd9a0}
-                distance={9}
-                decay={2}
-                intensity={0.7}
-              />
-              <primitive object={trainMesh} />
-            </group>
+            <primitive object={trainNode} />
             {coachNodes}
             <SmokeParticles
-              position={[train.position.x, train.position.y + 0.1, train.position.z]}
-              rotation={[0, train.rotation, 0]}
-              active={train.active}
-              speed={train.active ? train.speed : 0}
+              key={`${train.id}_smoke`}
+              target={trainNode}
+              trainManager={trainManager}
+              trainId={train.id}
             />
             <SmokeParticles
+              key={`${train.id}_dust`}
               kind="dust"
-              position={[train.position.x, train.position.y + 0.1, train.position.z]}
-              rotation={[0, train.rotation, 0]}
-              active={train.active && train.speed > 0.1}
-              speed={train.speed}
+              target={trainNode}
+              trainManager={trainManager}
+              trainId={train.id}
             />
           </group>
         );

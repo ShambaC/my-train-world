@@ -40,14 +40,36 @@ const KINDS = {
   },
 };
 
+// Shared per-kind resources — one geometry + one material for every train,
+// never rebuilt per instance.
+const PARTICLE_GEO = new THREE.DodecahedronGeometry(0.06, 0);
+const PARTICLE_MATS = Object.fromEntries(
+  Object.entries(KINDS).map(([kind, cfg]) => [
+    kind,
+    new THREE.MeshLambertMaterial({
+      color: cfg.color,
+      emissive: cfg.emissive,
+      emissiveIntensity: 0.45,
+      transparent: true,
+      opacity: cfg.opacity,
+      flatShading: true,
+    }),
+  ])
+);
+
 /**
  * Low-poly instanced particle system for trains.
  * - smoke: puffs vary with speed — fast trains trail smaller, quicker
  *   puffs; parked engines chuff big lazy clouds.
  * - dust: brown ground haze behind the wheels while moving.
+ *
+ * `target` is an Object3D (the train's world group). Its transform is read
+ * imperatively every frame — no React re-renders while trains move. Train
+ * state (active/speed) is read straight from the TrainManager.
  */
-export default function SmokeParticles({ position, rotation, active, speed = 0.5, kind = 'smoke' }) {
+export default function SmokeParticles({ target, trainManager, trainId, kind = 'smoke' }) {
   const meshRef = useRef();
+  const groupRef = useRef();
   const cfg = KINDS[kind] || KINDS.smoke;
 
   const particles = useMemo(() => {
@@ -75,6 +97,17 @@ export default function SmokeParticles({ position, rotation, active, speed = 0.5
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;
+
+    // Follow the train imperatively (position/rotation set by TrainRenderer)
+    if (target && groupRef.current) {
+      groupRef.current.position.copy(target.position);
+      groupRef.current.quaternion.copy(target.quaternion);
+    }
+
+    // Train state read live — no prop churn while the train moves.
+    const train = trainManager?.getTrain?.(trainId);
+    const active = !!train?.active;
+    const speed = train?.speed ?? 0;
 
     // Speed factor: fast trains shed quicker, smaller particles
     const spd = Math.max(0, Math.min(1.5, speed));
@@ -131,21 +164,11 @@ export default function SmokeParticles({ position, rotation, active, speed = 0.5
   });
 
   return (
-    <group position={position} rotation={rotation}>
+    <group ref={groupRef}>
       <instancedMesh
         ref={meshRef}
-        args={[null, null, cfg.count]}
-      >
-        <dodecahedronGeometry args={[0.06, 0]} />
-        <meshLambertMaterial
-          color={cfg.color}
-          emissive={cfg.emissive}
-          emissiveIntensity={0.45}
-          transparent
-          opacity={cfg.opacity}
-          flatShading
-        />
-      </instancedMesh>
+        args={[PARTICLE_GEO, PARTICLE_MATS[kind] || PARTICLE_MATS.smoke, cfg.count]}
+      />
     </group>
   );
 }

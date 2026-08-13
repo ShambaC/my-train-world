@@ -153,13 +153,9 @@ export default function TrackRenderer({
     const currentTrackIds = new Set(tracks.map(t => t.id));
     for (const [id, mesh] of trackMeshesRef.current.entries()) {
       if (!currentTrackIds.has(id)) {
-        mesh.traverse((child) => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) {
-            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
-            else child.material.dispose();
-          }
-        });
+        // Geometries and materials are shared per track type (TrackModels
+        // caches them) — remove from the scene but never dispose.
+        if (mesh.parent) mesh.parent.remove(mesh);
         trackMeshesRef.current.delete(id);
       }
     }
@@ -171,11 +167,14 @@ export default function TrackRenderer({
 
     ghostOffsetRef.current = null;
 
-    // Dispose old ghost
+    // Dispose old ghost — geometries are shared (TrackModels caches them),
+    // only the ghost's own materials are disposed.
     if (ghostMeshRef.current) {
       ghostMeshRef.current.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
-        if (child.material) child.material.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
       });
       ghostMeshRef.current = null;
     }

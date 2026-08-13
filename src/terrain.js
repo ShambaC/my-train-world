@@ -10,6 +10,10 @@ export const WATER_LEVEL = 2.0;
 // Voxel index at/under which columns are submerged (top of index 3 = 1.75 < 2.0)
 export const WATER_LEVEL_VOXEL = 3;
 
+// Spatial instance regions. Keeps original voxel boxes intact while giving
+// renderer frustum culling useful bounds instead of one bound for whole map.
+const TERRAIN_CHUNK_SIZE = 64;
+
 // Deterministic biome ids (shared with ScatterProps for prop selection)
 export const BIOME = {
   water: 0,
@@ -821,7 +825,7 @@ export function generateTerrain(length, breadth, seed = 1337) {
 
   const { heightMap, biomeMask, plateaus, blend } = best;
   const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-  const voxelInstances = new Map();
+  const voxelChunks = new Map();
 
   // Precomputed meadow→forest gradient (avoids per-voxel color math)
   const grassColor = new THREE.Color(TERRAIN_COLORS.grass);
@@ -893,13 +897,21 @@ export function generateTerrain(length, breadth, seed = 1337) {
           color = slope >= 3 ? TERRAIN_COLORS.rock : surfaceColor(biome, blend ? blend[x * breadth + z] : 0);
         }
 
-        const colorKey = color.toString();
-        if (!voxelInstances.has(colorKey)) {
-          voxelInstances.set(colorKey, []);
+        const chunkX = Math.floor(x / TERRAIN_CHUNK_SIZE);
+        const chunkZ = Math.floor(z / TERRAIN_CHUNK_SIZE);
+        const chunkKey = `${chunkX},${chunkZ}`;
+        let chunk = voxelChunks.get(chunkKey);
+        if (!chunk) {
+          chunk = new Map();
+          voxelChunks.set(chunkKey, chunk);
         }
-        voxelInstances.get(colorKey).push({
-          position: new THREE.Vector3(worldX, worldY, worldZ),
-        });
+        const colorKey = color.toString();
+        let instances = chunk.get(colorKey);
+        if (!instances) {
+          instances = [];
+          chunk.set(colorKey, instances);
+        }
+        instances.push({ worldX, worldY, worldZ });
       }
     }
   }
@@ -921,30 +933,43 @@ export function generateTerrain(length, breadth, seed = 1337) {
     diagnostics: best.diagnostics,
   };
 
-  // Create instanced meshes
-  voxelInstances.forEach((instances, colorKey) => {
-    const color = parseInt(colorKey);
-    const material = new THREE.MeshLambertMaterial({
-      color,
-      flatShading: true,
+  // Create spatially bounded instanced meshes. Original BoxGeometry,
+  // per-color Lambert materials and shadow behavior remain unchanged.
+  const matrix = new THREE.Matrix4();
+  const materials = new Map();
+
+  voxelChunks.forEach((colorChunks, chunkKey) => {
+    colorChunks.forEach((instances, colorKey) => {
+      let material = materials.get(colorKey);
+      if (!material) {
+        material = new THREE.MeshLambertMaterial({
+          color: parseInt(colorKey),
+          flatShading: true,
+        });
+        materials.set(colorKey, material);
+      }
+
+      const instancedMesh = new THREE.InstancedMesh(
+        voxelGeometry,
+        material,
+        instances.length
+      );
+
+      instances.forEach((instance, index) => {
+        matrix.setPosition(instance.worldX, instance.worldY, instance.worldZ);
+        instancedMesh.setMatrixAt(index, matrix);
+      });
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      instancedMesh.receiveShadow = true; // terrain receives but never casts
+      instancedMesh.frustumCulled = true;
+      instancedMesh.name = `terrainChunk_${chunkKey}_${colorKey}`;
+      // InstancedMesh bounds are not inferred reliably until explicitly built.
+      instancedMesh.computeBoundingBox();
+      instancedMesh.computeBoundingSphere();
+
+      terrain.add(instancedMesh);
     });
-
-    const instancedMesh = new THREE.InstancedMesh(
-      voxelGeometry,
-      material,
-      instances.length
-    );
-
-    const matrix = new THREE.Matrix4();
-    instances.forEach((instance, index) => {
-      matrix.setPosition(instance.position);
-      instancedMesh.setMatrixAt(index, matrix);
-    });
-
-    instancedMesh.instanceMatrix.needsUpdate = true;
-    instancedMesh.receiveShadow = true; // terrain receives but never casts
-
-    terrain.add(instancedMesh);
   });
 
   if (import.meta.env.DEV) {

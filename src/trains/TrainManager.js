@@ -360,6 +360,10 @@ export class TrainManager {
     return Array.from(this.trains.values());
   }
 
+  getTrain(id) {
+    return this.trains.get(id) || null;
+  }
+
   toggleTrain(id) {
     const train = this.trains.get(id);
     if (train) {
