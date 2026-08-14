@@ -79,6 +79,11 @@ function App() {
   const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
   const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
+  const [ambientEnabled, setAmbientEnabled] = useState(true);
+  const [soundsEnabled, setSoundsEnabled] = useState(true);
+  const [followTrainId, setFollowTrainId] = useState(null);
+  // Stations have exactly two orientations (horizontal / vertical); R toggles.
+  const [stationOrientation, setStationOrientation] = useState('horizontal');
   // Render pacing prefs — persisted, never touch world state.
   // Defaults: 120 FPS limit, vsync on (see PerformanceSettings.jsx).
   const [frameLimit, setFrameLimit] = useState(() => {
@@ -133,6 +138,7 @@ function App() {
     trackManagerRef.current.clear();
     trainManagerRef.current.clear();
     stationManagerRef.current.clear();
+    setFollowTrainId(null);
     setTracksVersion(v => v + 1); // Trigger re-render
   };
 
@@ -155,12 +161,19 @@ function App() {
 
   const handleToolSelect = (index) => {
     setSelectedToolIndex(index);
+    // Stations start fresh in horizontal orientation every time.
+    if (TOOLS[index]?.type === 'station') {
+      setStationOrientation('horizontal');
+    }
   };
 
   const handleRotate = () => {
     if (selectedTool?.type === 'train') {
       // Toggle train direction
       setTrainDirection(d => d === 1 ? -1 : 1);
+    } else if (selectedTool?.type === 'station') {
+      // Stations: flip between horizontal and vertical only
+      setStationOrientation(o => (o === 'horizontal' ? 'vertical' : 'horizontal'));
     } else {
       setRotation((prev) => (prev + 90) % 360);
     }
@@ -216,6 +229,10 @@ function App() {
         trainDirection={trainDirection}
         frameLimit={frameLimit}
         vsync={vsync}
+        ambientEnabled={ambientEnabled}
+        soundsEnabled={soundsEnabled}
+        followTrainId={followTrainId}
+        stationOrientation={stationOrientation}
       />
       
       {/* Control Panel */}
@@ -243,6 +260,12 @@ function App() {
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
         onVsyncChange={setVsync}
+        ambientEnabled={ambientEnabled}
+        onAmbientChange={setAmbientEnabled}
+        soundsEnabled={soundsEnabled}
+        onSoundsChange={setSoundsEnabled}
+        followTrainId={followTrainId}
+        onFollowTrain={setFollowTrainId}
       />
       
       {/* Hotbar */}

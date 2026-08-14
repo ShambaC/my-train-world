@@ -6,10 +6,13 @@ import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } f
 /**
  * Station placement hook — two-click flow:
  * click 1 = start marker, click 2 = end marker (cursor cell).
- * The station axis follows the dominant direction of the two markers.
+ *
+ * Orientation is binary: 'horizontal' (station extends along X) or
+ * 'vertical' (along Z), toggled by the R key. The station extends on
+ * either side of the start marker — the side the cursor sits on.
  * Validates flat same-height ground, no holes, no water, no overlap.
  */
-export function useStationPlacement(terrainRef, stationManager, rotation, terrainData) {
+export function useStationPlacement(terrainRef, stationManager, orientation, terrainData) {
   const { camera, gl } = useThree();
   const [ghost, setGhost] = useState(null);
   const [stationStart, setStationStart] = useState(null);
@@ -25,13 +28,6 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     x: Math.round(p.x / 0.5 + length / 2 - 0.5),
     z: Math.round(p.z / 0.5 + breadth / 2 - 0.5),
   }), [length, breadth]);
-
-  // Axis from the marker delta — dominant direction, snapped to 4 directions.
-  // lengthCells counts cells between the markers (end cell excluded).
-  const axisFromDelta = useCallback((dx, dz) => {
-    if (Math.abs(dx) >= Math.abs(dz)) return { x: dx >= 0 ? 1 : -1, z: 0, lengthCells: Math.abs(dx) };
-    return { x: 0, z: dz >= 0 ? 1 : -1, lengthCells: Math.abs(dz) };
-  }, []);
 
   const validate = useCallback((start, lengthCells, dir) => {
     if (!heightMap) return { ok: false, reason: 'no terrain' };
@@ -78,6 +74,36 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     y: h * 0.5 + 0.25,
     z: (cell.z - breadth / 2 + 0.5) * 0.5,
   }), [length, breadth]);
+
+  /**
+   * The world axis (X or Z) that appears horizontal on the current screen,
+   * derived from the camera's right basis vector projected onto the XZ
+   * plane. This makes the 'horizontal'/'vertical' labels camera-relative:
+   * 'horizontal' always extends left-right on screen, 'vertical' up-down,
+   * no matter how the camera is rotated.
+   */
+  const screenAxisFor = useCallback((cam) => {
+    const m = cam.matrixWorld.elements;
+    const rx = m[0]; // camera right, world x
+    const rz = m[8]; // camera right, world z
+    return Math.abs(rx) >= Math.abs(rz) ? 'X' : 'Z';
+  }, []);
+
+  /**
+   * Extension from the cursor delta for the current orientation:
+   * horizontal → along the screen-horizontal world axis (extend on either
+   * side of the marker), vertical → along the other axis.
+   */
+  const extensionFor = useCallback((dx, dz) => {
+    const screenIsX = screenAxisFor(camera) === 'X';
+    const useX = (orientation === 'horizontal') === screenIsX;
+    const axial = useX ? dx : dz;
+    const lengthCells = Math.abs(axial);
+    const dir = useX
+      ? { x: axial >= 0 ? 1 : -1, z: 0 }
+      : { x: 0, z: axial >= 0 ? 1 : -1 };
+    return { dir, lengthCells };
+  }, [orientation, camera, screenAxisFor]);
 
   const computeGhost = useCallback((event) => {
     if (!terrainRef.current || !heightMap) {
@@ -127,33 +153,37 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
       return;
     }
 
-    // End marker: follows the cursor cell; axis snaps to the dominant direction
+    // End marker: the station extends along the orientation axis on the
+    // side of the marker the cursor sits on. The ghost always shows the
+    // snapped slab + end marker, even at length 0.
     const dx = cell.x - stationStart.cell.x;
     const dz = cell.z - stationStart.cell.z;
-    const { x: dirX, z: dirZ, lengthCells } = axisFromDelta(dx, dz);
-    const dir = { x: dirX, z: dirZ };
+    const { dir, lengthCells } = extensionFor(dx, dz);
+    const endCell = {
+      x: stationStart.cell.x + dir.x * lengthCells,
+      z: stationStart.cell.z + dir.z * lengthCells,
+    };
     const result = validate(stationStart, lengthCells, dir);
 
     setGhost({
       phase: 'end',
       dir,
       lengthCells,
-      endCell: cell,
+      endCell,
       startWorld: stationStart.world,
-      endWorld: cellToWorld(cell, height),
+      endWorld: cellToWorld(endCell, stationStart.height),
       height: stationStart.height,
       valid: result.ok && lengthCells > 0,
       reason: result.reason,
     });
-  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, worldToCell, cellToWorld, axisFromDelta, validate]);
-
-  // Recompute ghost when rotation changes
+  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, orientation, worldToCell, cellToWorld, extensionFor, validate]);
+  // Recompute ghost when the orientation toggles
   useEffect(() => {
     if (!stationStart) return;
     if (lastMousePos.current.x !== undefined) {
       computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
     }
-  }, [rotation, stationStart, computeGhost]);
+  }, [orientation, stationStart, computeGhost]);
 
   const handleClick = useCallback((event) => {
     if (!terrainRef.current || !heightMap) return null;
@@ -182,11 +212,15 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
       return null;
     }
 
-    // End marker — build the station between the two markers
+    // End marker — build the station along the orientation axis on the
+    // side of the marker the cursor sits on.
     const dx = cell.x - stationStart.cell.x;
     const dz = cell.z - stationStart.cell.z;
-    const { x: dirX, z: dirZ, lengthCells } = axisFromDelta(dx, dz);
-    const dir = { x: dirX, z: dirZ };
+    const { dir, lengthCells } = extensionFor(dx, dz);
+    const endCell = {
+      x: stationStart.cell.x + dir.x * lengthCells,
+      z: stationStart.cell.z + dir.z * lengthCells,
+    };
 
     // Clicking near the start marker cancels placement
     if (lengthCells === 0) {
@@ -200,11 +234,6 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
       // Keep the start marker so the user can retry — no silent reset
       return null;
     }
-
-    const endCell = {
-      x: stationStart.cell.x + dir.x * lengthCells,
-      z: stationStart.cell.z + dir.z * lengthCells,
-    };
 
     const { station, group } = buildStation({
       startCell: stationStart.cell,
@@ -221,7 +250,7 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
     setStationStart(null);
     setGhost(null);
     return saved;
-  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, worldToCell, cellToWorld, axisFromDelta, validate, stationManager]);
+  }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, orientation, worldToCell, cellToWorld, extensionFor, validate, stationManager]);
 
   const reset = useCallback(() => {
     setStationStart(null);
@@ -230,4 +259,3 @@ export function useStationPlacement(terrainRef, stationManager, rotation, terrai
 
   return { ghost, stationStart, handleClick, computeGhost, reset };
 }
-

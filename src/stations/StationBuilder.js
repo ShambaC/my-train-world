@@ -18,7 +18,8 @@ const DECK_COLOR = 0x9a9a9a;
 const EDGE_COLOR = 0x929292; // brighter platform edges for readability
 
 // Shared practical-light materials (additive, toneMapped off — cheap glow
-// that reads as a lit lamp/window without dynamic lights).
+// that reads as a lit lamp/window without dynamic lights). Tagged nightGlow
+// so StationRenderer fades them to near-zero in daylight.
 const LAMP_GLOW_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
   transparent: true,
@@ -27,6 +28,7 @@ const LAMP_GLOW_MAT = new THREE.MeshBasicMaterial({
   depthWrite: false,
   toneMapped: false,
 });
+LAMP_GLOW_MAT.userData = { nightGlow: true, baseOpacity: 0.95 };
 
 const LAMP_HALO_MAT = new THREE.MeshBasicMaterial({
   color: 0xffb86a,
@@ -36,6 +38,7 @@ const LAMP_HALO_MAT = new THREE.MeshBasicMaterial({
   depthWrite: false,
   toneMapped: false,
 });
+LAMP_HALO_MAT.userData = { nightGlow: true, baseOpacity: 0.4 };
 
 const WINDOW_GLOW_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
@@ -46,6 +49,7 @@ const WINDOW_GLOW_MAT = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide,
   toneMapped: false,
 });
+WINDOW_GLOW_MAT.userData = { nightGlow: true, baseOpacity: 0.65 };
 
 const makeLampGlow = (radius = 0.05) => {
   const group = new THREE.Group();
@@ -59,28 +63,32 @@ const makeLampGlow = (radius = 0.05) => {
 
 const makeSignalLamp = (color) => {
   const group = new THREE.Group();
+  const coreMat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 1.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  coreMat.userData = { nightGlow: true, baseOpacity: 1.0 };
   const core = new THREE.Mesh(
     new THREE.SphereGeometry(0.04, 8, 8),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 1.0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-    })
+    coreMat
   );
   core.renderOrder = 2;
+  const haloMat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.32,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  haloMat.userData = { nightGlow: true, baseOpacity: 0.32 };
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(0.085, 8, 8),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.32,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-    })
+    haloMat
   );
   halo.renderOrder = 2;
   group.add(core, halo);
@@ -236,10 +244,12 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   building.rotation.y = -Math.PI / 2; // face the track side
   addWindowGlows(building);
 
-  // Chimney smoke puffs above the station building
+  // Chimney smoke puffs above the station building. Local coords: x = width
+  // (centered), y = up, z = platform axis — the chimney sits on the building
+  // roof, not at the platform end.
   const buildingBounds = ModelLibrary.getEntry('station-building').bounds;
   const chimney = new PuffSystem({
-    position: [buildingAxial, platformTop + buildingBounds.max.y * 0.5, 0],
+    position: [0, platformTop + buildingBounds.max.y * 0.9, buildingAxial],
     count: 12,
     size: 0.07,
     rise: 0.3,

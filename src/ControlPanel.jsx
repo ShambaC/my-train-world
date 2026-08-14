@@ -26,7 +26,13 @@ export default function ControlPanel({
   frameLimit,
   onFrameLimitChange,
   vsync,
-  onVsyncChange
+  onVsyncChange,
+  ambientEnabled,
+  onAmbientChange,
+  soundsEnabled,
+  onSoundsChange,
+  followTrainId,
+  onFollowTrain
 }) {
   const [length, setLength] = useState(100);
   const [breadth, setBreadth] = useState(100);
@@ -231,6 +237,10 @@ export default function ControlPanel({
               onTiltShiftChange={onTiltShiftChange}
               celShadingEnabled={celShadingEnabled}
               onCelShadingChange={onCelShadingChange}
+              ambientEnabled={ambientEnabled}
+              onAmbientChange={onAmbientChange}
+              soundsEnabled={soundsEnabled}
+              onSoundsChange={onSoundsChange}
             />
           </div>
 
@@ -246,7 +256,11 @@ export default function ControlPanel({
 
           {/* Train Control Section */}
           <div className="pt-4 border-t border-gray-700">
-            <TrainControl trainManager={trainManager} />
+            <TrainControl
+              trainManager={trainManager}
+              followTrainId={followTrainId}
+              onFollowTrain={onFollowTrain}
+            />
           </div>
 
           {/* Track System Info */}

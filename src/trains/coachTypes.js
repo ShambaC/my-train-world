@@ -21,6 +21,21 @@ export const COACH_LENGTH = {
   'viewdeck-coach': 1.12,
 };
 
+// Visual presentation roles — which ambient cargo type boards each coach.
+// Hooks for the activity system only; every coach still attaches to every
+// engine and travels everywhere regardless of role.
+export const COACH_ROLE = {
+  'passenger-coach': 'passenger',
+  'mail-coach': 'passenger',
+  'viewdeck-coach': 'passenger',
+  'goods-coach': 'crate',
+  'freight-van': 'crate',
+  'coal-cart': 'coal',
+  'container-coach': 'container',
+  'container-flat-wagon': 'container',
+  'gas-coach': 'tanker',
+};
+
 // Engine-relative spacing (used for the placement ghost): engine half (0.5)
 // + coach half + 0.15 gap. Real per-pair spacing is computed in addCoach.
 export const COACH_SPACING = {

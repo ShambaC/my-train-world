@@ -71,17 +71,24 @@ export default function TrainRenderer({ trainManager, lighting }) {
   // Animate trains imperatively — no React state involved.
   useFrame((state, delta) => {
     trainManager.update(delta);
+    const t = state.clock.elapsedTime;
 
     for (const train of trainManager.getAllTrains()) {
       const node = trainNodesRef.current.get(train.id);
       if (node) {
-        node.position.set(train.position.x, train.position.y + 0.1, train.position.z);
+        // Small idle motion while parked (stopped at a station or inactive)
+        const parked = !train.active || !!train.dwell;
+        const bobY = parked ? Math.sin(t * 2.2 + train.id.length) * 0.012 : 0;
+        node.position.set(train.position.x, train.position.y + 0.1 + bobY, train.position.z);
         node.rotation.y = train.rotation;
+        node.rotation.z = train.bank || 0;
       }
       for (const coach of train.coaches || []) {
         const cnode = coachNodesRef.current.get(coach.id);
         if (cnode && coach.position) {
-          cnode.position.set(coach.position.x, coach.position.y + 0.1, coach.position.z);
+          const parked = !train.active || !!train.dwell;
+          const bobY = parked ? Math.sin(t * 2.2 + coach.id.length) * 0.01 : 0;
+          cnode.position.set(coach.position.x, coach.position.y + 0.1 + bobY, coach.position.z);
           cnode.rotation.y = coach.rotation;
         }
       }
@@ -103,6 +110,14 @@ export default function TrainRenderer({ trainManager, lighting }) {
         if (!mat) return;
         if (kind === 'glow') mat.opacity = 0.04 + nightness * 0.31;
         else mat.opacity = 0.02 + nightness * 0.18;
+      });
+    }
+    // Coach window warmth at night (materials flagged windowGlow)
+    const winGlow = 0.12 + nightness * 0.8;
+    for (const node of coachNodesRef.current.values()) {
+      node.traverse((child) => {
+        const mat = child.material;
+        if (mat?.userData?.windowGlow) mat.emissiveIntensity = winGlow;
       });
     }
   });

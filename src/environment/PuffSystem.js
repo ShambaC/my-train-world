@@ -54,8 +54,11 @@ export class PuffSystem {
       const p = this.particles[i];
       p.age += dt;
       if (p.age > this.life || !active) {
+        // Full respawn at the emitter origin — the base of the plume must
+        // stay anchored or it creeps up/away with every cycle.
         p.age = 0;
         p.x = (Math.random() - 0.5) * this.jitter;
+        p.y = 0;
         p.z = (Math.random() - 0.5) * this.jitter;
         p.vy = this.rise * (0.8 + Math.random() * 0.4);
       }

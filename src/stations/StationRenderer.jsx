@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
-import { STATION_WIDTH_WORLD, easeOutBack } from './StationBuilder';
+import { buildStation, STATION_WIDTH_WORLD, easeOutBack } from './StationBuilder';
 
 const GHOST_GREEN = 0x00ff00;
 const GHOST_RED = 0xff0000;
@@ -28,17 +28,20 @@ export default function StationRenderer({
   stationManager,
   terrainRef,
   selectedTool,
-  rotation,
+  orientation,
   terrainData,
   stationsVersion,
   onStationsChange,
+  onStationPlaced,
+  lighting,
 }) {
   const [stations, setStations] = useState([]);
   const mouseDownPosRef = useRef(null);
   const ghostMeshesRef = useRef([]);
+  const camera = useThree((s) => s.camera);
 
-  const { ghost, handleClick, computeGhost, reset } = useStationPlacement(
-    terrainRef, stationManager, rotation, terrainData
+  const { ghost, stationStart, handleClick, computeGhost, reset } = useStationPlacement(
+    terrainRef, stationManager, orientation, terrainData
   );
 
   // Latest callbacks via refs — the canvas listeners attach ONCE so that
@@ -48,16 +51,18 @@ export default function StationRenderer({
   const handleClickRef = useRef(handleClick);
   const computeGhostRef = useRef(computeGhost);
   const onStationsChangeRef = useRef(onStationsChange);
+  const onStationPlacedRef = useRef(onStationPlaced);
   selectedToolRef.current = selectedTool;
   handleClickRef.current = handleClick;
   computeGhostRef.current = computeGhost;
   onStationsChangeRef.current = onStationsChange;
+  onStationPlacedRef.current = onStationPlaced;
 
   useEffect(() => {
     if (import.meta.env.DEV) {
-      window.__mtw = { ...window.__mtw, stationGhost: { ghost, handleClick, computeGhost } };
+      window.__mtw = { ...window.__mtw, stationGhost: { ghost, handleClick, computeGhost, stationStart }, buildStation, stationOrientation: orientation };
     }
-  }, [ghost, handleClick, computeGhost]);
+  }, [ghost, handleClick, computeGhost, stationStart, orientation]);
 
   // Sync station list with the manager
   useEffect(() => {
@@ -92,7 +97,10 @@ export default function StationRenderer({
         if (dx > 5 || dy > 5) return;
       }
       const station = handleClickRef.current(e);
-      if (station) onStationsChangeRef.current?.();
+      if (station) {
+        onStationsChangeRef.current?.();
+        onStationPlacedRef.current?.(station, e.clientX, e.clientY);
+      }
     };
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);
@@ -114,8 +122,25 @@ export default function StationRenderer({
 
     if (!ghost || !terrainData) return null;
 
+    // Marker = narrow platform lying ALONG the station axis (long side =
+    // extension direction). Start phase shows the orientation — aligned to
+    // the screen-horizontal world axis so the label always matches what
+    // the user sees. End phase snaps to the actual extension.
+    const makeAxisMarker = (color) => {
+      const marker = makeGhostBox(0.5, 0.15, 1.0, color);
+      if (ghost.phase === 'end') {
+        marker.rotation.y = Math.atan2(ghost.dir.x, ghost.dir.z);
+      } else {
+        const m = camera.matrixWorld.elements;
+        const screenIsX = Math.abs(m[0]) >= Math.abs(m[8]);
+        const longSideX = (orientation === 'horizontal') === screenIsX;
+        marker.rotation.y = (longSideX ? Math.PI / 2 : 0) + Math.PI / 2;
+      }
+      return marker;
+    };
+
     if (ghost.phase === 'start') {
-      const marker = makeGhostBox(STATION_WIDTH_WORLD, 0.15, 0.5, GHOST_GREEN);
+      const marker = makeAxisMarker(GHOST_GREEN);
       marker.position.set(ghost.world.x, ghost.world.y + 0.3, ghost.world.z);
       ghostMeshesRef.current.push(marker);
       return ghostMeshesRef.current;
@@ -130,7 +155,7 @@ export default function StationRenderer({
     slab.rotation.y = Math.atan2(ghost.dir.x, ghost.dir.z);
     ghostMeshesRef.current.push(slab);
 
-    const startMarker = makeGhostBox(STATION_WIDTH_WORLD, 0.15, 0.5, color);
+    const startMarker = makeAxisMarker(color);
     startMarker.position.set(ghost.startWorld.x, ghost.height * 0.5 + 0.25 + 0.3, ghost.startWorld.z);
     ghostMeshesRef.current.push(startMarker);
 
@@ -140,10 +165,11 @@ export default function StationRenderer({
     ghostMeshesRef.current.push(endMarker);
 
     return ghostMeshesRef.current;
-  }, [ghost, terrainData]);
+  }, [ghost, terrainData, orientation, camera]);
 
-  // Wave pop-out animation + chimney smoke
+  // Wave pop-out animation + chimney smoke + day/night lamp scaling
   useFrame((state, delta) => {
+    const nightness = lighting ? lighting.nightness : 0.6;
     for (const station of stations) {
       if (!station.group) continue;
       if (station.smoke) station.smoke.update(delta, true);
@@ -160,6 +186,16 @@ export default function StationRenderer({
         piece.obj.position.y = piece.fromY + (piece.toY - piece.fromY) * e;
         piece.obj.scale.setScalar(Math.max(e, 0.001));
       }
+      // All station lamps/glows fade to near-zero during the day
+      station.group.traverse((child) => {
+        if (child.isPointLight) {
+          child.intensity = 4.5 * (0.04 + nightness * 0.96);
+        }
+        const mat = child.material;
+        if (mat?.userData?.nightGlow) {
+          mat.opacity = mat.userData.baseOpacity * (0.03 + nightness * 0.97);
+        }
+      });
     }
   });
 

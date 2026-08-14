@@ -17,7 +17,11 @@ import Effects from './postprocessing/Effects';
 import ScatterProps from './environment/ScatterProps';
 import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
+import StationRoleMenu from './ui/StationRoleMenu';
 import RenderScheduler from './render/RenderScheduler';
+import { ActivityManager } from './ambient/ActivityManager';
+import ActivityRenderer from './ambient/ActivityRenderer';
+import { trainAudio } from './audio/trainAudio';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -45,6 +49,11 @@ function Scene({
   onCoachPick,
   frameLimit,
   vsync,
+  ambientEnabled,
+  onStationPlaced,
+  activityManager,
+  followTrainId,
+  stationOrientation,
 }) {
   const terrainRef = useRef();
   const orbitRef = useRef(null);
@@ -112,10 +121,30 @@ function Scene({
     lighting.update(delta);
     advanceWind(delta);
 
+    // Train follow camera: chase the engine, OrbitControls disabled while
+    // active so user input cannot fight the follow motion.
+    const controls = orbitRef.current;
+    const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
+    if (controls) controls.enabled = !followTrain;
+    if (followTrain) {
+      const hx = Math.sin(followTrain.rotation);
+      const hz = Math.cos(followTrain.rotation);
+      const target = new THREE.Vector3(followTrain.position.x, followTrain.position.y, followTrain.position.z);
+      const desired = new THREE.Vector3(
+        target.x - hx * 2.4,
+        target.y + 1.1,
+        target.z - hz * 2.4
+      );
+      const k = 1 - Math.exp(-3.5 * Math.min(delta, 0.1));
+      camera.position.lerp(desired, k);
+      controls.target.lerp(target, k);
+      controls.update();
+      return;
+    }
+
     // OrbitControls scales wheel/pan motion with camera distance. That makes
     // close construction work feel almost frozen. Compensate only at close
     // range; normal overview sensitivity stays unchanged.
-    const controls = orbitRef.current;
     if (controls) {
       const distance = camera.position.distanceTo(controls.target);
       const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
@@ -254,10 +283,22 @@ function Scene({
           stationManager={stationManager}
           terrainRef={terrainRef}
           selectedTool={selectedTool}
-          rotation={rotation}
+          orientation={stationOrientation}
           terrainData={terrain?.userData}
           stationsVersion={stationsVersion}
           onStationsChange={onStationsChange}
+          onStationPlaced={onStationPlaced}
+          lighting={lighting}
+        />
+      )}
+
+      {/* Ambient passenger/cargo activity */}
+      {terrain && ambientEnabled && (
+        <ActivityRenderer
+          activityManager={activityManager}
+          stationManager={stationManager}
+          trainManager={trainManager}
+          enabled={ambientEnabled}
         />
       )}
 
@@ -318,6 +359,10 @@ export default function GameScene({
   trainDirection = 1,
   frameLimit = 120,
   vsync = true,
+  ambientEnabled = true,
+  soundsEnabled = true,
+  followTrainId = null,
+  stationOrientation = 'horizontal',
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -330,6 +375,21 @@ export default function GameScene({
   const [stationsVersion, setStationsVersion] = useState(0);
   const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
+  const activityManagerRef = useRef(null);
+  if (!activityManagerRef.current) {
+    activityManagerRef.current = new ActivityManager(stationManager, trainManager);
+  }
+
+  // Ambient sound master switch
+  useEffect(() => {
+    trainAudio.setEnabled(soundsEnabled);
+  }, [soundsEnabled]);
+
+  // Re-sync ambient targets when stations change (added/removed/role)
+  useEffect(() => {
+    activityManagerRef.current.sync();
+  }, [stationsVersion]);
+
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
     stationManager?.rebuildBindings(trackManager);
@@ -340,6 +400,22 @@ export default function GameScene({
     setStationsVersion((v) => v + 1);
     setStationCount(stationManager?.getAllStations().length || 0);
     stationManager?.rebuildBindings(trackManager);
+  };
+
+  // Station role picker (radial menu) — opened right after a station is
+  // placed. Roles are pure presentation; dismissing keeps the default.
+  const [roleMenu, setRoleMenu] = useState(null);
+
+  const handleStationPlaced = (station, x, y) => {
+    setRoleMenu({ stationId: station.id, x, y });
+  };
+
+  const handleRoleSelect = (role) => {
+    if (roleMenu) {
+      stationManager?.setRole(roleMenu.stationId, role);
+      handleStationsChange();
+    }
+    setRoleMenu(null);
   };
 
   // Coach picker (radial menu) — opened when clicking an engine with the
@@ -363,10 +439,15 @@ export default function GameScene({
     setStationCount(stationManager?.getAllStations().length || 0);
   }, [terrainSize, stationManager]);
 
-  // Dev-only test hook
+  // Dev-only test hook — Object.assign so per-render component hooks
+  // (e.g. StationRenderer's stationGhost) are never wiped.
   useEffect(() => {
     if (import.meta.env.DEV) {
-      window.__mtw = { trackManager, stationManager, trainManager };
+      Object.assign(window.__mtw || (window.__mtw = {}), {
+        trackManager, stationManager, trainManager,
+        activityManager: activityManagerRef.current,
+        handleStationsChange,
+      });
     }
   }, [trackManager, stationManager, trainManager]);
   
@@ -415,6 +496,11 @@ export default function GameScene({
           onCoachPick={handleCoachPick}
           frameLimit={frameLimit}
           vsync={vsync}
+          ambientEnabled={ambientEnabled}
+          onStationPlaced={handleStationPlaced}
+          activityManager={activityManagerRef.current}
+          followTrainId={followTrainId}
+          stationOrientation={stationOrientation}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (
@@ -430,6 +516,16 @@ export default function GameScene({
           y={coachMenu.y}
           onSelect={handleCoachSelect}
           onClose={() => setCoachMenu(null)}
+        />
+      )}
+
+      {/* Station role picker (after placement) */}
+      {roleMenu && (
+        <StationRoleMenu
+          x={roleMenu.x}
+          y={roleMenu.y}
+          onSelect={handleRoleSelect}
+          onClose={() => setRoleMenu(null)}
         />
       )}
       
@@ -457,7 +553,11 @@ export default function GameScene({
           {selectedTool && (
             <div className="pt-2 border-t border-gray-600">
               <div>Tool: {selectedTool.name}</div>
-              <div>Rotation: {rotation}°</div>
+              {selectedTool.type === 'station' ? (
+                <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div>
+              ) : (
+                <div>Rotation: {rotation}°</div>
+              )}
               {heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}
             </div>
           )}

@@ -1,6 +1,8 @@
 /**
  * Station Manager — stores station data and binds adjacent tracks for stops.
  */
+import { DEFAULT_ROLE } from './stationRoles';
+
 export class StationManager {
   constructor() {
     this.stations = new Map();
@@ -10,8 +12,15 @@ export class StationManager {
 
   addStation(data) {
     const id = `station_${this.nextId++}`;
-    const station = { id, ...data };
+    const station = { id, role: DEFAULT_ROLE, ...data };
     this.stations.set(id, station);
+    return station;
+  }
+
+  setRole(id, role) {
+    const station = this.stations.get(id);
+    if (!station) return null;
+    station.role = role;
     return station;
   }
 

@@ -35,6 +35,7 @@ export function createPassengerCoach() {
     emissive: 0xffa54d,
     emissiveIntensity: 0.6,
   });
+  glassMat.userData = { windowGlow: true }; // nightness-scaled by TrainRenderer
   const railingMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.railingDark, flatShading: true });
   const brassMat = new THREE.MeshLambertMaterial({ color: COACH_COLORS.accentBrass, flatShading: true });
 

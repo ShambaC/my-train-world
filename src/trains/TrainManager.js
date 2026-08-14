@@ -25,6 +25,16 @@ export class TrainManager {
     this.time = 0;
     this.STOP_DURATION = 5; // seconds trains dwell at stations
     this.STOP_COOLDOWN = 8; // seconds after departing before a re-stop is allowed
+    this.globalSpeed = 0.5; // user-controlled speed target for all trains
+  }
+
+  /**
+   * User speed setting — applied to every train. Speed itself is eased
+   * toward this target per frame (smooth acceleration/deceleration).
+   */
+  setGlobalSpeed(v) {
+    this.globalSpeed = v;
+    for (const train of this.trains.values()) train.speedMax = v;
   }
 
   setStationManager(stationManager) {
@@ -53,10 +63,12 @@ export class TrainManager {
       id,
       currentTrackId: startTrackId,
       progress: t,
-      speed: 0.5,
+      speed: 0,          // eased toward speedMax each frame (smooth motion)
+      speedMax: this.globalSpeed,
       heading,
       position: { ...startTrack.position },
       rotation: Math.atan2(heading.x, heading.z),
+      bank: 0,           // curve roll, eased by the renderer-facing update
       active: false,
       dwell: null,      // { stationId, until } while stopped at a station
       cooldowns: new Map(), // stationId -> departure time (prevents re-stop)
@@ -93,7 +105,11 @@ export class TrainManager {
 
       // Station dwell: hold position until the stop time is over
       if (train.dwell) {
-        if (this.time < train.dwell.until) continue;
+        if (this.time < train.dwell.until) {
+          train.speed += (0 - train.speed) * (1 - Math.exp(-6 * deltaTime));
+          this.updateCoaches(train);
+          continue;
+        }
         train.cooldowns.set(train.dwell.stationId, this.time);
         train.dwell = null;
       }
@@ -104,6 +120,38 @@ export class TrainManager {
         currentTrack.rotation
       );
       const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
+
+      // Speed target: ease down near a station far end and near track ends
+      // (dead ends / reversals), otherwise the user-set global speed.
+      let speedTarget = train.speedMax;
+      const station = this.stationManager?.getStationForTrack(currentTrack.id);
+      if (station) {
+        const r = station.worldRect;
+        const inside =
+          train.position.x >= r.minX && train.position.x <= r.maxX &&
+          train.position.z >= r.minZ && train.position.z <= r.maxZ &&
+          Math.abs(train.position.y - station.groundY) <= 0.5;
+        if (inside) {
+          const axial =
+            (train.position.x - station.startWorld.x) * station.dir.x +
+            (train.position.z - station.startWorld.z) * station.dir.z;
+          const platformLen = station.lengthCells * 0.5;
+          const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
+          const distToStop = towardEnd > 0 ? platformLen - 0.4 - axial : axial - 0.4;
+          if (distToStop > 0 && distToStop < 1.0) {
+            speedTarget = Math.min(speedTarget, Math.max(0.03, distToStop * 0.6));
+          }
+        }
+      }
+      const trackLen = this.trackLength(currentTrack);
+      const distToBoundary = sign > 0 ? (1 - train.progress) * trackLen : train.progress * trackLen;
+      // Ease down ONLY at true dead ends — interior track joins must not
+      // slow the train (it would crawl across every segment boundary).
+      const endId = sign > 0 ? currentTrack.connections.front : currentTrack.connections.back;
+      if (!endId && distToBoundary < 0.12) {
+        speedTarget = Math.min(speedTarget, Math.max(0.02, distToBoundary * 1.2));
+      }
+      train.speed += (speedTarget - train.speed) * (1 - Math.exp(-2.0 * deltaTime));
 
       train.progress += train.speed * deltaTime * sign;
 
@@ -123,6 +171,17 @@ export class TrainManager {
       const newSign = (newTangent.x * train.heading.x + newTangent.z * train.heading.z) >= 0 ? 1 : -1;
       train.heading = { x: newTangent.x * newSign, z: newTangent.z * newSign };
 
+      // Curve banking — presentation only, eased so it never snaps.
+      let bankTarget = 0;
+      if (currentTrack.type === 'curved') {
+        const tA = tangentOnTrack('curved', train.progress);
+        const tB = tangentOnTrack('curved', Math.min(1, train.progress + 0.02));
+        const cross = tA.x * tB.z - tA.z * tB.x;
+        const speedF = Math.min(1, train.speed / Math.max(0.01, train.speedMax));
+        bankTarget = -Math.sign(cross) * 0.055 * speedF;
+      }
+      train.bank += (bankTarget - train.bank) * (1 - Math.exp(-5 * deltaTime));
+
       this.updateTrainPosition(train, currentTrack);
 
       // Coaches trail the engine along the track path — ALWAYS, independent
@@ -133,7 +192,6 @@ export class TrainManager {
       // Station stop detection: only on tracks bound to a station. The train
       // stops at the FAR end of the platform — the end opposite the one it
       // enters from — never at the building/center.
-      const station = this.stationManager?.getStationForTrack(currentTrack.id);
       if (!station) continue;
 
       const r = station.worldRect;

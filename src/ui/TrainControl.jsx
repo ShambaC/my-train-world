@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Train Control Panel - Manage individual trains
+ * Train Control Panel - Manage individual trains + global speed setting
  */
-export default function TrainControl({ trainManager }) {
+export default function TrainControl({ trainManager, followTrainId = null, onFollowTrain }) {
   const [trains, setTrains] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [speed, setSpeed] = useState(trainManager.globalSpeed ?? 0.5);
 
   // Update trains list periodically
   useEffect(() => {
@@ -30,14 +31,60 @@ export default function TrainControl({ trainManager }) {
 
   if (trains.length === 0) {
     return (
-      <div className="text-xs text-gray-400 py-2">
-        No trains on the map. Use the train tool (key 3) to place trains on tracks.
+      <div>
+        <div className="mb-3">
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            🐢 Train Speed: {speed.toFixed(2)} 🐇
+          </label>
+          <input
+            type="range"
+            min="0.1"
+            max="1.5"
+            step="0.05"
+            value={speed}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setSpeed(v);
+              trainManager.setGlobalSpeed(v);
+            }}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          />
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>Leisurely</span>
+            <span>Express</span>
+          </div>
+        </div>
+        <div className="text-xs text-gray-400 py-2">
+          No trains on the map. Use the train tool (key 3) to place trains on tracks.
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      <div className="mb-3">
+        <label className="block text-sm font-medium text-gray-300 mb-1">
+          🐢 Train Speed: {speed.toFixed(2)} 🐇
+        </label>
+        <input
+          type="range"
+          min="0.1"
+          max="1.5"
+          step="0.05"
+          value={speed}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setSpeed(v);
+            trainManager.setGlobalSpeed(v);
+          }}
+          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+        />
+        <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <span>Leisurely</span>
+          <span>Express</span>
+        </div>
+      </div>
       <div 
         className="flex items-center justify-between cursor-pointer hover:bg-gray-700 px-2 py-1 rounded transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -76,6 +123,19 @@ export default function TrainControl({ trainManager }) {
               </div>
               
               <div className="flex gap-1">
+                {/* Follow Camera Toggle */}
+                <button
+                  onClick={() => onFollowTrain && onFollowTrain(followTrainId === train.id ? null : train.id)}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    followTrainId === train.id
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                      : 'bg-gray-600 hover:bg-gray-500 text-white'
+                  }`}
+                  title={followTrainId === train.id ? 'Stop following train' : 'Follow train with camera'}
+                >
+                  {followTrainId === train.id ? '⏹' : '🎥'}
+                </button>
+
                 {/* Toggle Button */}
                 <button
                   onClick={() => handleToggle(train.id)}

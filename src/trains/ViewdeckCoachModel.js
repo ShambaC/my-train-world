@@ -32,6 +32,7 @@ export function createViewdeckCoach() {
     emissive: 0xffa54d,
     emissiveIntensity: 0.6,
   });
+  glassMat.userData = { windowGlow: true }; // nightness-scaled by TrainRenderer
   const railMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.railingDark, flatShading: true });
   const chassisMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.chassisDark, flatShading: true });
   const wheelMat = new THREE.MeshLambertMaterial({ color: VIEWDECK_COACH_COLORS.wheelDark, flatShading: true });
