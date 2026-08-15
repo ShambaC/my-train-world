@@ -31,7 +31,6 @@ const LINK_RANGE = 34;
 const MAX_LINKS = 24;
 const MAX_SPURS = 20;
 const SPUR_RANGE = 18;
-const LAMP_STEP = 6;
 
 // ── Road data ────────────────────────────────────────────────────────────
 
@@ -266,12 +265,12 @@ export function buildRoadNetwork(terrainData) {
     if (claimRoad(spur, 'dirt')) spurs++;
   }
 
-  // ── Lamps (occasional, on main roads) ──
+  // ── Lamps on every other road tile (main + branch, not dirt paths) ──
   const lamps = [];
   for (const road of roads) {
-    if (road.type !== 'main') continue;
+    if (road.type === 'dirt') continue;
     let side = 1;
-    for (let i = LAMP_STEP; i < road.cells.length - 1; i += LAMP_STEP) {
+    for (let i = 1; i < road.cells.length - 1; i += 2) {
       const [x, z] = road.cells[i];
       // Road direction at this cell → perpendicular offset for the lamp.
       const prev = road.cells[i - 1];
@@ -472,6 +471,26 @@ export function createRoadMeshes(layout) {
     return mesh;
   };
 
+  const addPlacedInstanced = (geo, mat, entries) => {
+    if (!entries.length) return null;
+    const mesh = new THREE.InstancedMesh(geo, mat, entries.length);
+    entries.forEach((e, i) => {
+      const quat = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, e.rotY || 0, 0)
+      );
+      matrix.compose(
+        new THREE.Vector3(e.x, e.y, e.z),
+        quat,
+        new THREE.Vector3(1, 1, 1)
+      );
+      mesh.setMatrixAt(i, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    Object.assign(mesh, MESH_FLAGS);
+    group.add(mesh);
+    return mesh;
+  };
+
   addInstanced(QUAD_GEO, SHOULDER_MAT, shoulderQuads);
   addInstanced(QUAD_GEO, ASPHALT_MAT, asphaltQuads);
   addInstanced(QUAD_GEO, DIRT_MAT, dirtQuads);
@@ -479,18 +498,18 @@ export function createRoadMeshes(layout) {
   // Lamps: pole + head + additive glow (faded by Roads.jsx with nightness)
   const lampPoles = layout.lamps.map((l) => ({ ...l }));
   const lampGlows = layout.lamps.map((l) => ({ ...l, y: l.y + 0.55 }));
-  addInstanced(POLE_GEO, POLE_MAT, lampPoles.map((l) => ({ ...l, y: l.y + 0.275 })));
-  addInstanced(LAMP_HEAD_GEO, LAMP_HEAD_MAT, lampGlows);
-  const glowCore = addInstanced(GLOW_CORE_GEO, GLOW_CORE_MAT, lampGlows);
-  const glowHalo = addInstanced(GLOW_HALO_GEO, GLOW_HALO_MAT, lampGlows);
+  addPlacedInstanced(POLE_GEO, POLE_MAT, lampPoles.map((l) => ({ ...l, y: l.y + 0.275 })));
+  addPlacedInstanced(LAMP_HEAD_GEO, LAMP_HEAD_MAT, lampGlows);
+  const glowCore = addPlacedInstanced(GLOW_CORE_GEO, GLOW_CORE_MAT, lampGlows);
+  const glowHalo = addPlacedInstanced(GLOW_HALO_GEO, GLOW_HALO_MAT, lampGlows);
   if (glowCore) glowCore.renderOrder = 2;
   if (glowHalo) glowHalo.renderOrder = 2;
 
   // Signs: post + board, rotated to face along the road
   const signPosts = layout.signs.map((s) => ({ ...s, y: s.y + 0.21 }));
   const signBoards = layout.signs.map((s) => ({ ...s, y: s.y + 0.44 }));
-  const postMesh = addInstanced(SIGN_POST_GEO, SIGN_POST_MAT, signPosts);
-  const boardMesh = addInstanced(SIGN_BOARD_GEO, SIGN_BOARD_MAT, signBoards);
+  const postMesh = addPlacedInstanced(SIGN_POST_GEO, SIGN_POST_MAT, signPosts);
+  const boardMesh = addPlacedInstanced(SIGN_BOARD_GEO, SIGN_BOARD_MAT, signBoards);
   if (postMesh) postMesh.castShadow = false;
   if (boardMesh) boardMesh.castShadow = false;
 
@@ -539,9 +558,35 @@ export class RoadManager {
   rebuildLayout() {
     this.layout = {
       roads: [...this.naturalLayout.roads, ...this.mergeUserRoads()],
-      lamps: this.naturalLayout.lamps,
+      lamps: [...this.naturalLayout.lamps, ...this.userLamps()],
       signs: this.naturalLayout.signs,
     };
+  }
+
+  /**
+   * Lamp posts on every other user road tile, alternating road sides.
+   */
+  userLamps() {
+    const lamps = [];
+    for (const road of this.mergeUserRoads()) {
+      let side = 1;
+      for (let i = 1; i < road.waypoints.length - 1; i += 2) {
+        const a = road.waypoints[i];
+        const b = road.waypoints[i + 1];
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const perpX = (-dz / len) * side;
+        const perpZ = (dx / len) * side;
+        lamps.push({
+          x: (a.x + b.x) / 2 + perpX * 0.55,
+          y: a.y,
+          z: (a.z + b.z) / 2 + perpZ * 0.55,
+        });
+        side = -side;
+      }
+    }
+    return lamps;
   }
 
   /** Merge contiguous collinear user tiles into one traffic/render path. */

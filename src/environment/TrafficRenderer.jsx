@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { atDistance } from './TrafficManager.js';
@@ -22,7 +22,34 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
   // ── Vehicle models (shared geometries/materials) ──────────────────────
   const wheelGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.02, 8);
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c, flatShading: true });
+  const HEADLAMP_GEO = new THREE.SphereGeometry(0.025, 6, 6);
+  const HEADLAMP_MAT = new THREE.MeshBasicMaterial({
+    color: 0xfff2c0,
+    transparent: true,
+    opacity: 0.1,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  HEADLAMP_MAT.userData = { nightGlow: true, baseOpacity: 0.85 };
+  const HEADLAMP_X = { car: 0.19, truck: 0.19, bus: 0.24, cart: 0.14, bike: 0.12 };
   const BODY_COLORS = [0xb82828, 0x2270b6, 0x2e7d32, 0xd35400, 0x8e44ad, 0x5d6d7e, 0xd6a63a, 0x7f8c8d, 0xe8e8e8, 0x4a4a5a];
+  // Fixed headlight pool — constant light count keeps shaders stable (no
+  // recompilation spikes). Assigned to nearest vehicles each frame.
+  const HEADLIGHT_COUNT = 4;
+  const HEADLIGHT_MAX = 625; // 25^2
+
+  const headlightPool = useMemo(() => {
+    const pool = [];
+    for (let i = 0; i < HEADLIGHT_COUNT; i++) {
+      const light = new THREE.SpotLight(0xfff2c0, 0, 12, 0.5, 0.4, 2);
+      const target = new THREE.Object3D();
+      target.position.set(2.5, 0.15, 0);
+      light.target = target;
+      pool.push({ light, target });
+    }
+    return pool;
+  }, []);
 
   const buildVehicle = (type) => {
     const g = new THREE.Group();
@@ -53,10 +80,10 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       addWheels(-0.13, 0.13, -0.07, 0.07);
     } else if (type === 'truck') {
       const cab = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.17), mat());
-      cab.position.set(0, 0.17, 0.1);
+      cab.position.set(0.1, 0.17, 0);
       g.add(cab);
       const cargo = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.17), mat());
-      cargo.position.set(0, 0.2, -0.08);
+      cargo.position.set(-0.08, 0.2, 0);
       g.add(cargo);
       addWheels(-0.15, 0.15, -0.13, 0.13);
     } else if (type === 'bus') {
@@ -83,6 +110,15 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         wheel.position.set(x, 0.055, 0);
         g.add(wheel);
       }
+    }
+
+    // Headlamps on the front (vehicles face +X), glow at night.
+    const hx = HEADLAMP_X[type] ?? 0.18;
+    for (const hz of [-0.06, 0.06]) {
+      const lamp = new THREE.Mesh(HEADLAMP_GEO, HEADLAMP_MAT);
+      lamp.position.set(hx, 0.15, hz);
+      lamp.userData.headlamp = true;
+      g.add(lamp);
     }
     return g;
   };
@@ -146,6 +182,8 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
 
     trafficManager.update(delta, state.camera.position, crossingManager);
     const t = state.clock.elapsedTime;
+    const nightness = lighting ? lighting.nightness : 0.6;
+    const headGlow = 0.04 + nightness * 0.8;
 
     for (const v of trafficManager.getVehicles()) {
       const node = poolRef.current.get(v.id);
@@ -161,11 +199,44 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         node.add(buildVehicle(v.type));
         node.userData.type = v.type;
       }
+      // Headlamp glow discs fade in at night.
+      node.traverse((child) => {
+        if (child.userData?.headlamp) child.material.opacity = headGlow;
+      });
       const pos = atDistance(v.path, v.s);
       node.position.set(pos.x, pos.y + 0.03, pos.z);
-      // Models are long along local X — align that with the road direction.
-      node.rotation.y = pos.yaw - Math.PI / 2;
+      // Models are long along local X — align with actual travel direction.
+      node.rotation.y = pos.yaw - Math.PI / 2 + (v.dir < 0 ? Math.PI : 0);
       node.visible = !v.frozen;
+    }
+
+    // Headlight pool: nearest unfrozen vehicles get real spotlights.
+    const cam = state.camera.position;
+    const nearest = [];
+    for (const v of trafficManager.getVehicles()) {
+      const node = poolRef.current.get(v.id);
+      if (!node || v.frozen) continue;
+      const dx = node.position.x - cam.x;
+      const dz = node.position.z - cam.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > HEADLIGHT_MAX) continue;
+      nearest.push({ v, node, d2 });
+      nearest.sort((a, b) => a.d2 - b.d2);
+      if (nearest.length > HEADLIGHT_COUNT) nearest.length = HEADLIGHT_COUNT;
+    }
+    for (let i = 0; i < headlightPool.length; i++) {
+      const { light, target } = headlightPool[i];
+      const hit = nearest[i];
+      if (hit) {
+        const pos = atDistance(hit.v.path, hit.v.s);
+        const fx = Math.sin(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
+        const fz = Math.cos(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
+        light.position.set(hit.node.position.x + fx * 0.35, hit.node.position.y + 0.15, hit.node.position.z + fz * 0.35);
+        target.position.set(hit.node.position.x + fx * 2.5, hit.node.position.y + 0.15, hit.node.position.z + fz * 2.5);
+        light.intensity = nightness * 6;
+      } else {
+        light.intensity = 0;
+      }
     }
 
     for (const w of trafficManager.getWalkers()) {
@@ -198,6 +269,12 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         const node = poolRef.current.get(w.id);
         return node ? <primitive key={w.id} object={node} /> : null;
       })}
+      {headlightPool.map((h, i) => (
+        <primitive key={`hl_${i}`} object={h.light} />
+      ))}
+      {headlightPool.map((h, i) => (
+        <primitive key={`hlt_${i}`} object={h.target} />
+      ))}
     </group>
   );
 }
