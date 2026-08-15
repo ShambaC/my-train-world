@@ -685,6 +685,7 @@ export function createPedestrian(type = 'conductor_blue') {
 
   root.userData.animNodes = animNodes;
   root.userData.pedestrianType = type;
+  root.scale.setScalar(0.6);
 
   return root;
 }
