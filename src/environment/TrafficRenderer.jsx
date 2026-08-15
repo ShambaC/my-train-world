@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { atDistance } from './TrafficManager.js';
 import { createPedestrian } from '../ambient/pedestrianModels.js';
+import { createVehicle } from './vehicleModels.js';
 
 /**
  * Traffic Renderer — pooled vehicles + pedestrians.
@@ -19,21 +20,6 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
   const [poolTick, setPoolTick] = useState(0);
   enabledRef.current = enabled;
 
-  // ── Vehicle models (shared geometries/materials) ──────────────────────
-  const wheelGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.02, 8);
-  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c, flatShading: true });
-  const HEADLAMP_GEO = new THREE.SphereGeometry(0.025, 6, 6);
-  const HEADLAMP_MAT = new THREE.MeshBasicMaterial({
-    color: 0xfff2c0,
-    transparent: true,
-    opacity: 0.1,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    toneMapped: false,
-  });
-  HEADLAMP_MAT.userData = { nightGlow: true, baseOpacity: 0.85 };
-  const HEADLAMP_X = { car: 0.19, truck: 0.19, bus: 0.24, cart: 0.14, bike: 0.12 };
-  const BODY_COLORS = [0xb82828, 0x2270b6, 0x2e7d32, 0xd35400, 0x8e44ad, 0x5d6d7e, 0xd6a63a, 0x7f8c8d, 0xe8e8e8, 0x4a4a5a];
   // Fixed headlight pool — constant light count keeps shaders stable (no
   // recompilation spikes). Assigned to nearest vehicles each frame.
   const HEADLIGHT_COUNT = 4;
@@ -50,78 +36,6 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
     }
     return pool;
   }, []);
-
-  const buildVehicle = (type) => {
-    const g = new THREE.Group();
-    const mat = () => new THREE.MeshLambertMaterial({
-      color: BODY_COLORS[Math.floor(Math.random() * BODY_COLORS.length)],
-      flatShading: true,
-    });
-    const darkMat = () => new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
-
-    const addWheels = (x1, x2, z1, z2) => {
-      for (const x of [x1, x2]) {
-        for (const z of [z1, z2]) {
-          const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-          wheel.rotation.x = Math.PI / 2; // axle along Z
-          wheel.position.set(x, 0.05, z);
-          g.add(wheel);
-        }
-      }
-    };
-
-    if (type === 'car') {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.17), mat());
-      body.position.y = 0.14;
-      g.add(body);
-      const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.11, 0.15), darkMat());
-      cabin.position.set(0, 0.245, -0.01);
-      g.add(cabin);
-      addWheels(-0.13, 0.13, -0.07, 0.07);
-    } else if (type === 'truck') {
-      const cab = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.17), mat());
-      cab.position.set(0.1, 0.17, 0);
-      g.add(cab);
-      const cargo = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.17), mat());
-      cargo.position.set(-0.08, 0.2, 0);
-      g.add(cargo);
-      addWheels(-0.15, 0.15, -0.13, 0.13);
-    } else if (type === 'bus') {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.18), mat());
-      body.position.y = 0.2;
-      g.add(body);
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.03, 0.19), darkMat());
-      stripe.position.y = 0.16;
-      g.add(stripe);
-      addWheels(-0.19, 0.19, -0.07, 0.07);
-    } else if (type === 'cart') {
-      const bed = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.16), mat());
-      bed.position.y = 0.16;
-      g.add(bed);
-      addWheels(-0.11, 0.11, -0.06, 0.06);
-    } else {
-      // bicycle — two wheels + frame, long axis along X
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.02), darkMat());
-      frame.position.y = 0.13;
-      g.add(frame);
-      for (const x of [-0.09, 0.09]) {
-        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.02, 8), wheelMat);
-        wheel.rotation.x = Math.PI / 2;
-        wheel.position.set(x, 0.055, 0);
-        g.add(wheel);
-      }
-    }
-
-    // Headlamps on the front (vehicles face +X), glow at night.
-    const hx = HEADLAMP_X[type] ?? 0.18;
-    for (const hz of [-0.06, 0.06]) {
-      const lamp = new THREE.Mesh(HEADLAMP_GEO, HEADLAMP_MAT);
-      lamp.position.set(hx, 0.15, hz);
-      lamp.userData.headlamp = true;
-      g.add(lamp);
-    }
-    return g;
-  };
 
   // ── Pool rebuild when the road layout changes ─────────────────────────
   // Version changes arrive outside React renders (user road add/remove), so
@@ -149,7 +63,8 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         const group = new THREE.Group();
         group.name = v.id;
         group.userData.type = v.type;
-        group.add(buildVehicle(v.type));
+        group.userData.variant = v.variant;
+        group.add(createVehicle(v.type, v.variant));
         pool.set(v.id, group);
       }
       for (const w of trafficManager.getWalkers()) {
@@ -190,16 +105,14 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
     for (const v of trafficManager.getVehicles()) {
       const node = poolRef.current.get(v.id);
       if (!node) continue;
-      // Respawned vehicles may have a new type — swap the model.
-      if (node.userData.type !== v.type) {
+      // Respawned vehicles may have a new type or variant — swap the model.
+      if (node.userData.type !== v.type || node.userData.variant !== v.variant) {
         for (const child of [...node.children]) {
-          child.traverse((m) => {
-            if (m.isMesh && m.material) m.material.dispose();
-          });
           node.remove(child);
         }
-        node.add(buildVehicle(v.type));
+        node.add(createVehicle(v.type, v.variant));
         node.userData.type = v.type;
+        node.userData.variant = v.variant;
       }
       // Headlamp glow discs fade in at night.
       node.traverse((child) => {
@@ -233,7 +146,8 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         const pos = atDistance(hit.v.path, hit.v.s);
         const fx = Math.sin(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
         const fz = Math.cos(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
-        light.position.set(hit.node.position.x + fx * 0.35, hit.node.position.y + 0.15, hit.node.position.z + fz * 0.35);
+        const hx = hit.node.children[0]?.userData?.headlampX || 0.19;
+        light.position.set(hit.node.position.x + fx * (hx + 0.1), hit.node.position.y + 0.15, hit.node.position.z + fz * (hx + 0.1));
         target.position.set(hit.node.position.x + fx * 2.5, hit.node.position.y + 0.15, hit.node.position.z + fz * 2.5);
         light.intensity = nightness * 6;
       } else {

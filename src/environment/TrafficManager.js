@@ -9,6 +9,7 @@
  */
 
 import { getRandomPedestrianType } from '../ambient/pedestrianModels.js';
+import { getRandomVehicleVariant } from './vehicleModels.js';
 
 const VEHICLE_MAX = 36;
 const WALKER_MAX = 44;
@@ -18,8 +19,10 @@ const SPEEDS = {
   car: [0.5, 0.85],
   truck: [0.38, 0.6],
   bus: [0.45, 0.68],
-  cart: [0.28, 0.42],
-  bike: [0.55, 0.8],
+  pickup: [0.48, 0.75],
+  cart: [0.32, 0.48],
+  scooter: [0.45, 0.7],
+  bike: [0.4, 0.6],
 };
 
 const randInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -27,10 +30,12 @@ const rand = (min, max) => min + Math.random() * (max - min);
 
 const vehicleType = () => {
   const roll = Math.random();
-  if (roll < 0.4) return 'car';
-  if (roll < 0.6) return 'truck';
-  if (roll < 0.78) return 'bus';
-  if (roll < 0.9) return 'cart';
+  if (roll < 0.35) return 'car';
+  if (roll < 0.50) return 'truck';
+  if (roll < 0.65) return 'bus';
+  if (roll < 0.78) return 'pickup';
+  if (roll < 0.88) return 'cart';
+  if (roll < 0.94) return 'scooter';
   return 'bike';
 };
 
@@ -136,10 +141,12 @@ export class TrafficManager {
       const count = Math.max(1, Math.min(3, Math.floor(roadLen / 5) + (Math.random() < 0.6 ? 1 : 0)));
       for (let i = 0; i < count && this.vehicles.length < VEHICLE_MAX; i++) {
         const type = vehicleType();
-        const sp = SPEEDS[type];
+        const variant = getRandomVehicleVariant(type);
+        const sp = SPEEDS[type] || SPEEDS.car;
         this.vehicles.push({
           id: `veh_${this.nextV++}`,
           type,
+          variant,
           roadId: road.id,
           path,
           s: Math.random() * roadLen,
@@ -270,7 +277,8 @@ export class TrafficManager {
         v.s = Math.random() < 0.5 ? 0 : v.path.total;
         v.dir = v.s === 0 ? 1 : -1;
         v.type = vehicleType();
-        const sp = SPEEDS[v.type];
+        v.variant = getRandomVehicleVariant(v.type);
+        const sp = SPEEDS[v.type] || SPEEDS.car;
         v.speed = rand(sp[0], sp[1]);
         continue;
       }
