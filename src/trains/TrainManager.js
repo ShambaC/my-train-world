@@ -84,6 +84,61 @@ export class TrainManager {
     this.trains.delete(id);
   }
 
+  /**
+   * Re-insert a train with its original id (undo/redo, save/load).
+   * Data is plain JSON-safe; cooldowns may arrive as {} (times are
+   * meaningless across reloads and are dropped on restore).
+   */
+  restoreTrain(data) {
+    const train = {
+      ...data,
+      heading: { ...data.heading },
+      position: { ...data.position },
+      cooldowns: data.cooldowns instanceof Map ? data.cooldowns : new Map(Object.entries(data.cooldowns || {})),
+      coaches: (data.coaches || []).map((c) => ({ ...c })),
+    };
+    this.trains.set(train.id, train);
+    const num = parseInt(train.id.split('_')[1], 10);
+    if (!Number.isNaN(num) && num >= this.nextId) this.nextId = num + 1;
+    this.updateTrainPosition(train, this.trackManager.tracks.get(train.currentTrackId));
+    this.updateCoaches(train);
+    return train;
+  }
+
+  /**
+   * Flip the train's heading (reverse). Always allowed — no route rules.
+   */
+  reverseTrain(id) {
+    const train = this.trains.get(id);
+    if (!train) return false;
+    train.heading = { x: -train.heading.x, z: -train.heading.z };
+    return true;
+  }
+
+  /**
+   * Remove one coach (keeps the rest of the consist untouched).
+   */
+  removeCoach(trainId, coachId) {
+    const train = this.trains.get(trainId);
+    if (!train) return false;
+    const idx = train.coaches.findIndex((c) => c.id === coachId);
+    if (idx < 0) return false;
+    train.coaches.splice(idx, 1);
+    this.updateCoaches(train);
+    return true;
+  }
+
+  /**
+   * Re-insert a coach at its original index (undo of removeCoach).
+   */
+  restoreCoach(trainId, coach, index) {
+    const train = this.trains.get(trainId);
+    if (!train) return false;
+    train.coaches.splice(Math.min(index, train.coaches.length), 0, { ...coach });
+    this.updateCoaches(train);
+    return true;
+  }
+
   update(deltaTime) {
     this.time += deltaTime;
 

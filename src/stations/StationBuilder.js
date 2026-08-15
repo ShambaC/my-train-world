@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 import { PuffSystem } from '../environment/PuffSystem';
+import { mulberry32 } from '../terrain.js';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
@@ -278,15 +279,18 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
 
   // --- prop row (bench / lamp / bin cycle) — one block forward from the
   // building, and never directly under a canopy so support beams stay clear.
-  // Every bench gets a lamp post with a warm point light on the far edge. ---
+  // Every bench gets a lamp post with a warm point light on the far edge.
+  // Jitter is deterministic per marker cell so undo/redo and save/load
+  // rebuild the identical station (no unseeded Math.random in world content).
   const propCycle = ['platform-bench', 'platform-gas-lamp', 'platform-litter-bin'];
   for (let i = 2; i < lengthCells - 2; i += 3) {
     if (canopyCells.some((c) => Math.abs(c - i) <= 1)) continue;
     const type = propCycle[Math.floor((i - 2) / 3) % propCycle.length];
     const prop = ModelLibrary.getMesh(type);
-    const jitter = (Math.random() - 0.5) * 0.2;
+    const rng = mulberry32(((startCell.x * 73856093) ^ (startCell.z * 19349663) ^ (i * 83492791)) >>> 0);
+    const jitter = (rng() - 0.5) * 0.2;
     addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, 0.05);
-    prop.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+    prop.rotation.y = Math.PI / 2 + (rng() - 0.5) * 0.3;
 
     // Warm glow at the head of each gas lamp
     if (type === 'platform-gas-lamp') {

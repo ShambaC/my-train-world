@@ -9,12 +9,19 @@ import { createContainerCoach } from '../trains/ContainerCoachModel';
 import { createViewdeckCoach } from '../trains/ViewdeckCoachModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
+import { getEndpoints } from './trackGeometry';
+import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/editActions';
 import ModelLibrary from '../models/ModelLibrary';
 import { DEFAULT_COACH, COACH_SPACING } from '../trains/coachTypes';
 import * as THREE from 'three';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
 const ROAD_GHOST_GEO = new THREE.BoxGeometry(0.75, 0.02, 0.5);
+
+// Small endpoint markers on the track placement ghost (connection assist).
+const endpointMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, toneMapped: false });
+const endpointMatSnapped = new THREE.MeshBasicMaterial({ color: 0x00ff88, toneMapped: false });
+const endpointGeo = new THREE.SphereGeometry(0.07, 8, 8);
 
 export default function TrackRenderer({
   trackManager,
@@ -30,6 +37,8 @@ export default function TrackRenderer({
   onCoachPick,
   signalManager,
   roadManager,
+  history,
+  onSelect,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -40,16 +49,17 @@ export default function TrackRenderer({
   const {
     ghostPosition,
     isValidPosition,
+    ghostReason,
+    latestRef,
     updateGhostPosition,
     handlePlacement,
-    handleDelete,
   } = useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager);
 
   // Latest values via refs — canvas listeners attach ONCE so re-renders
   // during a click event never re-attach mid-dispatch (which made clicks
   // recurse and double-place / crash).
   const selectedToolRef = useRef(selectedTool);
-  const ghostRef = useRef({ ghostPosition, isValidPosition });
+  const latestRefMirror = useRef(latestRef);
   const updateGhostRef = useRef(updateGhostPosition);
   const handlePlacementRef = useRef(handlePlacement);
   const trackManagerRef = useRef(trackManager);
@@ -61,8 +71,10 @@ export default function TrackRenderer({
   const onCoachPickRef = useRef(onCoachPick);
   const signalManagerRef = useRef(signalManager);
   const roadManagerRef = useRef(roadManager);
+  const historyRef = useRef(history);
+  const onSelectRef = useRef(onSelect);
   selectedToolRef.current = selectedTool;
-  ghostRef.current = { ghostPosition, isValidPosition };
+  latestRefMirror.current = latestRef;
   updateGhostRef.current = updateGhostPosition;
   handlePlacementRef.current = handlePlacement;
   trackManagerRef.current = trackManager;
@@ -74,6 +86,8 @@ export default function TrackRenderer({
   onCoachPickRef.current = onCoachPick;
   signalManagerRef.current = signalManager;
   roadManagerRef.current = roadManager;
+  historyRef.current = history;
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
@@ -86,6 +100,39 @@ export default function TrackRenderer({
     canvas.addEventListener('mousemove', handleMouseMove);
     return () => canvas.removeEventListener('mousemove', handleMouseMove);
   }, []);
+
+  // Resolve the entity under the pointer (trains first, then tracks,
+  // stations, roads) — shared by the delete tool and hand-tool selection.
+  const resolveTarget = (point) => {
+    let target = null;
+    for (const train of trainManagerRef.current.getAllTrains()) {
+      const dx = Math.abs(train.position.x - point.x);
+      const dz = Math.abs(train.position.z - point.z);
+      if (dx < 0.45 && dz < 0.45) {
+        target = { kind: 'train', id: train.id, position: train.position, rotation: train.rotation, type: null };
+        break;
+      }
+    }
+    if (!target) {
+      const track = trackManagerRef.current.getTrackAtPosition(point, 0.35);
+      if (track) {
+        target = { kind: 'track', id: track.id, position: track.position, rotation: track.rotation || 0, type: track.type };
+      }
+    }
+    if (!target) {
+      const station = stationManagerRef.current?.getStationAtPosition(point, 0.9);
+      if (station) {
+        target = { kind: 'station', id: station.id, position: station.centerWorld, rect: station.worldRect };
+      }
+    }
+    if (!target && roadManagerRef.current) {
+      const road = roadManagerRef.current.findRoadAtPosition(point, 0.7);
+      if (road) {
+        target = { kind: 'road', id: road.road.id, position: road.center, rotation: road.rotation, type: null };
+      }
+    }
+    return target;
+  };
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');
@@ -112,19 +159,50 @@ export default function TrackRenderer({
       }
 
       const tool = selectedToolRef.current;
-      const { ghostPosition, isValidPosition } = ghostRef.current;
 
-      if (tool?.type === 'train') {
+      // Recompute the ghost synchronously from THIS click event, so a click
+      // right after tool/rotation/camera changes never acts on stale state
+      // (no mouse-away workaround needed).
+      updateGhostRef.current(e);
+      const latest = latestRefMirror.current.current;
+      const { ghostPosition, isValidPosition } = latest;
+      if (import.meta.env.DEV) {
+        window.__clickDebug = { tool: tool?.type, ghost: ghostPosition, valid: isValidPosition };
+      }
+
+      if (tool?.type === 'hand') {
+        // Selection: train → track → station → road under the cursor.
+        updateGhostRef.current(e);
+        const point = latestRefMirror.current.current.hitPoint;
+        const target = point ? resolveTarget(point) : null;
+        onSelectRef.current?.(target ? { kind: target.kind, id: target.id } : null);
+      } else if (tool?.type === 'train') {
         if (ghostPosition?.isTrack) {
           const track = trackManagerRef.current.getTrackAtPosition(ghostPosition, 0.35);
-          if (track) trainManagerRef.current.addTrain(track.id, trainDirectionRef.current);
+          if (track) {
+            const train = trainManagerRef.current.addTrain(track.id, trainDirectionRef.current);
+            if (train && historyRef.current) {
+              const snap = clone(train);
+              historyRef.current.push({
+                undo: () => trainManagerRef.current.removeTrain(train.id),
+                redo: () => trainManagerRef.current.restoreTrain(clone(snap)),
+              });
+            }
+          }
         }
       } else if (tool?.type === 'road') {
         if (ghostPosition && isValidPosition) {
-          roadManagerRef.current?.addRoad(
+          const road = roadManagerRef.current?.addRoad(
             { x: ghostPosition.x, y: ghostPosition.y, z: ghostPosition.z },
             ghostPosition.rotation || 0
           );
+          if (road && historyRef.current) {
+            const snap = clone(road);
+            historyRef.current.push({
+              undo: () => roadManagerRef.current.removeRoad(road.id),
+              redo: () => roadManagerRef.current.restoreUserRoad(clone(snap)),
+            });
+          }
         }
       } else if (tool?.type === 'coach') {
         const target = ghostPosition?.target;
@@ -133,26 +211,35 @@ export default function TrackRenderer({
         }
       } else if (tool?.type === 'delete') {
         const target = ghostPosition?.target;
-        if (target?.kind === 'road') {
-          roadManagerRef.current?.removeRoad(target.id);
-        } else if (target?.kind === 'station') {
-          stationManagerRef.current.removeStation(target.id);
-          setTracks(trackManagerRef.current.getAllTracks());
-          onStationsChangeRef.current?.();
-        } else if (target?.kind === 'track') {
-          trainManagerRef.current.getAllTrains()
-            .filter(t => t.currentTrackId === target.id)
-            .forEach(t => trainManagerRef.current.removeTrain(t.id));
-          trackManagerRef.current.removeTrack(target.id);
-          signalManagerRef.current?.removeForTrack(target.id);
-          setTracks(trackManagerRef.current.getAllTracks());
-          onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
-        } else if (target?.kind === 'train') {
-          trainManagerRef.current.removeTrain(target.id);
+        if (target) {
+          deleteEntity({
+            target,
+            trackManager: trackManagerRef.current,
+            stationManager: stationManagerRef.current,
+            trainManager: trainManagerRef.current,
+            signalManager: signalManagerRef.current,
+            roadManager: roadManagerRef.current,
+            history: historyRef.current,
+          });
+          if (target.kind === 'track') {
+            setTracks(trackManagerRef.current.getAllTracks());
+            onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
+          } else if (target.kind === 'station') {
+            setTracks(trackManagerRef.current.getAllTracks());
+            onStationsChangeRef.current?.();
+          }
+          onSelectRef.current?.(null);
         }
       } else if (tool && ghostPosition && isValidPosition) {
-        const track = handlePlacementRef.current(e);
+        const track = handlePlacementRef.current();
         if (track) {
+          if (historyRef.current) {
+            const snap = clone(track);
+            historyRef.current.push({
+              undo: () => trackManagerRef.current.removeTrack(track.id),
+              redo: () => trackManagerRef.current.restoreTrack(clone(snap)),
+            });
+          }
           setTracks(trackManagerRef.current.getAllTracks());
           onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
         }
@@ -268,6 +355,30 @@ export default function TrackRenderer({
     ghostMeshRef.current = mesh;
     return mesh;
   }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.target?.id]);
+
+  // Endpoint markers on the track placement ghost (connection assistance).
+  const endpointMarkers = useMemo(() => {
+    if (selectedTool?.type !== 'track' || !ghostPosition?.type) return null;
+    const eps = getEndpoints(ghostPosition.type, ghostPosition, ghostPosition.rotation);
+    const mat = ghostPosition.snappedToEndpoint ? endpointMatSnapped : endpointMat;
+    const mk = (p) => {
+      const m = new THREE.Mesh(endpointGeo, mat);
+      m.position.set(p.x, ghostPosition.y + 0.05, p.z);
+      return m;
+    };
+    return [mk(eps.front), mk(eps.back)];
+  }, [selectedTool?.type, ghostPosition?.type, ghostPosition?.rotation, ghostPosition?.x, ghostPosition?.y, ghostPosition?.z, ghostPosition?.snappedToEndpoint]);
+
+  // Debug-only ghost reason (advisory, never a blocker).
+  useEffect(() => {
+    if (import.meta.env.DEV && window.__mtw) {
+      Object.assign(window.__mtw, {
+        ghost: { position: ghostPosition, valid: isValidPosition, reason: ghostReason },
+        trackTool: { rotation, heightOffset },
+      });
+    }
+  }, [ghostPosition, isValidPosition, ghostReason, rotation, heightOffset]);
+
   return (
     <group>
       {tracks.map((track) => {
@@ -297,15 +408,20 @@ export default function TrackRenderer({
       })}
 
       {ghostMesh && ghostPosition && (
-        <primitive
-          object={ghostMesh}
-          position={[
-            ghostOffsetRef.current?.x ?? ghostPosition.x,
-            ghostOffsetRef.current?.y ?? ghostPosition.y,
-            ghostOffsetRef.current?.z ?? ghostPosition.z,
-          ]}
-          rotation={[0, ghostPosition.rotation || 0, 0]}
-        />
+        <group>
+          <primitive
+            object={ghostMesh}
+            position={[
+              ghostOffsetRef.current?.x ?? ghostPosition.x,
+              ghostOffsetRef.current?.y ?? ghostPosition.y,
+              ghostOffsetRef.current?.z ?? ghostPosition.z,
+            ]}
+            rotation={[0, ghostPosition.rotation || 0, 0]}
+          />
+          {endpointMarkers?.map((m, i) => (
+            <primitive key={i} object={m} />
+          ))}
+        </group>
       )}
     </group>
   );

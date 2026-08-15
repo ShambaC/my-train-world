@@ -735,6 +735,37 @@ export class RoadManager {
     return false;
   }
 
+  /** Re-insert a user road with its original id (undo/redo, save/load). */
+  restoreUserRoad(road) {
+    this.userRoads.push(road);
+    const num = parseInt(road.id.split('_')[2] || road.id.split('_')[1], 10);
+    if (!Number.isNaN(num) && num >= this.userNextId) this.userNextId = num + 1;
+    this.rebuildLayout();
+    this.version++;
+    return road;
+  }
+
+  /** User-placed roads only — the natural network regenerates from terrain. */
+  exportUserData() {
+    return {
+      userRoads: this.userRoads,
+      userNextId: this.userNextId,
+    };
+  }
+
+  /** Restore user roads after the natural network has been (re)built. */
+  importUserData(data) {
+    if (data) {
+      this.userRoads = Array.isArray(data.userRoads) ? data.userRoads : [];
+      this.userNextId = data.userNextId || 0;
+    } else {
+      this.userRoads = [];
+      this.userNextId = 0;
+    }
+    this.rebuildLayout();
+    this.version++;
+  }
+
   /**
    * Nearest road whose cells cover a world position (delete tool).
    * @returns {{road, center:{x,y,z}, rotation:number} | null}

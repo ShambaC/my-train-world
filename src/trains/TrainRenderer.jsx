@@ -23,6 +23,24 @@ function createCoachMesh(type) {
   return ModelLibrary.getMesh(type);
 }
 
+// Selection highlight: flat rings under the engine + every coach.
+const SELECT_RING_MAT = new THREE.MeshBasicMaterial({
+  color: 0x00ff88,
+  transparent: true,
+  opacity: 0.85,
+  depthWrite: false,
+  toneMapped: false,
+});
+const ENGINE_RING_GEO = new THREE.TorusGeometry(0.5, 0.035, 8, 32);
+const COACH_RING_GEO = new THREE.TorusGeometry(0.42, 0.03, 8, 32);
+
+function makeSelectRing(geo) {
+  const mesh = new THREE.Mesh(geo, SELECT_RING_MAT);
+  mesh.rotation.x = Math.PI / 2;
+  mesh.renderOrder = 5;
+  return mesh;
+}
+
 /**
  * Train Renderer — renders all trains + their trailing coaches.
  *
@@ -31,13 +49,17 @@ function createCoachMesh(type) {
  * imperatively to cached Object3D groups in useFrame, so moving trains and
  * coaches never trigger React re-renders.
  */
-export default function TrainRenderer({ trainManager, lighting }) {
+export default function TrainRenderer({ trainManager, lighting, selectedTrainId }) {
   const rootRef = useRef();
   const trainNodesRef = useRef(new Map()); // trainId -> THREE.Group (world)
   const coachNodesRef = useRef(new Map()); // coachId -> THREE.Group (world)
   const headlightsRef = useRef(new Map()); // trainId -> pointLight
   const lastSigRef = useRef('');
   const [snapshot, setSnapshot] = useState(null);
+  const highlightGroupRef = useRef(null);
+  const highlightMeshesRef = useRef([]); // engine ring + coach rings
+  const selectedTrainIdRef = useRef(selectedTrainId);
+  selectedTrainIdRef.current = selectedTrainId;
 
   // Topology poll — state updates only when the train/coach set changes.
   useEffect(() => {
@@ -119,6 +141,43 @@ export default function TrainRenderer({ trainManager, lighting }) {
         const mat = child.material;
         if (mat?.userData?.windowGlow) mat.emissiveIntensity = winGlow;
       });
+    }
+
+    // Selection highlight: rings under the engine + every coach of the
+    // selected consist (updated imperatively, no React churn).
+    const group = highlightGroupRef.current;
+    if (group) {
+      const selected = selectedTrainIdRef.current
+        ? trainManager.getTrain(selectedTrainIdRef.current)
+        : null;
+      if (!selected) {
+        group.visible = false;
+      } else {
+        const count = 1 + (selected.coaches || []).length;
+        while (highlightMeshesRef.current.length < count) {
+          const ring = makeSelectRing(
+            highlightMeshesRef.current.length === 0 ? ENGINE_RING_GEO : COACH_RING_GEO
+          );
+          highlightMeshesRef.current.push(ring);
+          group.add(ring);
+        }
+        while (highlightMeshesRef.current.length > count) {
+          const ring = highlightMeshesRef.current.pop();
+          group.remove(ring);
+          ring.geometry.dispose();
+          ring.material.dispose();
+        }
+        highlightMeshesRef.current[0].position.set(selected.position.x, selected.position.y + 0.06, selected.position.z);
+        for (let i = 0; i < (selected.coaches || []).length; i++) {
+          const c = selected.coaches[i];
+          highlightMeshesRef.current[i + 1].position.set(
+            c.position ? c.position.x : selected.position.x,
+            (c.position ? c.position.y : selected.position.y) + 0.05,
+            c.position ? c.position.z : selected.position.z
+          );
+        }
+        group.visible = true;
+      }
     }
   });
 
@@ -211,6 +270,8 @@ export default function TrainRenderer({ trainManager, lighting }) {
           </group>
         );
       })}
+      {/* Selection highlight rings — updated imperatively in useFrame */}
+      <group ref={highlightGroupRef} visible={false} />
     </group>
   );
 }

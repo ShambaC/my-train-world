@@ -1,5 +1,5 @@
 ﻿import { useRef, useState, useCallback, useEffect } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } from '../stations/StationBuilder';
 
@@ -19,6 +19,9 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
   const raycaster = useRef(new THREE.Raycaster());
   const mouse = useRef(new THREE.Vector2());
   const lastMousePos = useRef({ x: 0, y: 0 });
+  const pointerInside = useRef(false);
+  const lastCamPos = useRef(new THREE.Vector3());
+  const lastCamQuat = useRef(new THREE.Quaternion());
 
   const length = terrainData?.length || 0;
   const breadth = terrainData?.breadth || 0;
@@ -184,6 +187,40 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
     }
   }, [orientation, stationStart, computeGhost]);
+
+  // Pointer leave/enter: hide the ghost while away, keep the start marker
+  // and the last pointer position so returning restores it immediately.
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const onEnter = () => {
+      pointerInside.current = true;
+      if (lastMousePos.current.x !== undefined) {
+        computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
+      }
+    };
+    const onLeave = () => {
+      pointerInside.current = false;
+      setGhost(null);
+    };
+    canvas.addEventListener('pointerenter', onEnter);
+    canvas.addEventListener('pointerleave', onLeave);
+    return () => {
+      canvas.removeEventListener('pointerenter', onEnter);
+      canvas.removeEventListener('pointerleave', onLeave);
+    };
+  }, [gl, computeGhost]);
+
+  // Camera-driven recompute: orbit/pan/zoom/WASD/follow must keep the ghost
+  // slab under the cursor without any pointer motion.
+  useFrame(() => {
+    if (camera.position.distanceToSquared(lastCamPos.current) < 1e-6 && camera.quaternion.equals(lastCamQuat.current)) {
+      return;
+    }
+    lastCamPos.current.copy(camera.position);
+    lastCamQuat.current.copy(camera.quaternion);
+    if (!pointerInside.current || lastMousePos.current.x === undefined) return;
+    computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
+  });
 
   const handleClick = useCallback((event) => {
     if (!terrainRef.current || !heightMap) return null;

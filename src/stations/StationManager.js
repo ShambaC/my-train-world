@@ -33,6 +33,38 @@ export class StationManager {
     return this.stations.get(id);
   }
 
+  /**
+   * Re-insert a station with its original id (undo/redo, save/load).
+   * The THREE group is attached by the caller (rebuildStation).
+   */
+  restoreStation(station) {
+    this.stations.set(station.id, station);
+    const num = parseInt(station.id.split('_')[1], 10);
+    if (!Number.isNaN(num) && num >= this.nextId) this.nextId = num + 1;
+    return station;
+  }
+
+  /**
+   * Serialize marker data only — groups/pieces/smoke are rebuilt from
+   * markers (buildStation is deterministic per marker cells).
+   */
+  exportData() {
+    return {
+      nextId: this.nextId,
+      stations: Array.from(this.stations.values()).map((s) => ({
+        id: s.id,
+        role: s.role,
+        startCell: s.startCell,
+        endCell: s.endCell,
+        dir: s.dir,
+        lengthCells: s.lengthCells,
+        startHeight: s.startHeight,
+        terrainLength: s.terrainLength,
+        terrainBreadth: s.terrainBreadth,
+      })),
+    };
+  }
+
   getAllStations() {
     return Array.from(this.stations.values());
   }

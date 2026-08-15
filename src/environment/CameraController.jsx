@@ -49,6 +49,8 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
     if (isKeyDown('s')) move.sub(forward);
     if (isKeyDown('d')) move.add(right);
     if (isKeyDown('a')) move.sub(right);
+    if (isKeyDown(' ')) move.y += 1; // Space: rise
+    if (isKeyDown('c')) move.y -= 1; // C: lower
 
     if (move.lengthSq() === 0) return;
 

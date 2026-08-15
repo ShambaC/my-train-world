@@ -33,9 +33,28 @@ function EnvironmentSettings({
   trafficEnabled,
   onTrafficChange,
   signalsEnabled,
-  onSignalsChange
+  onSignalsChange,
+  audioVolumes,
+  onAudioVolumeChange,
 }) {
   const [isOpen, setIsOpen] = useState(true);
+
+  const volumeSlider = (label, key, display) => (
+    <div>
+      <label className="block text-sm font-medium mb-1">
+        {label}: {display ? display(audioVolumes[key]) : Math.round(audioVolumes[key] * 100)}%
+      </label>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.05"
+        value={audioVolumes[key]}
+        onChange={(e) => onAudioVolumeChange({ [key]: parseFloat(e.target.value) })}
+        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+      />
+    </div>
+  );
 
   return (
     <div className="mb-4">
@@ -212,6 +231,15 @@ function EnvironmentSettings({
               />
             </button>
           </div>
+
+          {/* Audio volumes */}
+          {audioVolumes && onAudioVolumeChange && (
+            <div className="space-y-2 pt-1 border-t border-gray-700">
+              {volumeSlider('🔊 Master Volume', 'master')}
+              {volumeSlider('🚂 Train Volume (whistle/bell)', 'train')}
+              {volumeSlider('🚧 Crossing Volume (bell/motor)', 'crossing')}
+            </div>
+          )}
 
           {/* Roads & Traffic Toggle */}
           <div className="flex items-center justify-between">

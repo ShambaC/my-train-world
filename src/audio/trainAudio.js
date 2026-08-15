@@ -2,6 +2,8 @@
  * Train whistle/bell audio — small WebAudio synth, no assets.
  * Soft ambient volumes, lazily created AudioContext (resumed on the first
  * pointer interaction, per browser autoplay rules). Globally toggleable.
+ *
+ * Volume buses: master → train (whistle/bell) and crossing (bell/motor).
  */
 
 const VOLUME = 0.045; // soft — ambient flavor, never intrusive
@@ -11,6 +13,8 @@ class TrainAudio {
     this.enabled = true;
     this.ctx = null;
     this.lastWhistle = 0;
+    this.volumes = { master: 1, train: 1, crossing: 1 };
+    this.buses = { master: null, train: null, crossing: null };
     if (typeof window !== 'undefined') {
       window.addEventListener('pointerdown', () => this.resume(), { once: true });
     }
@@ -19,6 +23,20 @@ class TrainAudio {
   setEnabled(on) {
     this.enabled = on;
     if (!on && this.ctx) this.ctx.suspend();
+    else if (on && this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  setVolumes(volumes) {
+    this.volumes = { ...this.volumes, ...volumes };
+    this.applyVolumes();
+  }
+
+  applyVolumes() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (this.buses.master) this.buses.master.gain.setTargetAtTime(this.volumes.master, t, 0.05);
+    if (this.buses.train) this.buses.train.gain.setTargetAtTime(this.volumes.train, t, 0.05);
+    if (this.buses.crossing) this.buses.crossing.gain.setTargetAtTime(this.volumes.crossing, t, 0.05);
   }
 
   resume() {
@@ -30,11 +48,29 @@ class TrainAudio {
     if (!this.ctx) {
       try {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const master = this.ctx.createGain();
+        master.connect(this.ctx.destination);
+        const train = this.ctx.createGain();
+        train.connect(master);
+        const crossing = this.ctx.createGain();
+        crossing.connect(master);
+        this.buses = { master, train, crossing };
+        this.applyVolumes();
       } catch {
         return null;
       }
     }
     return this.ctx;
+  }
+
+  /** Voice gain helper: base volume × bus volumes. */
+  voiceGain(ctx, base, bus) {
+    const gain = ctx.createGain();
+    const busGain = this.buses[bus];
+    if (busGain) gain.connect(busGain);
+    else gain.connect(ctx.destination);
+    gain.gain.value = base;
+    return gain;
   }
 
   /** Steam whistle: two detuned tones with vibrato + breath noise. */
@@ -46,7 +82,7 @@ class TrainAudio {
     this.lastWhistle = now;
     const t0 = ctx.currentTime;
 
-    const gain = ctx.createGain();
+    const gain = this.voiceGain(ctx, 0.0001, 'train');
     gain.gain.setValueAtTime(0.0001, t0);
     gain.gain.exponentialRampToValueAtTime(VOLUME, t0 + 0.18);
     gain.gain.setValueAtTime(VOLUME, t0 + 0.7);
@@ -77,7 +113,6 @@ class TrainAudio {
 
     osc1.connect(gain);
     osc2.connect(gain);
-    gain.connect(ctx.destination);
     osc1.start(t0);
     osc2.start(t0);
     osc1.stop(t0 + 1.2);
@@ -91,7 +126,7 @@ class TrainAudio {
     const t0 = ctx.currentTime;
     for (let i = 0; i < 3; i++) {
       const t = t0 + i * 0.22;
-      const gain = ctx.createGain();
+      const gain = this.voiceGain(ctx, VOLUME * 0.8, 'train');
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(VOLUME * 0.8, t + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
@@ -99,7 +134,6 @@ class TrainAudio {
       osc.type = 'sine';
       osc.frequency.value = 1318; // E6
       osc.connect(gain);
-      gain.connect(ctx.destination);
       osc.start(t);
       osc.stop(t + 0.55);
     }
@@ -110,7 +144,7 @@ class TrainAudio {
     const ctx = this.ensure();
     if (!ctx) return;
     const t0 = ctx.currentTime;
-    const gain = ctx.createGain();
+    const gain = this.voiceGain(ctx, VOLUME * 0.7, 'crossing');
     gain.gain.setValueAtTime(0.0001, t0);
     gain.gain.exponentialRampToValueAtTime(VOLUME * 0.7, t0 + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
@@ -118,7 +152,6 @@ class TrainAudio {
     osc.type = 'sine';
     osc.frequency.value = 1245; // ~D#6 — softer than the station bell
     osc.connect(gain);
-    gain.connect(ctx.destination);
     osc.start(t0);
     osc.stop(t0 + 0.3);
   }
@@ -128,7 +161,7 @@ class TrainAudio {
     const ctx = this.ensure();
     if (!ctx) return;
     const t0 = ctx.currentTime;
-    const gain = ctx.createGain();
+    const gain = this.voiceGain(ctx, VOLUME * 0.5, 'crossing');
     gain.gain.setValueAtTime(0.0001, t0);
     gain.gain.exponentialRampToValueAtTime(VOLUME * 0.5, t0 + 0.05);
     gain.gain.setValueAtTime(VOLUME * 0.5, t0 + 0.6);
@@ -138,7 +171,6 @@ class TrainAudio {
     osc.frequency.setValueAtTime(60, t0);
     osc.frequency.linearRampToValueAtTime(48, t0 + 0.95);
     osc.connect(gain);
-    gain.connect(ctx.destination);
     osc.start(t0);
     osc.stop(t0 + 1.0);
   }

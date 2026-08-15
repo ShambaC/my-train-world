@@ -172,6 +172,25 @@ export class TrackManager {
   }
 
   /**
+   * Get a track by id
+   */
+  getTrack(id) {
+    return this.tracks.get(id) || null;
+  }
+
+  /**
+   * Re-insert a track with its original id (undo/redo, save/load).
+   * Auto-connects to whatever neighbors exist so links are restored.
+   */
+  restoreTrack(track) {
+    this.tracks.set(track.id, track);
+    const num = parseInt(track.id.split('_')[1], 10);
+    if (!Number.isNaN(num) && num >= this.nextId) this.nextId = num + 1;
+    this.autoConnectTrack(track);
+    return track;
+  }
+
+  /**
    * Get all tracks
    */
   getAllTracks() {

@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
 import { buildStation, STATION_WIDTH_WORLD, easeOutBack } from './StationBuilder';
+import { stripStation, rebuildStation } from '../utils/editActions';
 
 const GHOST_GREEN = 0x00ff00;
 const GHOST_RED = 0xff0000;
@@ -34,6 +35,7 @@ export default function StationRenderer({
   onStationsChange,
   onStationPlaced,
   lighting,
+  history,
 }) {
   const [stations, setStations] = useState([]);
   const mouseDownPosRef = useRef(null);
@@ -52,11 +54,15 @@ export default function StationRenderer({
   const computeGhostRef = useRef(computeGhost);
   const onStationsChangeRef = useRef(onStationsChange);
   const onStationPlacedRef = useRef(onStationPlaced);
+  const stationManagerRef = useRef(stationManager);
+  const historyRef = useRef(history);
   selectedToolRef.current = selectedTool;
   handleClickRef.current = handleClick;
   computeGhostRef.current = computeGhost;
   onStationsChangeRef.current = onStationsChange;
   onStationPlacedRef.current = onStationPlaced;
+  stationManagerRef.current = stationManager;
+  historyRef.current = history;
 
   useEffect(() => {
     if (import.meta.env.DEV) {
@@ -98,6 +104,13 @@ export default function StationRenderer({
       }
       const station = handleClickRef.current(e);
       if (station) {
+        if (historyRef.current) {
+          const marker = stripStation(station);
+          historyRef.current.push({
+            undo: () => rebuildStation(marker, stationManagerRef.current),
+            redo: () => stationManagerRef.current.removeStation(station.id),
+          });
+        }
         onStationsChangeRef.current?.();
         onStationPlacedRef.current?.(station, e.clientX, e.clientY);
       }

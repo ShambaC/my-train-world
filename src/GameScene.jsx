@@ -23,19 +23,20 @@ import { ActivityManager } from './ambient/ActivityManager';
 import ActivityRenderer from './ambient/ActivityRenderer';
 import { trainAudio } from './audio/trainAudio';
 import Roads from './environment/Roads';
-import { RoadManager } from './environment/roadNetwork';
 import { TrafficManager } from './environment/TrafficManager';
 import TrafficRenderer from './environment/TrafficRenderer';
-import { SignalManager } from './signals/SignalManager';
+import CameraCommands from './environment/CameraCommands';
 import SignalsRenderer from './signals/SignalsRenderer';
 import { CrossingManager } from './crossings/CrossingManager';
 import CrossingRenderer from './crossings/CrossingRenderer';
+import { cameraBus } from './utils/cameraBus';
 
 // Scene component that contains the terrain
 function Scene({ 
   terrainSize, 
   terrainSeed,
   onTerrainGenerated, 
+  onTerrainReady,
   trackManager,
   stationManager,
   trainManager,
@@ -69,6 +70,9 @@ function Scene({
   trafficEnabled,
   signalsEnabled,
   trackLayoutVersion,
+  history,
+  onSelect,
+  selectedTrainId,
 }) {
   const terrainRef = useRef();
   const orbitRef = useRef(null);
@@ -226,6 +230,10 @@ function Scene({
       });
     }
 
+    // QoL: world save/load hooks into terrain readiness (restores roads and
+    // stations once the new terrain exists).
+    if (onTerrainReady) onTerrainReady(newTerrain.userData);
+
     // Cleanup old border on unmount
     return () => {
       if (border) {
@@ -235,7 +243,7 @@ function Scene({
         });
       }
     };
-  }, [terrainSize, terrainSeed, onTerrainGenerated]);
+  }, [terrainSize, terrainSeed, onTerrainGenerated, onTerrainReady]);
 
   return (
     <>
@@ -298,6 +306,8 @@ function Scene({
           onCoachPick={onCoachPick}
           signalManager={signalManager}
           roadManager={roadManager}
+          history={history}
+          onSelect={onSelect}
         />
       )}
 
@@ -313,6 +323,7 @@ function Scene({
           onStationsChange={onStationsChange}
           onStationPlaced={onStationPlaced}
           lighting={lighting}
+          history={history}
         />
       )}
 
@@ -387,20 +398,32 @@ function Scene({
         <TrainRenderer
           trainManager={trainManager}
           lighting={lighting}
+          selectedTrainId={selectedTrainId}
         />
       )}
       
       {/* Grid helper */}
       <primitive object={createGrid(Math.max(terrainSize.length, terrainSize.breadth))} />
       
-      {/* Camera controls */}
+      {/* Camera controls — max distance scales with terrain so full-map
+          overview stays useful on large worlds. */}
       <OrbitControls
         ref={orbitRef}
         enableDamping
         dampingFactor={0.05}
         minDistance={0.2}
-        maxDistance={100}
+        maxDistance={Math.max(120, Math.max(terrainSize.length, terrainSize.breadth) * 0.75)}
         maxPolarAngle={Math.PI / 2.1}
+      />
+
+      {/* QoL camera commands (focus / frame / reset / ease) */}
+      <CameraCommands
+        terrainSize={terrainSize}
+        trackManager={trackManager}
+        stationManager={stationManager}
+        trainManager={trainManager}
+        followTrainId={followTrainId}
+        orbitRef={orbitRef}
       />
     </>
   );
@@ -434,6 +457,13 @@ export default function GameScene({
   signalsEnabled = true,
   followTrainId = null,
   stationOrientation = 'horizontal',
+  history,
+  onSelect,
+  onTerrainReady,
+  worldVersion = 0,
+  selectedTrainId = null,
+  roadManager,
+  signalManager,
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -452,18 +482,13 @@ export default function GameScene({
     activityManagerRef.current = new ActivityManager(stationManager, trainManager);
   }
 
-  // Roads, traffic, signals and crossings — one set of managers per scene.
-  const roadManagerRef = useRef(null);
-  if (!roadManagerRef.current) roadManagerRef.current = new RoadManager();
+  // Roads, signals and crossings — shared managers. Road + signal managers
+  // are owned by App (save/load needs them); crossings derive from both.
   const trafficManagerRef = useRef(null);
   if (!trafficManagerRef.current) trafficManagerRef.current = new TrafficManager();
-  const signalManagerRef = useRef(null);
-  if (!signalManagerRef.current) {
-    signalManagerRef.current = new SignalManager(trackManager);
-  }
   const crossingManagerRef = useRef(null);
   if (!crossingManagerRef.current) {
-    crossingManagerRef.current = new CrossingManager(trackManager, roadManagerRef.current);
+    crossingManagerRef.current = new CrossingManager(trackManager, roadManager);
   }
 
   // Ambient sound master switch
@@ -515,7 +540,15 @@ export default function GameScene({
 
   const handleCoachSelect = (coachType) => {
     if (coachMenu) {
-      trainManager?.addCoach(coachMenu.trainId, coachType);
+      const coach = trainManager?.addCoach(coachMenu.trainId, coachType);
+      if (coach && history) {
+        const trainId = coachMenu.trainId;
+        const idx = trainManager.getTrain(trainId).coaches.findIndex((c) => c.id === coach.id);
+        history.push({
+          undo: () => trainManager.removeCoach(trainId, coach.id),
+          redo: () => trainManager.restoreCoach(trainId, coach, idx),
+        });
+      }
     }
     setCoachMenu(null);
   };
@@ -526,6 +559,18 @@ export default function GameScene({
     setStationCount(stationManager?.getAllStations().length || 0);
   }, [terrainSize, stationManager]);
 
+  // QoL: undo/redo / load restore manager state outside React — bump all
+  // version counters so every renderer re-reads its manager. (App bumps
+  // tracksVersion itself to remount TrackRenderer.)
+  useEffect(() => {
+    if (!worldVersion) return;
+    setTrackLayoutVersion((v) => v + 1);
+    setStationsVersion((v) => v + 1);
+    setTrackCount(trackManager?.getAllTracks().length || 0);
+    setStationCount(stationManager?.getAllStations().length || 0);
+    stationManager?.rebuildBindings(trackManager);
+  }, [worldVersion, trackManager, stationManager]);
+
   // Dev-only test hook — Object.assign so per-render component hooks
   // (e.g. StationRenderer's stationGhost) are never wiped.
   useEffect(() => {
@@ -533,14 +578,16 @@ export default function GameScene({
       Object.assign(window.__mtw || (window.__mtw = {}), {
         trackManager, stationManager, trainManager,
         activityManager: activityManagerRef.current,
-        roadManager: roadManagerRef.current,
-        signalManager: signalManagerRef.current,
+        roadManager: roadManager,
+        signalManager: signalManager,
         crossingManager: crossingManagerRef.current,
         trafficManager: trafficManagerRef.current,
         handleStationsChange,
+        history,
+        cameraBus,
       });
     }
-  }, [trackManager, stationManager, trainManager]);
+  }, [trackManager, stationManager, trainManager, history]);
   
   // Update train count
   useEffect(() => {
@@ -566,6 +613,7 @@ export default function GameScene({
           terrainSize={terrainSize} 
           terrainSeed={terrainSeed}
           onTerrainGenerated={setSceneStats}
+          onTerrainReady={onTerrainReady}
           trackManager={trackManager}
           stationManager={stationManager}
           trainManager={trainManager}
@@ -592,13 +640,16 @@ export default function GameScene({
           activityManager={activityManagerRef.current}
           followTrainId={followTrainId}
           stationOrientation={stationOrientation}
-          roadManager={roadManagerRef.current}
+          roadManager={roadManager}
           trafficManager={trafficManagerRef.current}
-          signalManager={signalManagerRef.current}
+          signalManager={signalManager}
           crossingManager={crossingManagerRef.current}
           trafficEnabled={trafficEnabled}
           signalsEnabled={signalsEnabled}
           trackLayoutVersion={trackLayoutVersion}
+          history={history}
+          onSelect={onSelect}
+          selectedTrainId={selectedTrainId}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import TrainControl from './ui/TrainControl';
 import EnvironmentSettings from './ui/EnvironmentSettings';
 import PerformanceSettings from './ui/PerformanceSettings';
+import WorldControls from './ui/WorldControls';
 
 export default function ControlPanel({ 
   onTerrainSizeChange, 
@@ -36,7 +37,17 @@ export default function ControlPanel({
   signalsEnabled,
   onSignalsChange,
   followTrainId,
-  onFollowTrain
+  onFollowTrain,
+  audioVolumes,
+  onAudioVolumeChange,
+  history,
+  terrainSize,
+  onSaveWorld,
+  onLoadWorld,
+  onRecoverWorld,
+  onUndo,
+  onRedo,
+  worldStatus,
 }) {
   const [length, setLength] = useState(100);
   const [breadth, setBreadth] = useState(100);
@@ -249,6 +260,8 @@ export default function ControlPanel({
               onTrafficChange={onTrafficChange}
               signalsEnabled={signalsEnabled}
               onSignalsChange={onSignalsChange}
+              audioVolumes={audioVolumes}
+              onAudioVolumeChange={onAudioVolumeChange}
             />
           </div>
 
@@ -262,12 +275,27 @@ export default function ControlPanel({
             />
           </div>
 
+          {/* World QoL: undo/redo, save/load/recover, camera framing */}
+          <div className="pt-4 border-t border-gray-700">
+            <WorldControls
+              history={history}
+              terrainSize={terrainSize}
+              onSave={onSaveWorld}
+              onLoad={onLoadWorld}
+              onRecover={onRecoverWorld}
+              onUndo={onUndo}
+              onRedo={onRedo}
+              status={worldStatus}
+            />
+          </div>
+
           {/* Train Control Section */}
           <div className="pt-4 border-t border-gray-700">
             <TrainControl
               trainManager={trainManager}
               followTrainId={followTrainId}
               onFollowTrain={onFollowTrain}
+              history={history}
             />
           </div>
 
