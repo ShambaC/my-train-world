@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { atDistance } from './TrafficManager.js';
-import { createPerson } from '../ambient/propModels.js';
+import { createPedestrian } from '../ambient/pedestrianModels.js';
 
 /**
  * Traffic Renderer — pooled vehicles + pedestrians.
@@ -155,9 +155,11 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       for (const w of trafficManager.getWalkers()) {
         const group = new THREE.Group();
         group.name = w.id;
-        const person = createPerson();
+        group.userData.variant = w.variant;
+        const person = createPedestrian(w.variant);
         person.userData.bobPhase = w.phase;
         group.add(person);
+        group.userData.animNodes = person.userData.animNodes;
         pool.set(w.id, group);
       }
       lastResetRef.current = trafficManager.resetCount;
@@ -242,6 +244,19 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
     for (const w of trafficManager.getWalkers()) {
       const node = poolRef.current.get(w.id);
       if (!node) continue;
+
+      // Respawned walker may have a different variant — swap model
+      if (node.userData.variant !== w.variant) {
+        for (const child of [...node.children]) {
+          node.remove(child);
+        }
+        const person = createPedestrian(w.variant);
+        person.userData.bobPhase = w.phase;
+        node.add(person);
+        node.userData.variant = w.variant;
+        node.userData.animNodes = person.userData.animNodes;
+      }
+
       const pos = atDistance(w.path, w.s);
       // Sideways offset: perpendicular to the walking direction.
       const perpX = -Math.cos(pos.yaw);
@@ -253,7 +268,34 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       );
       node.rotation.y = w.dir > 0 ? pos.yaw : pos.yaw + Math.PI;
       node.visible = !w.frozen;
-      node.position.y += Math.sin(t * 2.6 + w.phase) * 0.01;
+
+      // Culled walk cycle animation: skip detailed limb swings beyond 28 units distance
+      if (!w.frozen) {
+        const dx = node.position.x - cam.x;
+        const dz = node.position.z - cam.z;
+        const distSq = dx * dx + dz * dz;
+
+        const anim = node.userData.animNodes;
+        if (anim) {
+          if (w.moving && distSq < 784) { // < 28 units
+            const walkPhase = t * 13 * (w.speed / 0.12) + w.phase;
+            const stride = Math.sin(walkPhase) * 0.42;
+            const armStride = Math.sin(walkPhase) * 0.32;
+            if (anim.legL) anim.legL.rotation.x = stride;
+            if (anim.legR) anim.legR.rotation.x = -stride;
+            if (anim.armL) anim.armL.rotation.x = -armStride;
+            if (anim.armR) anim.armR.rotation.x = armStride;
+            if (anim.body) anim.body.position.y = 0.165 + Math.abs(Math.sin(walkPhase * 2)) * 0.004;
+          } else {
+            // Standing still or distant: reset limbs to neutral
+            if (anim.legL) anim.legL.rotation.x = 0;
+            if (anim.legR) anim.legR.rotation.x = 0;
+            if (anim.armL) anim.armL.rotation.x = 0;
+            if (anim.armR) anim.armR.rotation.x = 0;
+            if (anim.body) anim.body.position.y = 0.165;
+          }
+        }
+      }
     }
   });
 

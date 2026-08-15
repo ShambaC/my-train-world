@@ -8,6 +8,8 @@
  * (their transforms stay put — cheap to skip).
  */
 
+import { getRandomPedestrianType } from '../ambient/pedestrianModels.js';
+
 const VEHICLE_MAX = 36;
 const WALKER_MAX = 44;
 const FAR = 45; // world units — beyond this actors freeze
@@ -154,6 +156,7 @@ export class TrafficManager {
       this.walkers.push({
         id: `wlk_${this.nextW++}`,
         kind: 'road',
+        variant: getRandomPedestrianType(),
         roadId: road.id,
         path,
         offset: road.width / 2 + 0.09,
@@ -163,6 +166,7 @@ export class TrafficManager {
         speed: rand(0.09, 0.16),
         pause: rand(1, 4),
         phase: Math.random() * Math.PI * 2,
+        moving: false,
       });
     }
   }
@@ -284,6 +288,7 @@ export class TrafficManager {
       }
       if (w.pause > 0) {
         w.pause -= dt;
+        w.moving = false;
         continue;
       }
       // Hold at a closed crossing, just like vehicles.
@@ -297,8 +302,12 @@ export class TrafficManager {
             break;
           }
         }
-        if (hold) continue;
+        if (hold) {
+          w.moving = false;
+          continue;
+        }
       }
+      w.moving = true;
       let next = w.s + w.speed * dt * w.dir;
       if (next <= 0 || next >= w.path.total) {
         // Reached the end — despawn, spawn fresh from either end.
@@ -306,6 +315,7 @@ export class TrafficManager {
         w.dir = w.s === 0 ? 1 : -1;
         w.side = Math.random() < 0.5 ? -1 : 1;
         w.speed = rand(0.09, 0.16);
+        w.variant = getRandomPedestrianType();
         continue;
       }
       w.s = next;

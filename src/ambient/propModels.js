@@ -6,6 +6,8 @@
  */
 import * as THREE from 'three';
 
+import { createPedestrian, getRandomPedestrianType } from './pedestrianModels.js';
+
 // ── Shared geometries ──────────────────────────────────────────────────
 const PERSON_LEG_GEO = new THREE.BoxGeometry(0.03, 0.1, 0.03);
 const PERSON_TORSO_GEO = new THREE.BoxGeometry(0.1, 0.13, 0.06);
@@ -35,34 +37,11 @@ const TANKER_MAT = new THREE.MeshLambertMaterial({ color: 0xb9c2c9, flatShading:
 const randOf = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 /**
- * Low-poly passenger figure. Height ~0.32 units, walking/standing pose
- * with fixed legs (animation is done by the renderer via bob/tilt).
+ * Low-poly passenger figure matching reference sheet archetypes.
+ * Height ~0.32 units.
  */
-export function createPerson() {
-  const g = new THREE.Group();
-
-  const legL = new THREE.Mesh(PERSON_LEG_GEO, randOf(PANTS_MATS));
-  legL.position.set(-0.023, 0.05, 0);
-  g.add(legL);
-  const legR = new THREE.Mesh(PERSON_LEG_GEO, randOf(PANTS_MATS));
-  legR.position.set(0.023, 0.05, 0);
-  g.add(legR);
-
-  const torso = new THREE.Mesh(PERSON_TORSO_GEO, randOf(SHIRT_MATS));
-  torso.position.set(0, 0.168, 0);
-  g.add(torso);
-
-  const head = new THREE.Mesh(PERSON_HEAD_GEO, randOf(SKIN_MATS));
-  head.position.set(0, 0.265, 0);
-  g.add(head);
-
-  // Small hat/cap for readable silhouette
-  const cap = new THREE.Mesh(PERSON_HEAD_GEO, HEAD_MAT);
-  cap.position.set(0, 0.285, 0);
-  cap.scale.set(1.05, 0.5, 1.05);
-  g.add(cap);
-
-  return g;
+export function createPerson(variant) {
+  return createPedestrian(variant || getRandomPedestrianType());
 }
 
 /**
