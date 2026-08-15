@@ -544,9 +544,14 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
     }
   );
 
-  // --- 3. Landmarks: elevated ridge + sunken basin (scenic variety) ---
-  pushDisk(maxSide * (0.1 + rng() * 0.04) * radiusScale, 10 + 2 * Math.floor(rng() * 2), () => true);
-  pushDisk(maxSide * (0.08 + rng() * 0.04) * radiusScale, 4 + 2 * Math.floor(rng() * 2), () => true);
+  // --- 3. Landmarks: occasional elevated ridge + sunken basin (scenic
+  // variety). Both are infrequent — most of the map stays rolling fields. ---
+  if (rng() < 0.5) {
+    pushDisk(maxSide * (0.1 + rng() * 0.04) * radiusScale, 8 + 2 * Math.floor(rng() * 2), () => true);
+  }
+  if (rng() < 0.5) {
+    pushDisk(maxSide * (0.08 + rng() * 0.04) * radiusScale, 4 + 2 * Math.floor(rng() * 2), () => true);
+  }
 
   // --- 4. Extra dry plateaus — outside the river's reach ---
   const maxAwayR = Math.max(8, (across - margin - aHalf - RIVER_REACH) / 2 - 2);
@@ -570,7 +575,12 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
   return { plateaus, count, riverPin };
 }
 
-/** Multi-scale heightmap: broad hills, mid plateau regions, weak detail. */
+/**
+ * Multi-scale heightmap: broad hills, mid plateau regions, weak detail.
+ * Amplitudes are deliberately gentle — the world reads as rolling fields
+ * with large same-level flats (quantization does the rest), and mountains
+ * are rare landmarks instead of the default.
+ */
 function generateHeightMap(length, breadth, seed) {
   const noiseLow = createNoise2D(() => seed);
   const noiseMid = createNoise2D(() => seed * 1.7);
@@ -579,9 +589,9 @@ function generateHeightMap(length, breadth, seed) {
   for (let x = 0; x < length; x++) {
     heightMap[x] = [];
     for (let z = 0; z < breadth; z++) {
-      const broad = noiseLow(x * 0.02, z * 0.02) * 3.4;
-      const mid = noiseMid(x * 0.055, z * 0.055) * 1.5;
-      const detail = noiseHigh(x * 0.13, z * 0.13) * 0.5;
+      const broad = noiseLow(x * 0.02, z * 0.02) * 2.1;
+      const mid = noiseMid(x * 0.055, z * 0.055) * 1.0;
+      const detail = noiseHigh(x * 0.13, z * 0.13) * 0.3;
       heightMap[x][z] = Math.max(0, Math.round(broad + mid + detail + 8.5));
     }
   }

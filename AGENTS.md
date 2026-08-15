@@ -103,10 +103,26 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Model Library (`src/models/ModelLibrary.js`)**:
   - Loads, normalizes and caches all Draco-compressed GLB props (buildings, props, rocks, trees, trains) at `MODEL_SCALE = 0.3`; bakes node transforms and centers bases at y=0.
 
+- **Roads & Traffic (`src/environment/`)**:
+  - `roadNetwork.js`: Deterministic scenery road network (seeded, any non-highland biome, slope <= 1, clearing cells excluded). `RoadManager` stores roads (polyline waypoints per road, widths per type) + lamps/signs; supports user-placed straight road segments (`addRoad`/`removeRoad`, road crossings allowed) merged with the natural layout. `createRoadMeshes` renders instanced asphalt/shoulder/dirt quads (no sidewalks at crossroads, later road lifted to avoid z-fighting), lamp posts with night-glow, and signs. `ScatterProps` excludes road cells so props never sit on the surface; a version poll keeps meshes/exclusions/traffic in sync with runtime road edits.
+  - `scatterRegistry.js`: Runtime record of scattered buildings (barns/sheds/huts) so roads and walkers can target them without duplicating scatter logic.
+  - `TrafficManager.js` & `TrafficRenderer.jsx`: Pooled decorative vehicles (car/truck/bus/cart/bike) and road-edge pedestrians. Vehicles despawn/respawn with random type from either road end; walkers walk the road edge only. All actors stop at active railway crossings (approach-relative). Delta-time based, frozen beyond 45 units from camera.
+  - `Roads.jsx`: Builds road layout per terrain; fades lamp glow with `lighting.nightness`.
+  - Road placement: Hotbar Road tool (straight, axis-aligned, R rotates, Delete tool removes).
+
+- **Signals (`src/signals/`)**:
+  - `SignalManager.js`: Deterministic auto-scattered signals beside long track runs (`rebuildAuto`, seeded, runs >= 5 tracks, dead-end signals). States (clear/approaching/occupied/departing) derive from along-track train distance — visual only, never stop trains. Aspect mapping per type (two/platform, three, junction).
+  - `SignalsRenderer.jsx` & `signalModels.js`: Renders the `colour-light-signal` GLB with additive aspect lamps; React reconciles only on topology changes. Auto-regenerated on every track layout change (no user tool).
+  - `src/tracks/pathDistance.js`: `distanceAlongTrack` — Dijkstra over the track graph for track-relative approach detection.
+
+- **Road-Rail Crossings (`src/crossings/`)**:
+  - `CrossingManager.js`: Detects track×road intersections (per-type tolerance ≈ half road width), groups hits, merges crossings of the same connected track line over one road. State machine open → warning → closing → closed → opening (gates stay closed while ANY consist part is on/within exit margin; stopped/reversed trains never cause unsafe opening). Optional bell/gate-motor/whistle audio via `trainAudio`.
+  - `CrossingRenderer.jsx` & `crossingModels.js`: Rebuilds on track/road layout changes (signature poll), animates barrier arms + alternating red warning lamps imperatively.
+
 - **Post-Processing (`src/postprocessing/Effects.jsx`)**:
   - Custom `EffectComposer` pipeline with toggleable `TiltShiftShader` (miniature depth of field + saturation + vignette) and `CelShader` (posterized luminance + Sobel edge detection).
 
 - **UI & Controls (`src/ui/`, `src/ControlPanel.jsx`, `src/hooks/useTrackPlacement.js`)**:
-  - `Hotbar.jsx`: Tool switcher (Hand, Straight, Curved, Train, Station, Coach, Delete) with keyboard shortcuts (1-7, Escape to deselect, R to rotate, Q/E/X for bridge heights).
-  - `ControlPanel.jsx`, `TrainControl.jsx` & `EnvironmentSettings.jsx`: Terrain sizing, train speed/dispatch controls, time-of-day (dawn/day/dusk/night), fog, and debug statistics.
-  - `CoachMenu.jsx`: Radial coach picker (thumbnails in a circle) opened by clicking an engine with the Coach tool; `GameScene.jsx` orchestrates scene composition and `LoadingScreen.jsx` shows asset-load progress.
+  - `Hotbar.jsx`: Tool switcher (Hand, Straight, Curved, Road, Train, Station, Coach, Delete) with keyboard shortcuts (1-8, Escape to deselect, R to rotate/flip, Q/E/X for bridge heights).
+  - `ControlPanel.jsx`, `TrainControl.jsx`, `EnvironmentSettings.jsx` & `PerformanceSettings.jsx`: Terrain sizing, train speed/dispatch controls, time-of-day (dawn/day/dusk/night), fog, shadows, tilt-shift/cel toggles, ambient activity, roads & traffic, signals & crossings, frame limit/vsync, and debug statistics.
+  - `CoachMenu.jsx`: Radial coach picker (thumbnails in a circle) opened by clicking an engine with the Coach tool; `GameScene.jsx` orchestrates scene composition (terrain, tracks, stations, activity, roads/traffic, signals, crossings, trains) and `LoadingScreen.jsx` shows asset-load progress.

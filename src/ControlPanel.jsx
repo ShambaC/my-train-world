@@ -31,6 +31,10 @@ export default function ControlPanel({
   onAmbientChange,
   soundsEnabled,
   onSoundsChange,
+  trafficEnabled,
+  onTrafficChange,
+  signalsEnabled,
+  onSignalsChange,
   followTrainId,
   onFollowTrain
 }) {
@@ -241,6 +245,10 @@ export default function ControlPanel({
               onAmbientChange={onAmbientChange}
               soundsEnabled={soundsEnabled}
               onSoundsChange={onSoundsChange}
+              trafficEnabled={trafficEnabled}
+              onTrafficChange={onTrafficChange}
+              signalsEnabled={signalsEnabled}
+              onSignalsChange={onSignalsChange}
             />
           </div>
 
@@ -268,11 +276,12 @@ export default function ControlPanel({
             <h3 className="text-sm font-semibold mb-2 text-green-400">✅ Active Features</h3>
             <p className="text-xs text-gray-400 mb-2">Use the hotbar at the bottom to:</p>
             <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-              <li>Select track types (1-2)</li>
-              <li>Press R to rotate tracks</li>
-              <li>Place trains on tracks (3)</li>
-              <li>Use Q/E for elevated tracks</li>
-              <li>Delete with tool (4)</li>
+               <li>Select track types (1-3)</li>
+               <li>Place roads (4)</li>
+               <li>Press R to rotate tracks/roads</li>
+               <li>Place trains on tracks (5)</li>
+               <li>Use Q/E for elevated tracks</li>
+               <li>Delete with tool (8)</li>
             </ul>
           </div>
 

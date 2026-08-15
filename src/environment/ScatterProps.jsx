@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 import { BIOME, mulberry32, isClearingCell } from '../terrain.js';
 import { applyWindSway } from './wind.js';
+import { scatterRegistry } from './scatterRegistry.js';
 
 const VOXEL = 0.5;
 
@@ -101,7 +102,7 @@ const SCATTER_DEFS = [
  * Shadow policy: only major buildings cast real shadows; every prop gets a
  * fake contact patch; trees sway in the shared wind clock.
  */
-export default function ScatterProps({ terrainData, trackManager, stationManager, trackCount, stationsVersion }) {
+export default function ScatterProps({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager }) {
   const groupRef = useRef(new THREE.Group());
   const layoutRef = useRef([]);
 
@@ -117,6 +118,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
   useMemo(() => {
     groupRef.current = new THREE.Group();
     layoutRef.current = [];
+    scatterRegistry.clear();
 
     if (!terrainData?.heightMap) return;
 
@@ -181,6 +183,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       // trees; bushes/shrubs may freely grow under or next to them.
       const isTree = def.key === 'lineside-oak' || def.key === 'lineside-pine';
       const placedList = isTree ? sharedTreePlaced : [];
+      const isBuilding = BUILDING_DEFS.has(def.key);
       const rng = mulberry32((((seed * 2654435761) >>> 0) ^ (defIndex * 40503)) >>> 0);
 
       for (const { x, z } of cells) {
@@ -228,11 +231,15 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
           cellX: x,
           cellZ: z,
         });
+
+        // Register major buildings for the road network + traffic.
+        if (isBuilding) {
+          scatterRegistry.add(x, z, (x - length / 2 + 0.5) * VOXEL, h * VOXEL + 0.25 - SINK, (z - breadth / 2 + 0.5) * VOXEL);
+        }
       }
 
       if (instances.length === 0) continue;
 
-      const isBuilding = BUILDING_DEFS.has(def.key);
       const isWindy = WIND_DEFS.has(def.key);
 
       const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);
@@ -304,48 +311,70 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
     layoutRef.current._needsExclusion = true;
   }, [terrainData, length, breadth]);
 
-  // Exclusion pass: hide instances that collide with tracks or stations
+  // Exclusion pass: hide instances that collide with tracks, stations or
+  // roads. Roads can change at runtime (user placement), so a poll re-runs
+  // the pass when roadManager.version changes outside React renders.
   useEffect(() => {
     const layout = layoutRef.current;
     if (!layout.length) return;
 
-    const excluded = new Set();
-    const markCell = (x, z, r) => {
-      for (let dx = -r; dx <= r; dx++) {
-        for (let dz = -r; dz <= r; dz++) {
-          excluded.add(`${x + dx},${z + dz}`);
+    const run = () => {
+      const excluded = new Set();
+      const markCell = (x, z, r) => {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dz = -r; dz <= r; dz++) {
+            excluded.add(`${x + dx},${z + dz}`);
+          }
         }
+      };
+
+      for (const track of trackManager.getAllTracks()) {
+        const cx = Math.round(track.position.x / VOXEL + length / 2 - 0.5);
+        const cz = Math.round(track.position.z / VOXEL + breadth / 2 - 0.5);
+        markCell(cx, cz, 2);
+      }
+
+      for (const station of stationManager.getAllStations()) {
+        const r = station.voxelRect;
+        for (let x = r.minX - 1; x <= r.maxX + 1; x++) {
+          for (let z = r.minZ - 1; z <= r.maxZ + 1; z++) {
+            excluded.add(`${x},${z}`);
+          }
+        }
+      }
+
+      // Roads carve through scenery — keep the road surface clear of props.
+      if (roadManager?.ready) {
+        for (const cell of roadManager.getRoadCells()) {
+          const [cx, cz] = cell.split(',').map(Number);
+          markCell(cx, cz, 1);
+        }
+      }
+
+      for (const inst of layout) {
+        const isExcluded = excluded.has(`${inst.cellX},${inst.cellZ}`);
+        if (isExcluded === inst.hidden) continue;
+        inst.hidden = isExcluded;
+
+        position.set(inst.ox, inst.oy, inst.oz);
+        quaternion.copy(inst.rotQ);
+        scaleVec.set(isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale);
+        matrix.compose(position, quaternion, scaleVec);
+        inst.mesh.setMatrixAt(inst.index, matrix);
+        inst.mesh.instanceMatrix.needsUpdate = true;
       }
     };
 
-    for (const track of trackManager.getAllTracks()) {
-      const cx = Math.round(track.position.x / VOXEL + length / 2 - 0.5);
-      const cz = Math.round(track.position.z / VOXEL + breadth / 2 - 0.5);
-      markCell(cx, cz, 2);
-    }
-
-    for (const station of stationManager.getAllStations()) {
-      const r = station.voxelRect;
-      for (let x = r.minX - 1; x <= r.maxX + 1; x++) {
-        for (let z = r.minZ - 1; z <= r.maxZ + 1; z++) {
-          excluded.add(`${x},${z}`);
-        }
+    run();
+    let lastRoadVersion = roadManager?.version ?? -1;
+    const interval = setInterval(() => {
+      if ((roadManager?.version ?? -1) !== lastRoadVersion) {
+        lastRoadVersion = roadManager?.version ?? -1;
+        run();
       }
-    }
-
-    for (const inst of layout) {
-      const isExcluded = excluded.has(`${inst.cellX},${inst.cellZ}`);
-      if (isExcluded === inst.hidden) continue;
-      inst.hidden = isExcluded;
-
-      position.set(inst.ox, inst.oy, inst.oz);
-      quaternion.copy(inst.rotQ);
-      scaleVec.set(isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale);
-      matrix.compose(position, quaternion, scaleVec);
-      inst.mesh.setMatrixAt(inst.index, matrix);
-      inst.mesh.instanceMatrix.needsUpdate = true;
-    }
-  }, [trackCount, stationsVersion, terrainData, trackManager, stationManager, length, breadth]);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [trackCount, stationsVersion, terrainData, trackManager, stationManager, roadManager, length, breadth]);
 
   return <primitive object={groupRef.current} />;
 }

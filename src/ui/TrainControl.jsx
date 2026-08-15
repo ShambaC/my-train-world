@@ -55,7 +55,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
           </div>
         </div>
         <div className="text-xs text-gray-400 py-2">
-          No trains on the map. Use the train tool (key 3) to place trains on tracks.
+          No trains on the map. Use the train tool (key 5) to place trains on tracks.
         </div>
       </div>
     );

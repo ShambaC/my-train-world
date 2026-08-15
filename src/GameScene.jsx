@@ -22,6 +22,14 @@ import RenderScheduler from './render/RenderScheduler';
 import { ActivityManager } from './ambient/ActivityManager';
 import ActivityRenderer from './ambient/ActivityRenderer';
 import { trainAudio } from './audio/trainAudio';
+import Roads from './environment/Roads';
+import { RoadManager } from './environment/roadNetwork';
+import { TrafficManager } from './environment/TrafficManager';
+import TrafficRenderer from './environment/TrafficRenderer';
+import { SignalManager } from './signals/SignalManager';
+import SignalsRenderer from './signals/SignalsRenderer';
+import { CrossingManager } from './crossings/CrossingManager';
+import CrossingRenderer from './crossings/CrossingRenderer';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -54,6 +62,13 @@ function Scene({
   activityManager,
   followTrainId,
   stationOrientation,
+  roadManager,
+  trafficManager,
+  signalManager,
+  crossingManager,
+  trafficEnabled,
+  signalsEnabled,
+  trackLayoutVersion,
 }) {
   const terrainRef = useRef();
   const orbitRef = useRef(null);
@@ -114,6 +129,13 @@ function Scene({
       };
     }
   }, [camera, gl, terrain, terrainRef]);
+
+  // Auto-scatter signals beside long track runs (deterministic per seed).
+  // Runs after every track layout change + terrain (re)generation.
+  useEffect(() => {
+    if (!terrain) return;
+    signalManager?.rebuildAuto(trackManager, terrainSeed);
+  }, [trackLayoutVersion, tracksVersion, terrainSeed, terrain, signalManager, trackManager]);
 
   // Per-frame lighting: ease the current values toward the target preset
   // (no abrupt color/intensity jumps), then apply to lights and fog.
@@ -274,6 +296,8 @@ function Scene({
           trainDirection={trainDirection}
           onStationsChange={onStationsChange}
           onCoachPick={onCoachPick}
+          signalManager={signalManager}
+          roadManager={roadManager}
         />
       )}
 
@@ -302,6 +326,17 @@ function Scene({
         />
       )}
 
+      {/* Roads — rendered before ScatterProps so its exclusion effect runs
+          after the road layout is built (same commit). */}
+      {terrain && (
+        <Roads
+          terrainData={terrain?.userData}
+          roadManager={roadManager}
+          lighting={lighting}
+          enabled={trafficEnabled}
+        />
+      )}
+
       {/* Scattered Props */}
       {terrain && (
         <ScatterProps
@@ -310,6 +345,40 @@ function Scene({
           stationManager={stationManager}
           trackCount={trackCount}
           stationsVersion={stationsVersion}
+          roadManager={roadManager}
+        />
+      )}
+
+      {/* Traffic (vehicles, pedestrians) */}
+      {terrain && trafficEnabled && (
+        <TrafficRenderer
+          trafficManager={trafficManager}
+          roadManager={roadManager}
+          crossingManager={crossingManager}
+          lighting={lighting}
+          enabled={trafficEnabled && ambientEnabled}
+        />
+      )}
+
+      {/* Signals (user-placed + auto-scattered beside long tracks) */}
+      {terrain && (
+        <SignalsRenderer
+          signalManager={signalManager}
+          trainManager={trainManager}
+          lighting={lighting}
+          enabled={signalsEnabled}
+        />
+      )}
+
+      {/* Road-rail crossings (gates + warning lights) */}
+      {terrain && (
+        <CrossingRenderer
+          crossingManager={crossingManager}
+          trackManager={trackManager}
+          roadManager={roadManager}
+          trainManager={trainManager}
+          lighting={lighting}
+          enabled={signalsEnabled}
         />
       )}
       
@@ -361,6 +430,8 @@ export default function GameScene({
   vsync = true,
   ambientEnabled = true,
   soundsEnabled = true,
+  trafficEnabled = true,
+  signalsEnabled = true,
   followTrainId = null,
   stationOrientation = 'horizontal',
 }) {
@@ -373,11 +444,26 @@ export default function GameScene({
   const [trainCount, setTrainCount] = useState(0);
   const [stationCount, setStationCount] = useState(0);
   const [stationsVersion, setStationsVersion] = useState(0);
+  const [trackLayoutVersion, setTrackLayoutVersion] = useState(0);
   const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
   const activityManagerRef = useRef(null);
   if (!activityManagerRef.current) {
     activityManagerRef.current = new ActivityManager(stationManager, trainManager);
+  }
+
+  // Roads, traffic, signals and crossings — one set of managers per scene.
+  const roadManagerRef = useRef(null);
+  if (!roadManagerRef.current) roadManagerRef.current = new RoadManager();
+  const trafficManagerRef = useRef(null);
+  if (!trafficManagerRef.current) trafficManagerRef.current = new TrafficManager();
+  const signalManagerRef = useRef(null);
+  if (!signalManagerRef.current) {
+    signalManagerRef.current = new SignalManager(trackManager);
+  }
+  const crossingManagerRef = useRef(null);
+  if (!crossingManagerRef.current) {
+    crossingManagerRef.current = new CrossingManager(trackManager, roadManagerRef.current);
   }
 
   // Ambient sound master switch
@@ -392,6 +478,7 @@ export default function GameScene({
 
   const handleTracksChange = (tracks) => {
     setTrackCount(tracks.length);
+    setTrackLayoutVersion((v) => v + 1);
     stationManager?.rebuildBindings(trackManager);
     if (onTracksChange) onTracksChange(tracks);
   };
@@ -446,6 +533,10 @@ export default function GameScene({
       Object.assign(window.__mtw || (window.__mtw = {}), {
         trackManager, stationManager, trainManager,
         activityManager: activityManagerRef.current,
+        roadManager: roadManagerRef.current,
+        signalManager: signalManagerRef.current,
+        crossingManager: crossingManagerRef.current,
+        trafficManager: trafficManagerRef.current,
         handleStationsChange,
       });
     }
@@ -501,6 +592,13 @@ export default function GameScene({
           activityManager={activityManagerRef.current}
           followTrainId={followTrainId}
           stationOrientation={stationOrientation}
+          roadManager={roadManagerRef.current}
+          trafficManager={trafficManagerRef.current}
+          signalManager={signalManagerRef.current}
+          crossingManager={crossingManagerRef.current}
+          trafficEnabled={trafficEnabled}
+          signalsEnabled={signalsEnabled}
+          trackLayoutVersion={trackLayoutVersion}
         />
         {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (

@@ -1,11 +1,12 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { WATER_LEVEL } from '../terrain.js';
 
 /**
  * Custom hook for raycasting and track placement
  */
-export function useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection) {
+export function useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager) {
   const { camera, gl } = useThree();
   const [ghostPosition, setGhostPosition] = useState(null);
   const [isValidPosition, setIsValidPosition] = useState(true);
@@ -132,6 +133,12 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
               target = { kind: 'station', id: station.id, position: station.centerWorld, rect: station.worldRect };
             }
           }
+          if (!target && roadManager) {
+            const road = roadManager.findRoadAtPosition(point, 0.7);
+            if (road) {
+              target = { kind: 'road', id: road.road.id, position: road.center, rotation: road.rotation, type: null };
+            }
+          }
           if (target) {
             setGhostPosition({
               x: target.position.x,
@@ -180,25 +187,31 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       const snapped = trackManager.snapToGrid(point);
       snapped.y = snapped.y + heightOffset;
 
-      // Check if valid placement (only for track tools) - pass surface normal
-      const valid = selectedTool.type === 'track' ? trackManager.isValidPlacement(
-        snapped,
-        selectedTool.trackType,
-        rotation,
-        point.y,
-        normal
-      ) : true;
+      let valid = true;
+      if (selectedTool.type === 'track') {
+        valid = trackManager.isValidPlacement(
+          snapped,
+          selectedTool.trackType,
+          rotation,
+          point.y,
+          normal
+        );
+      } else if (selectedTool.type === 'road') {
+        // Roads stay permissive: allow track overlap/crossings, reject only
+        // water and duplicate same-axis road tiles.
+        valid = point.y >= WATER_LEVEL && roadManager?.isRoadPlacementValid(snapped, rotation) !== false;
+      }
 
       setIsValidPosition(valid);
       setGhostPosition({
         ...snapped,
         rotation: rotation,
-        type: selectedTool.trackType,
+        type: selectedTool.type === 'road' ? 'road' : selectedTool.trackType,
       });
     } else {
       setGhostPosition(null);
     }
-  }, [camera, gl, terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection]);
+  }, [camera, gl, terrainRef, trackManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager]);
 
   // Recalculate ghost position when rotation or heightOffset changes
   const recalculateGhostPosition = useCallback(() => {

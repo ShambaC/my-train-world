@@ -35,6 +35,13 @@ const TOOLS = [
     trackType: 'curved'
   },
   { 
+    id: 'road', 
+    name: 'Place Road', 
+    label: 'Road',
+    icon: '🛣️', 
+    type: 'road'
+  },
+  { 
     id: 'train', 
     name: 'Place Train', 
     label: 'Train',
@@ -81,6 +88,8 @@ function App() {
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
   const [ambientEnabled, setAmbientEnabled] = useState(true);
   const [soundsEnabled, setSoundsEnabled] = useState(true);
+  const [trafficEnabled, setTrafficEnabled] = useState(true);
+  const [signalsEnabled, setSignalsEnabled] = useState(true);
   const [followTrainId, setFollowTrainId] = useState(null);
   // Stations have exactly two orientations (horizontal / vertical); R toggles.
   const [stationOrientation, setStationOrientation] = useState('horizontal');
@@ -231,6 +240,8 @@ function App() {
         vsync={vsync}
         ambientEnabled={ambientEnabled}
         soundsEnabled={soundsEnabled}
+        trafficEnabled={trafficEnabled}
+        signalsEnabled={signalsEnabled}
         followTrainId={followTrainId}
         stationOrientation={stationOrientation}
       />
@@ -264,6 +275,10 @@ function App() {
         onAmbientChange={setAmbientEnabled}
         soundsEnabled={soundsEnabled}
         onSoundsChange={setSoundsEnabled}
+        trafficEnabled={trafficEnabled}
+        onTrafficChange={setTrafficEnabled}
+        signalsEnabled={signalsEnabled}
+        onSignalsChange={setSignalsEnabled}
         followTrainId={followTrainId}
         onFollowTrain={setFollowTrainId}
       />

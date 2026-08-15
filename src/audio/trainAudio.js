@@ -104,6 +104,44 @@ class TrainAudio {
       osc.stop(t + 0.55);
     }
   }
+
+  /** Crossing bell: single ding (cadence driven by the crossing state). */
+  crossingBell() {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(VOLUME * 0.7, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 1245; // ~D#6 — softer than the station bell
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.3);
+  }
+
+  /** Crossing gate motor: short low buzz while arms move. */
+  gateMotor() {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(VOLUME * 0.5, t0 + 0.05);
+    gain.gain.setValueAtTime(VOLUME * 0.5, t0 + 0.6);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.95);
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(60, t0);
+    osc.frequency.linearRampToValueAtTime(48, t0 + 0.95);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 1.0);
+  }
 }
 
 export const trainAudio = new TrainAudio();

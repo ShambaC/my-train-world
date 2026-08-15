@@ -88,7 +88,7 @@ export class TrainManager {
     this.time += deltaTime;
 
     for (const train of this.trains.values()) {
-      const currentTrack = this.trackManager.tracks.get(train.currentTrackId);
+      let currentTrack = this.trackManager.tracks.get(train.currentTrackId);
       if (!currentTrack) {
         if (train.active) {
           console.warn('Train on invalid track:', train.currentTrackId);
@@ -124,7 +124,7 @@ export class TrainManager {
       // Speed target: ease down near a station far end and near track ends
       // (dead ends / reversals), otherwise the user-set global speed.
       let speedTarget = train.speedMax;
-      const station = this.stationManager?.getStationForTrack(currentTrack.id);
+      let station = this.stationManager?.getStationForTrack(currentTrack.id);
       if (station) {
         const r = station.worldRect;
         const inside =
@@ -160,6 +160,12 @@ export class TrainManager {
       } else if (sign < 0 && train.progress <= 0.0) {
         this.transition(train, currentTrack, 'back');
       }
+
+      // Transition may switch train.currentTrackId. Refresh track before
+      // calculating tangent/position; using old track for one frame makes
+      // train appear to teleport backward at every connection.
+      currentTrack = this.trackManager.tracks.get(train.currentTrackId) || currentTrack;
+      station = this.stationManager?.getStationForTrack(currentTrack.id);
 
       // NO clamp here — it resets accumulation before the boundary is crossed.
 
