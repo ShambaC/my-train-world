@@ -16,14 +16,26 @@ function smoothstep(edge0, edge1, x) {
 const KINDS = {
   smoke: {
     count: 20,
-    spawnY: 0.52,
-    spawnZ: 0.25,
+    spawnY: 0.54,
+    spawnZ: 0.26,
     size: [0.05, 0.1],
     rise: [0.16, 0.32],
     life: [1.0, 1.5],
     color: 0xc9c9c9, // light steam gray
     emissive: 0x9a9a9a, // stays visible (soft steam) even at night
     opacity: 0.3,
+    spin: true,
+  },
+  dieselSmoke: {
+    count: 14,
+    spawnY: 0.36,
+    spawnZ: 0.28,
+    size: [0.035, 0.07],
+    rise: [0.12, 0.24],
+    life: [0.8, 1.2],
+    color: 0x5a5c60, // light diesel exhaust
+    emissive: 0x222222,
+    opacity: 0.22,
     spin: true,
   },
   dust: {
@@ -67,10 +79,20 @@ const PARTICLE_MATS = Object.fromEntries(
  * imperatively every frame — no React re-renders while trains move. Train
  * state (active/speed) is read straight from the TrainManager.
  */
-export default function SmokeParticles({ target, trainManager, trainId, kind = 'smoke' }) {
+export default function SmokeParticles({ target, trainManager, trainId, engineType = 'steam-engine', kind = 'smoke' }) {
   const meshRef = useRef();
   const groupRef = useRef();
-  const cfg = KINDS[kind] || KINDS.smoke;
+
+  if (kind === 'smoke' && engineType === 'electric-engine') {
+    return null;
+  }
+
+  const effectiveKind =
+    kind === 'smoke' && (engineType === 'diesel-engine' || engineType === 'checker-engine')
+      ? 'dieselSmoke'
+      : kind;
+
+  const cfg = KINDS[effectiveKind] || KINDS.smoke;
 
   const particles = useMemo(() => {
     return Array.from({ length: cfg.count }, (_, i) => ({

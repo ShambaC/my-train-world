@@ -62,6 +62,7 @@ export function captureWorld({ terrainSize, terrainSeed, trackManager, stationMa
     rotation: t.rotation,
     bank: t.bank,
     active: t.active,
+    engineType: t.engineType || 'steam-engine',
     coaches: (t.coaches || []).map((c) => ({ ...c })),
   }));
 

@@ -6,6 +6,7 @@
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
 import { COACH_LENGTH } from './coachTypes.js';
+import { DEFAULT_ENGINE } from './engineTypes.js';
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -44,7 +45,7 @@ export class TrainManager {
   /**
    * Add a train. direction: 1 = along track tangent, -1 = against it.
    */
-  addTrain(startTrackId, direction = 1) {
+  addTrain(startTrackId, direction = 1, engineType = DEFAULT_ENGINE) {
     const startTrack = this.trackManager.tracks.get(startTrackId);
     if (!startTrack) {
       console.error('Start track not found:', startTrackId);
@@ -61,6 +62,7 @@ export class TrainManager {
     const id = `train_${this.nextId++}`;
     const train = {
       id,
+      engineType: engineType || DEFAULT_ENGINE,
       currentTrackId: startTrackId,
       progress: t,
       speed: 0,          // eased toward speedMax each frame (smooth motion)
@@ -80,6 +82,13 @@ export class TrainManager {
     return train;
   }
 
+  setEngineType(trainId, engineType) {
+    const train = this.trains.get(trainId);
+    if (!train) return false;
+    train.engineType = engineType;
+    return true;
+  }
+
   removeTrain(id) {
     this.trains.delete(id);
   }
@@ -92,6 +101,7 @@ export class TrainManager {
   restoreTrain(data) {
     const train = {
       ...data,
+      engineType: data.engineType || DEFAULT_ENGINE,
       heading: { ...data.heading },
       position: { ...data.position },
       cooldowns: data.cooldowns instanceof Map ? data.cooldowns : new Map(Object.entries(data.cooldowns || {})),

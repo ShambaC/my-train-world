@@ -14,12 +14,26 @@ export default function StationRoleMenu({ x, y, onSelect, onClose }) {
   const labelRadius = radius + 50;
 
   return (
-    <div className="fixed z-50" style={{ left: x, top: y }}>
+    <div
+      className="fixed z-50"
+      style={{ left: x, top: y }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Click-away backdrop — defaults to village */}
-      <div className="fixed inset-0" onClick={onClose} />
+      <div
+        className="fixed inset-0"
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      />
       <div className="absolute" style={{ left: -hub, top: -hub }}>
         {/* Hub */}
-        <div className="w-[80px] h-[80px] rounded-full bg-gray-800 border-2 border-green-500 flex flex-col items-center justify-center shadow-2xl">
+        <div className="w-[80px] h-[80px] rounded-full bg-gray-800 border-2 border-green-500 flex flex-col items-center justify-center shadow-2xl pointer-events-none">
           <span className="text-lg">🚉</span>
           <span className="text-[9px] text-gray-300">Role</span>
           <span className="text-[8px] text-gray-500">(village = default)</span>
@@ -44,7 +58,13 @@ export default function StationRoleMenu({ x, y, onSelect, onClose }) {
                 </div>
               )}
               <button
-                onClick={() => onSelect(role.key)}
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(role.key);
+                }}
                 onMouseEnter={() => setHoverKey(role.key)}
                 onMouseLeave={() => setHoverKey(null)}
                 className={`w-[68px] h-[68px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-xl overflow-hidden transition-all hover:scale-110 flex flex-col items-center justify-center ${
@@ -54,8 +74,8 @@ export default function StationRoleMenu({ x, y, onSelect, onClose }) {
                 }`}
                 title={role.label}
               >
-                <span className="text-2xl">{role.icon}</span>
-                <span className="text-[9px] text-white mt-0.5">{role.label}</span>
+                <span className="text-2xl pointer-events-none">{role.icon}</span>
+                <span className="text-[9px] text-white mt-0.5 pointer-events-none">{role.label}</span>
               </button>
             </div>
           );

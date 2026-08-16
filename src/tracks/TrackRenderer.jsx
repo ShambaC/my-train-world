@@ -9,7 +9,6 @@ import { createContainerCoach } from '../trains/ContainerCoachModel';
 import { createViewdeckCoach } from '../trains/ViewdeckCoachModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
-import { getEndpoints } from './trackGeometry';
 import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/editActions';
 import ModelLibrary from '../models/ModelLibrary';
 import { DEFAULT_COACH, COACH_SPACING } from '../trains/coachTypes';
@@ -17,11 +16,6 @@ import * as THREE from 'three';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
 const ROAD_GHOST_GEO = new THREE.BoxGeometry(0.75, 0.02, 0.5);
-
-// Small endpoint markers on the track placement ghost (connection assist).
-const endpointMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, toneMapped: false });
-const endpointMatSnapped = new THREE.MeshBasicMaterial({ color: 0x00ff88, toneMapped: false });
-const endpointGeo = new THREE.SphereGeometry(0.07, 8, 8);
 
 export default function TrackRenderer({
   trackManager,
@@ -35,6 +29,8 @@ export default function TrackRenderer({
   trainDirection,
   onStationsChange,
   onCoachPick,
+  onEnginePick,
+  currentEngineType = 'steam-engine',
   signalManager,
   roadManager,
   history,
@@ -69,6 +65,8 @@ export default function TrackRenderer({
   const onTracksChangeRef = useRef(onTracksChange);
   const onStationsChangeRef = useRef(onStationsChange);
   const onCoachPickRef = useRef(onCoachPick);
+  const onEnginePickRef = useRef(onEnginePick);
+  const currentEngineTypeRef = useRef(currentEngineType);
   const signalManagerRef = useRef(signalManager);
   const roadManagerRef = useRef(roadManager);
   const historyRef = useRef(history);
@@ -84,6 +82,8 @@ export default function TrackRenderer({
   onTracksChangeRef.current = onTracksChange;
   onStationsChangeRef.current = onStationsChange;
   onCoachPickRef.current = onCoachPick;
+  onEnginePickRef.current = onEnginePick;
+  currentEngineTypeRef.current = currentEngineType;
   signalManagerRef.current = signalManager;
   roadManagerRef.current = roadManager;
   historyRef.current = history;
@@ -109,27 +109,21 @@ export default function TrackRenderer({
       const dx = Math.abs(train.position.x - point.x);
       const dz = Math.abs(train.position.z - point.z);
       if (dx < 0.45 && dz < 0.45) {
-        target = { kind: 'train', id: train.id, position: train.position, rotation: train.rotation, type: null };
+        target = { kind: 'train', id: train.id };
         break;
       }
     }
     if (!target) {
       const track = trackManagerRef.current.getTrackAtPosition(point, 0.35);
-      if (track) {
-        target = { kind: 'track', id: track.id, position: track.position, rotation: track.rotation || 0, type: track.type };
-      }
+      if (track) target = { kind: 'track', id: track.id };
     }
-    if (!target) {
-      const station = stationManagerRef.current?.getStationAtPosition(point, 0.9);
-      if (station) {
-        target = { kind: 'station', id: station.id, position: station.centerWorld, rect: station.worldRect };
-      }
+    if (!target && stationManagerRef.current) {
+      const st = stationManagerRef.current.getStationAtPosition(point);
+      if (st) target = { kind: 'station', id: st.id };
     }
     if (!target && roadManagerRef.current) {
-      const road = roadManagerRef.current.findRoadAtPosition(point, 0.7);
-      if (road) {
-        target = { kind: 'road', id: road.road.id, position: road.center, rotation: road.rotation, type: null };
-      }
+      const rd = roadManagerRef.current.getRoadAtPosition(point);
+      if (rd) target = { kind: 'road', id: rd.id };
     }
     return target;
   };
@@ -139,24 +133,18 @@ export default function TrackRenderer({
     if (!canvas) return;
 
     const handleMouseDown = (e) => {
+      if (e.target !== canvas) return;
       mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     };
 
     const handleClick = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const isOnCanvas =
-        e.clientX >= rect.left && e.clientX <= rect.right &&
-        e.clientY >= rect.top && e.clientY <= rect.bottom;
-      if (!isOnCanvas) return;
-
-      if (mouseDownPosRef.current) {
-        const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
-        const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
-        if (dx > 5 || dy > 5) {
-          mouseDownPosRef.current = null;
-          return;
-        }
-      }
+      if (e.target !== canvas) return;
+      if (!mouseDownPosRef.current) return;
+      const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+      const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+      mouseDownPosRef.current = null;
+      // Filter out drags (orbit / pan)
+      if (dx > 5 || dy > 5) return;
 
       const tool = selectedToolRef.current;
 
@@ -177,17 +165,17 @@ export default function TrackRenderer({
         const target = point ? resolveTarget(point) : null;
         onSelectRef.current?.(target ? { kind: target.kind, id: target.id } : null);
       } else if (tool?.type === 'train') {
-        if (ghostPosition?.isTrack) {
+        const target = ghostPosition?.target;
+        if (target?.kind === 'train') {
+          onEnginePickRef.current?.({ trainId: target.id }, e.clientX, e.clientY);
+        } else if (ghostPosition?.isTrack) {
           const track = trackManagerRef.current.getTrackAtPosition(ghostPosition, 0.35);
           if (track) {
-            const train = trainManagerRef.current.addTrain(track.id, trainDirectionRef.current);
-            if (train && historyRef.current) {
-              const snap = clone(train);
-              historyRef.current.push({
-                undo: () => trainManagerRef.current.removeTrain(train.id),
-                redo: () => trainManagerRef.current.restoreTrain(clone(snap)),
-              });
-            }
+            onEnginePickRef.current?.(
+              { trackId: track.id, direction: trainDirectionRef.current },
+              e.clientX,
+              e.clientY
+            );
           }
         }
       } else if (tool?.type === 'road') {
@@ -297,7 +285,12 @@ export default function TrackRenderer({
         ? makeGhost(new THREE.Mesh(ROAD_GHOST_GEO, new THREE.MeshBasicMaterial({ color: GHOST_GREEN })), color)
         : null;
     } else if (selectedTool.type === 'train') {
-      mesh = makeGhost(createTrainEngine(0), isValidPosition ? GHOST_GREEN : GHOST_RED);
+      if (ghostPosition?.target?.kind === 'train') {
+        const t = trainManager?.getTrain?.(ghostPosition.target.id);
+        mesh = makeGhost(createTrainEngine(t?.engineType || currentEngineType || 'steam-engine'), GHOST_GREEN);
+      } else {
+        mesh = makeGhost(createTrainEngine(currentEngineType || 'steam-engine'), isValidPosition ? GHOST_GREEN : GHOST_RED);
+      }
     } else if (selectedTool.type === 'coach') {
       // Green ghost of the default coach, hovering behind the engine
       if (ghostPosition?.target?.kind === 'train') {
@@ -344,7 +337,8 @@ export default function TrackRenderer({
         box.renderOrder = 10;
         mesh = box;
       } else if (ghostPosition?.target?.kind === 'train') {
-        mesh = makeGhost(createTrainEngine(0), GHOST_RED, 0.5);
+        const t = trainManager?.getTrain?.(ghostPosition.target.id);
+        mesh = makeGhost(createTrainEngine(t?.engineType || 'steam-engine'), GHOST_RED, 0.5);
       } else if (ghostPosition?.type) {
         mesh = ghostPosition.type === 'straight'
           ? makeGhost(createStraightTrack(), GHOST_RED, 0.5)
@@ -355,19 +349,6 @@ export default function TrackRenderer({
     ghostMeshRef.current = mesh;
     return mesh;
   }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.target?.id]);
-
-  // Endpoint markers on the track placement ghost (connection assistance).
-  const endpointMarkers = useMemo(() => {
-    if (selectedTool?.type !== 'track' || !ghostPosition?.type) return null;
-    const eps = getEndpoints(ghostPosition.type, ghostPosition, ghostPosition.rotation);
-    const mat = ghostPosition.snappedToEndpoint ? endpointMatSnapped : endpointMat;
-    const mk = (p) => {
-      const m = new THREE.Mesh(endpointGeo, mat);
-      m.position.set(p.x, ghostPosition.y + 0.05, p.z);
-      return m;
-    };
-    return [mk(eps.front), mk(eps.back)];
-  }, [selectedTool?.type, ghostPosition?.type, ghostPosition?.rotation, ghostPosition?.x, ghostPosition?.y, ghostPosition?.z, ghostPosition?.snappedToEndpoint]);
 
   // Debug-only ghost reason (advisory, never a blocker).
   useEffect(() => {
@@ -408,20 +389,15 @@ export default function TrackRenderer({
       })}
 
       {ghostMesh && ghostPosition && (
-        <group>
-          <primitive
-            object={ghostMesh}
-            position={[
-              ghostOffsetRef.current?.x ?? ghostPosition.x,
-              ghostOffsetRef.current?.y ?? ghostPosition.y,
-              ghostOffsetRef.current?.z ?? ghostPosition.z,
-            ]}
-            rotation={[0, ghostPosition.rotation || 0, 0]}
-          />
-          {endpointMarkers?.map((m, i) => (
-            <primitive key={i} object={m} />
-          ))}
-        </group>
+        <primitive
+          object={ghostMesh}
+          position={[
+            ghostOffsetRef.current?.x ?? ghostPosition.x,
+            ghostOffsetRef.current?.y ?? ghostPosition.y,
+            ghostOffsetRef.current?.z ?? ghostPosition.z,
+          ]}
+          rotation={[0, ghostPosition.rotation || 0, 0]}
+        />
       )}
     </group>
   );

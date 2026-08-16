@@ -2,53 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WATER_LEVEL } from '../terrain.js';
-import { getEndpoints } from '../tracks/trackGeometry.js';
-
-// Endpoint snap assist radius — small enough that deliberate near-miss
-// placements (scenery right beside a track) are never hijacked.
-const SNAP_RADIUS = 0.4;
-
-/**
- * Soft snap: if a ghost endpoint lands within SNAP_RADIUS of an existing
- * track endpoint (same height), shift the ghost so the endpoints meet
- * exactly and align straight-track rotation with the neighbor's axis.
- * Advisory only — the user always sees where the ghost actually lands.
- */
-function findEndpointSnap(trackManager, type, position, rotation) {
-  const eps = getEndpoints(type, position, rotation);
-  let best = null;
-
-  for (const track of trackManager.getAllTracks()) {
-    if (Math.abs(track.position.y - position.y) > 0.15) continue;
-    const other = getEndpoints(track.type, track.position, track.rotation);
-    for (const myEp of [eps.front, eps.back]) {
-      for (const otherEp of [other.front, other.back]) {
-        const d = Math.hypot(myEp.x - otherEp.x, myEp.z - otherEp.z);
-        if (d < SNAP_RADIUS && (!best || d < best.d)) {
-          best = { d, myEp, otherEp, track };
-        }
-      }
-    }
-  }
-
-  if (!best) return null;
-
-  const newPos = {
-    x: position.x + (best.otherEp.x - best.myEp.x),
-    y: position.y,
-    z: position.z + (best.otherEp.z - best.myEp.z),
-  };
-
-  let newRot = rotation;
-  if (type === 'straight') {
-    // Align with the neighbor's axis (grid rotations: 0/90/180/270)
-    const ax = best.otherEp.x - best.track.position.x;
-    const az = best.otherEp.z - best.track.position.z;
-    newRot = Math.atan2(ax, az);
-  }
-
-  return { position: newPos, rotation: newRot };
-}
 
 /**
  * Custom hook for raycasting and track placement.
@@ -164,28 +117,49 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
         const point = intersects[0].point;
 
         if (tool.type === 'train') {
-          // Snap ghost to the actual track under cursor
-          const track = trackManager.getTrackAtPosition(point, 0.35);
-          if (track) {
-            const flip = trainDirection === -1 ? Math.PI : 0;
+          // Check if hovering over an existing train first (allows changing engine type)
+          let hoveredTrain = null;
+          for (const t of trainManager.getAllTrains()) {
+            const dx = Math.abs(t.position.x - point.x);
+            const dz = Math.abs(t.position.z - point.z);
+            if (dx < 0.45 && dz < 0.45) {
+              hoveredTrain = t;
+              break;
+            }
+          }
+          if (hoveredTrain) {
             publish({
-              x: track.position.x,
-              y: track.position.y,
-              z: track.position.z,
-              rotation: (track.rotation || 0) + flip,
-              type: track.type,
-              isTrack: true,
+              x: hoveredTrain.position.x,
+              y: hoveredTrain.position.y,
+              z: hoveredTrain.position.z,
+              rotation: hoveredTrain.rotation,
+              type: null,
+              target: { kind: 'train', id: hoveredTrain.id },
             }, true, null);
           } else {
-            const snapped = trackManager.snapToGrid(point);
-            publish({
-              x: snapped.x,
-              y: snapped.y,
-              z: snapped.z,
-              rotation: 0,
-              type: null,
-              isTrack: false,
-            }, false, 'no track under cursor');
+            // Snap ghost to the actual track under cursor
+            const track = trackManager.getTrackAtPosition(point, 0.35);
+            if (track) {
+              const flip = trainDirection === -1 ? Math.PI : 0;
+              publish({
+                x: track.position.x,
+                y: track.position.y,
+                z: track.position.z,
+                rotation: (track.rotation || 0) + flip,
+                type: track.type,
+                isTrack: true,
+              }, true, null);
+            } else {
+              const snapped = trackManager.snapToGrid(point);
+              publish({
+                x: snapped.x,
+                y: snapped.y,
+                z: snapped.z,
+                rotation: 0,
+                type: null,
+                isTrack: false,
+              }, false, 'no track under cursor');
+            }
           }
         } else {
           // Delete tool: resolve exact target — trains first, then tracks
@@ -277,19 +251,10 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
           reason = point.y < WATER_LEVEL ? 'water' : 'occupied or invalid spot';
         }
 
-        // Endpoint snap assist — advisory, moves ghost only when it already
-        // nearly touches an existing endpoint.
-        const snap = findEndpointSnap(trackManager, selectedToolRef.current.trackType, snapped, rotation);
-        if (snap) {
-          snapped.x = snap.position.x;
-          snapped.z = snap.position.z;
-        }
-        const ghostRot = snap ? snap.rotation : rotation;
         publish({
           ...snapped,
-          rotation: ghostRot,
+          rotation,
           type: selectedToolRef.current.trackType,
-          snappedToEndpoint: !!snap,
         }, valid, reason);
         return;
       } else if (selectedToolRef.current.type === 'road') {

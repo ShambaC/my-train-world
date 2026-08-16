@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Sky } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { generateTerrain, createGrid, VOXEL_SIZE } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
@@ -18,6 +18,7 @@ import ScatterProps from './environment/ScatterProps';
 import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
 import StationRoleMenu from './ui/StationRoleMenu';
+import EngineMenu from './ui/EngineMenu';
 import RenderScheduler from './render/RenderScheduler';
 import { ActivityManager } from './ambient/ActivityManager';
 import ActivityRenderer from './ambient/ActivityRenderer';
@@ -30,6 +31,7 @@ import SignalsRenderer from './signals/SignalsRenderer';
 import { CrossingManager } from './crossings/CrossingManager';
 import CrossingRenderer from './crossings/CrossingRenderer';
 import { cameraBus } from './utils/cameraBus';
+import { clone } from './utils/editActions';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -56,6 +58,8 @@ function Scene({
   stationsVersion,
   onStationsChange,
   onCoachPick,
+  onEnginePick,
+  currentEngineType,
   frameLimit,
   vsync,
   ambientEnabled,
@@ -81,9 +85,6 @@ function Scene({
   const [forestBorder, setForestBorder] = useState(null);
 
   // Realtime shadow mode: none / hard (BasicShadowMap) / soft (PCFSoft).
-  // The shadow type is baked into every receiving shader, so toggling
-  // requires recompiling materials; 'none' also drops castShadow from the
-  // light (a stale shadow map would otherwise keep shading the scene).
   useEffect(() => {
     const dir = scene.getObjectByName('directionalLight');
     if (dir) dir.castShadow = shadowMode !== 'none';
@@ -98,14 +99,13 @@ function Scene({
     });
   }, [shadowMode, gl, scene]);
 
-  // Interpolated lighting state — one stable object shared by the lights,
-  // fog, water shader, fog wall, train lights and fireflies.
+  // Interpolated lighting state
   const lighting = useMemo(() => new LightingState(timeOfDay), []);
   useEffect(() => {
     lighting.setTarget(timeOfDay);
   }, [timeOfDay, lighting]);
 
-  // Shadow camera covers the active playable region, not the whole map.
+  // Shadow camera covers the active playable region
   const shadowHalf = Math.max(40, Math.min(Math.max(terrainSize.length, terrainSize.breadth) * 0.5 * VOXEL_SIZE * 0.85, 110));
 
   useEffect(() => {
@@ -118,7 +118,6 @@ function Scene({
     dir.shadow.camera.updateProjectionMatrix();
   }, [scene, shadowHalf]);
 
-  // Shadow softness follows the light mood (long soft dawn shadows, crisp day)
   useEffect(() => {
     const dir = scene.getObjectByName('directionalLight');
     if (dir) dir.shadow.radius = lighting.target?.shadowRadius ?? 4;
@@ -134,21 +133,17 @@ function Scene({
     }
   }, [camera, gl, terrain, terrainRef]);
 
-  // Auto-scatter signals beside long track runs (deterministic per seed).
-  // Runs after every track layout change + terrain (re)generation.
+  // Auto-scatter signals beside long track runs
   useEffect(() => {
     if (!terrain) return;
     signalManager?.rebuildAuto(trackManager, terrainSeed);
   }, [trackLayoutVersion, tracksVersion, terrainSeed, terrain, signalManager, trackManager]);
 
-  // Per-frame lighting: ease the current values toward the target preset
-  // (no abrupt color/intensity jumps), then apply to lights and fog.
   useFrame((_, delta) => {
     lighting.update(delta);
     advanceWind(delta);
 
-    // Train follow camera: chase the engine, OrbitControls disabled while
-    // active so user input cannot fight the follow motion.
+    // Train follow camera
     const controls = orbitRef.current;
     const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
     if (controls) controls.enabled = !followTrain;
@@ -168,9 +163,6 @@ function Scene({
       return;
     }
 
-    // OrbitControls scales wheel/pan motion with camera distance. That makes
-    // close construction work feel almost frozen. Compensate only at close
-    // range; normal overview sensitivity stays unchanged.
     if (controls) {
       const distance = camera.position.distanceTo(controls.target);
       const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
@@ -197,26 +189,21 @@ function Scene({
         scene.fog = new THREE.FogExp2(lighting.fog.color.getHex(), lighting.fog.density);
       }
       scene.fog.color.copy(lighting.fog.color);
-      // null (from App default) = use the time-of-day preset density
       scene.fog.density = fogDensity != null ? fogDensity : lighting.fog.density;
     } else if (scene.fog) {
       scene.fog = null;
     }
   });
 
-
   useEffect(() => {
-    // Generate terrain when size or seed changes
     const t0 = performance.now();
     const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth, terrainSeed);
     setTerrain(newTerrain);
 
-    // Generate forest border around terrain (world-unit based)
     const border = createForestBorder(terrainSize, terrainSeed);
     setForestBorder(border);
 
     if (onTerrainGenerated) {
-      // Count voxels for debug info
       let voxelCount = 0;
       newTerrain.children.forEach(mesh => {
         if (mesh instanceof THREE.InstancedMesh) {
@@ -230,11 +217,8 @@ function Scene({
       });
     }
 
-    // QoL: world save/load hooks into terrain readiness (restores roads and
-    // stations once the new terrain exists).
     if (onTerrainReady) onTerrainReady(newTerrain.userData);
 
-    // Cleanup old border on unmount
     return () => {
       if (border) {
         border.traverse((child) => {
@@ -304,6 +288,8 @@ function Scene({
           trainDirection={trainDirection}
           onStationsChange={onStationsChange}
           onCoachPick={onCoachPick}
+          onEnginePick={onEnginePick}
+          currentEngineType={currentEngineType}
           signalManager={signalManager}
           roadManager={roadManager}
           history={history}
@@ -337,8 +323,7 @@ function Scene({
         />
       )}
 
-      {/* Roads — rendered before ScatterProps so its exclusion effect runs
-          after the road layout is built (same commit). */}
+      {/* Roads */}
       {terrain && (
         <Roads
           terrainData={terrain?.userData}
@@ -371,7 +356,7 @@ function Scene({
         />
       )}
 
-      {/* Signals (user-placed + auto-scattered beside long tracks) */}
+      {/* Signals */}
       {terrain && (
         <SignalsRenderer
           signalManager={signalManager}
@@ -381,7 +366,7 @@ function Scene({
         />
       )}
 
-      {/* Road-rail crossings (gates + warning lights) */}
+      {/* Road-rail crossings */}
       {terrain && (
         <CrossingRenderer
           crossingManager={crossingManager}
@@ -405,8 +390,7 @@ function Scene({
       {/* Grid helper */}
       <primitive object={createGrid(Math.max(terrainSize.length, terrainSize.breadth))} />
       
-      {/* Camera controls — max distance scales with terrain so full-map
-          overview stays useful on large worlds. */}
+      {/* Camera controls */}
       <OrbitControls
         ref={orbitRef}
         enableDamping
@@ -416,7 +400,7 @@ function Scene({
         maxPolarAngle={Math.PI / 2.1}
       />
 
-      {/* QoL camera commands (focus / frame / reset / ease) */}
+      {/* QoL camera commands */}
       <CameraCommands
         terrainSize={terrainSize}
         trackManager={trackManager}
@@ -477,13 +461,13 @@ export default function GameScene({
   const [trackLayoutVersion, setTrackLayoutVersion] = useState(0);
   const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
+  const [currentEngineType, setCurrentEngineType] = useState('steam-engine');
+
   const activityManagerRef = useRef(null);
   if (!activityManagerRef.current) {
     activityManagerRef.current = new ActivityManager(stationManager, trainManager);
   }
 
-  // Roads, signals and crossings — shared managers. Road + signal managers
-  // are owned by App (save/load needs them); crossings derive from both.
   const trafficManagerRef = useRef(null);
   if (!trafficManagerRef.current) trafficManagerRef.current = new TrafficManager();
   const crossingManagerRef = useRef(null);
@@ -496,7 +480,7 @@ export default function GameScene({
     trainAudio.setEnabled(soundsEnabled);
   }, [soundsEnabled]);
 
-  // Re-sync ambient targets when stations change (added/removed/role)
+  // Re-sync ambient targets when stations change
   useEffect(() => {
     activityManagerRef.current.sync();
   }, [stationsVersion]);
@@ -514,8 +498,7 @@ export default function GameScene({
     stationManager?.rebuildBindings(trackManager);
   };
 
-  // Station role picker (radial menu) — opened right after a station is
-  // placed. Roles are pure presentation; dismissing keeps the default.
+  // Station role picker (radial menu)
   const [roleMenu, setRoleMenu] = useState(null);
 
   const handleStationPlaced = (station, x, y) => {
@@ -530,8 +513,7 @@ export default function GameScene({
     setRoleMenu(null);
   };
 
-  // Coach picker (radial menu) — opened when clicking an engine with the
-  // coach tool; selection attaches the coach behind that engine.
+  // Coach picker (radial menu)
   const [coachMenu, setCoachMenu] = useState(null);
 
   const handleCoachPick = (trainId, x, y) => {
@@ -553,15 +535,60 @@ export default function GameScene({
     setCoachMenu(null);
   };
 
-  // Stations are cleared by App on terrain change — re-sync versions
+  // Engine picker (radial menu) — opened when clicking track with Train tool or clicking an existing engine
+  const [engineMenu, setEngineMenu] = useState(null);
+
+  const handleEnginePick = (target, x, y) => {
+    // target can be { trackId, direction } (new placement) or { trainId } (switch engine)
+    let currentEngine = currentEngineType;
+    if (target?.trainId) {
+      const train = trainManager?.getTrain(target.trainId);
+      if (train?.engineType) currentEngine = train.engineType;
+    }
+    setEngineMenu({
+      ...target,
+      x,
+      y,
+      currentEngine,
+    });
+  };
+
+  const handleEngineSelect = (engineType) => {
+    if (engineMenu) {
+      setCurrentEngineType(engineType);
+      if (engineMenu.trackId) {
+        // Place new train with chosen engine
+        const train = trainManager?.addTrain(engineMenu.trackId, engineMenu.direction, engineType);
+        if (train && history) {
+          const snap = clone(train);
+          history.push({
+            undo: () => trainManager.removeTrain(train.id),
+            redo: () => trainManager.restoreTrain(clone(snap)),
+          });
+        }
+      } else if (engineMenu.trainId) {
+        // Switch engine of existing train
+        const train = trainManager?.getTrain(engineMenu.trainId);
+        if (train && history) {
+          const prevEngineType = train.engineType;
+          const trainId = train.id;
+          history.push({
+            undo: () => trainManager.setEngineType(trainId, prevEngineType),
+            redo: () => trainManager.setEngineType(trainId, engineType),
+          });
+        }
+        trainManager?.setEngineType(engineMenu.trainId, engineType);
+      }
+    }
+    setEngineMenu(null);
+  };
+
+  // Stations are cleared by App on terrain change
   useEffect(() => {
     setStationsVersion((v) => v + 1);
     setStationCount(stationManager?.getAllStations().length || 0);
   }, [terrainSize, stationManager]);
 
-  // QoL: undo/redo / load restore manager state outside React — bump all
-  // version counters so every renderer re-reads its manager. (App bumps
-  // tracksVersion itself to remount TrackRenderer.)
   useEffect(() => {
     if (!worldVersion) return;
     setTrackLayoutVersion((v) => v + 1);
@@ -571,8 +598,6 @@ export default function GameScene({
     stationManager?.rebuildBindings(trackManager);
   }, [worldVersion, trackManager, stationManager]);
 
-  // Dev-only test hook — Object.assign so per-render component hooks
-  // (e.g. StationRenderer's stationGhost) are never wiped.
   useEffect(() => {
     if (import.meta.env.DEV) {
       Object.assign(window.__mtw || (window.__mtw = {}), {
@@ -589,7 +614,6 @@ export default function GameScene({
     }
   }, [trackManager, stationManager, trainManager, history]);
   
-  // Update train count
   useEffect(() => {
     const interval = setInterval(() => {
       setTrainCount(trainManager.getAllTrains().length);
@@ -605,9 +629,6 @@ export default function GameScene({
         frameloop="never"
         gl={{ antialias: true }}
       >
-        {/* Render pacing driven by the performance settings (frame limit +
-            vsync). Simulation stays delta-based, so limits never change
-            train speed or animation. */}
         <RenderScheduler frameLimit={frameLimit} vsync={vsync} />
         <Scene 
           terrainSize={terrainSize} 
@@ -633,6 +654,8 @@ export default function GameScene({
           stationsVersion={stationsVersion}
           onStationsChange={handleStationsChange}
           onCoachPick={handleCoachPick}
+          onEnginePick={handleEnginePick}
+          currentEngineType={currentEngineType}
           frameLimit={frameLimit}
           vsync={vsync}
           ambientEnabled={ambientEnabled}
@@ -651,12 +674,22 @@ export default function GameScene({
           onSelect={onSelect}
           selectedTrainId={selectedTrainId}
         />
-        {/* Effects only mount when active to avoid breaking default render */}
         {(tiltShiftEnabled || celShadingEnabled) && (
           <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
         )}
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
+
+      {/* Radial engine picker */}
+      {engineMenu && (
+        <EngineMenu
+          x={engineMenu.x}
+          y={engineMenu.y}
+          currentEngine={engineMenu.currentEngine}
+          onSelect={handleEngineSelect}
+          onClose={() => setEngineMenu(null)}
+        />
+      )}
 
       {/* Radial coach picker */}
       {coachMenu && (
@@ -723,8 +756,6 @@ export default function GameScene({
 }
 
 // Separate component to track FPS + memory stats.
-// JS heap is Chromium-only (performance.memory); three.js WebGL resource
-// counts work in every browser, including Firefox.
 function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
@@ -743,7 +774,6 @@ function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
       frameCount.current = 0;
       lastTime.current = currentTime;
 
-      // JS heap usage (Chrome/Edge only; Firefox exposes no heap API)
       const mem = performance.memory;
       const info = gl?.info;
       onMemoryUpdate({

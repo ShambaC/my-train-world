@@ -67,7 +67,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
       const trains = trainManager.getAllTrains();
       const sig = trains
         .map((t) =>
-          `${t.id}:${(t.coaches || []).map((c) => c.id + (c.position ? 'p' : 'x')).join(',')}`
+          `${t.id}:${t.engineType || 'steam-engine'}:${(t.coaches || []).map((c) => c.id + (c.position ? 'p' : 'x')).join(',')}`
         )
         .join('|');
       if (sig !== lastSigRef.current) {
@@ -75,6 +75,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
         setSnapshot({
           trains: trains.map((t) => ({
             id: t.id,
+            engineType: t.engineType || 'steam-engine',
             coaches: (t.coaches || []).map((c) => ({
               id: c.id,
               type: c.type,
@@ -216,17 +217,32 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
   return (
     <group ref={rootRef}>
       {snapshot?.trains.map((train) => {
+        const engineType = train.engineType || 'steam-engine';
+        const existingNode = trainNodesRef.current.get(train.id);
+
+        // Recreate engine node if engineType changed
+        if (existingNode && existingNode.userData?.engineType !== engineType) {
+          if (existingNode.parent) existingNode.parent.remove(existingNode);
+          existingNode.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+          trainNodesRef.current.delete(train.id);
+          headlightsRef.current.delete(train.id);
+        }
+
         // Engine node (created once, updated imperatively)
         if (!trainNodesRef.current.has(train.id)) {
           const node = new THREE.Group();
           node.name = `train_${train.id}`;
+          node.userData.engineType = engineType;
 
-          const engineMesh = createTrainEngine(trainNodesRef.current.size);
+          const engineMesh = createTrainEngine(engineType);
           node.add(engineMesh);
 
           // One warm point light per engine (engines are few).
           const headlight = new THREE.PointLight(0xffd9a0, 0, 9, 2);
-          headlight.position.set(0, 0.3, 0.42);
+          headlight.position.set(0, 0.3, 0.46);
           node.add(headlight);
           headlightsRef.current.set(train.id, headlight);
 
@@ -255,10 +271,12 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
             <primitive object={trainNode} />
             {coachNodes}
             <SmokeParticles
-              key={`${train.id}_smoke`}
+              key={`${train.id}_smoke_${engineType}`}
               target={trainNode}
               trainManager={trainManager}
               trainId={train.id}
+              engineType={engineType}
+              kind="smoke"
             />
             <SmokeParticles
               key={`${train.id}_dust`}
@@ -266,6 +284,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
               target={trainNode}
               trainManager={trainManager}
               trainId={train.id}
+              engineType={engineType}
             />
           </group>
         );
