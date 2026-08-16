@@ -236,6 +236,11 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
         if (isBuilding) {
           scatterRegistry.add(x, z, (x - length / 2 + 0.5) * VOXEL, h * VOXEL + 0.25 - SINK, (z - breadth / 2 + 0.5) * VOXEL);
         }
+
+        // Register trees so GrassField spawns a grass patch at their base.
+        if (isTree) {
+          scatterRegistry.addTree(x, z, (x - length / 2 + 0.5) * VOXEL, h * VOXEL + 0.25 - SINK, (z - breadth / 2 + 0.5) * VOXEL);
+        }
       }
 
       if (instances.length === 0) continue;

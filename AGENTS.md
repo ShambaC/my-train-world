@@ -81,6 +81,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - `ForestBorder.js` & `FogWall.jsx`: Instanced border tree ring and animated cylindrical cloud wall hiding map edges.
   - `Skybox.jsx`: Time-of-day lighting and skybox presets (dawn, day, dusk, night) via `getLightingForTime`.
   - `ScatterProps.jsx`: Probability-based scattering of instanced GLB props (trees, rocks, buildings, fences), excluding water, slopes, tracks, and station zones.
+  - `GrassField.jsx` (+ `grassShaders.js`, `grassMaterials.js`): Stylized instanced grass field (ported from cortiz2894/stylized-components) — wind-swayed shader blades (gradient + patch color, fake +Y normal, soft ring-sampled shadows, backlit translucency) and alpha-mask flower cross-billboards (`src/assets/Textures/flower{,3}/`, custom depth materials). Scattered deterministically per terrain seed as DENSE IRREGULAR patches (16-sample radial blob outlines, outward-spraying blades): one patch compulsory at every tree base (`scatterRegistry.trees`, any dry biome), others on meadow/forest cells kept `PATCH_SPACING` apart; hidden (zero-scale) under tracks/stations/roads/scattered buildings via the same exclusion pass + road version poll as ScatterProps; sway syncs with the shared wind clock, sun dir/color + night dim from `lighting`.
   - `CameraController.jsx`: WASD camera-relative movement (Shift sprint, Space rise, C lower) that moves the `OrbitControls` target with the camera.
 
 - **Track System (`src/tracks/`)**:
@@ -106,7 +107,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **Roads & Traffic (`src/environment/`)**:
   - `roadNetwork.js`: Deterministic scenery road network (seeded, any non-highland biome, slope <= 1, clearing cells excluded). `RoadManager` stores roads (polyline waypoints per road, widths per type) + lamps/signs; supports user-placed straight road segments (`addRoad`/`removeRoad`, road crossings allowed, `restoreUserRoad`/`exportUserData`/`importUserData` for undo + save-load) merged with the natural layout. `createRoadMeshes` renders instanced asphalt/shoulder/dirt quads (no sidewalks at crossroads, later road lifted to avoid z-fighting), lamp posts with night-glow, and signs. `ScatterProps` excludes road cells so props never sit on the surface; a version poll keeps meshes/exclusions/traffic in sync with runtime road edits.
-  - `scatterRegistry.js`: Runtime record of scattered buildings (barns/sheds/huts) so roads and walkers can target them without duplicating scatter logic.
+  - `scatterRegistry.js`: Runtime record of scattered buildings (barns/sheds/huts) and trees (oaks/pines) so roads, walkers and GrassField can target them without duplicating scatter logic.
   - `TrafficManager.js` & `TrafficRenderer.jsx`: Pooled decorative vehicles (car/truck/bus/cart/bike) and road-edge pedestrians. Vehicles despawn/respawn with random type from either road end; walkers walk the road edge only. All actors stop at active railway crossings (approach-relative). Delta-time based, frozen beyond 45 units from camera.
   - `Roads.jsx`: Builds road layout per terrain; fades lamp glow with `lighting.nightness`.
   - Road placement: Hotbar Road tool (straight, axis-aligned, R rotates, Delete tool removes).

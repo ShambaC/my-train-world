@@ -15,6 +15,7 @@ import WaterSurface from './environment/WaterSurface';
 import FogWall from './environment/FogWall';
 import Effects from './postprocessing/Effects';
 import ScatterProps from './environment/ScatterProps';
+import GrassField from './environment/GrassField';
 import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
 import StationRoleMenu from './ui/StationRoleMenu';
@@ -342,6 +343,19 @@ function Scene({
           trackCount={trackCount}
           stationsVersion={stationsVersion}
           roadManager={roadManager}
+        />
+      )}
+
+      {/* Stylized grass field */}
+      {terrain && (
+        <GrassField
+          terrainData={terrain?.userData}
+          trackManager={trackManager}
+          stationManager={stationManager}
+          trackCount={trackCount}
+          stationsVersion={stationsVersion}
+          roadManager={roadManager}
+          lighting={lighting}
         />
       )}
 
