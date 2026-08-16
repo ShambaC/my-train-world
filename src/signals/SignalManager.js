@@ -139,8 +139,9 @@ export class SignalManager {
         return true;
       };
 
-      // Signals every 6th track along the run.
-      for (let i = 5; i < order.length; i += 6) {
+      // Signals every 15th track along the run (keeps lineside clutter low
+      // next to the electrification gantries, which sit every 5 tracks).
+      for (let i = 5; i < order.length; i += 15) {
         const trackId = order[i];
         const tr = trackManager.tracks.get(trackId);
         const passThrough = tr.connections.front && tr.connections.back;

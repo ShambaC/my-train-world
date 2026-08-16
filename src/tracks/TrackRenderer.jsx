@@ -9,6 +9,7 @@ import { createContainerCoach } from '../trains/ContainerCoachModel';
 import { createViewdeckCoach } from '../trains/ViewdeckCoachModel';
 import { makeGhost, GHOST_GREEN, GHOST_RED } from '../utils/ghost';
 import { useTrackPlacement } from '../hooks/useTrackPlacement';
+import OverheadLine from './OverheadLine';
 import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/editActions';
 import ModelLibrary from '../models/ModelLibrary';
 import { DEFAULT_COACH, COACH_SPACING } from '../trains/coachTypes';
@@ -399,6 +400,9 @@ export default function TrackRenderer({
           rotation={[0, ghostPosition.rotation || 0, 0]}
         />
       )}
+
+      {/* Electrification gantries + overhead wires (derived from track layout) */}
+      <OverheadLine tracks={tracks} />
     </group>
   );
 }

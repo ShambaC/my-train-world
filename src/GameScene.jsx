@@ -127,7 +127,7 @@ function Scene({
   useEffect(() => {
     if (import.meta.env.DEV) {
       window.__mtw = {
-        ...window.__mtw, camera, gl: gl.domElement, renderer: gl, THREE,
+        ...window.__mtw, camera, scene, gl: gl.domElement, renderer: gl, THREE,
         terrainRef: terrainRef.current, terrainData: terrain?.userData, terrainGroup: terrain,
       };
     }
@@ -674,9 +674,10 @@ export default function GameScene({
           onSelect={onSelect}
           selectedTrainId={selectedTrainId}
         />
-        {(tiltShiftEnabled || celShadingEnabled) && (
-          <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
-        )}
+        {/* Final color pass always mounted: vanilla now shares the miniature
+            mode's vibrant grading (exposure/saturation/vignette); the tilt
+            blur and cel passes stay opt-in toggles. */}
+        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
 
