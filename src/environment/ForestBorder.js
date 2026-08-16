@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VOXEL_SIZE, mulberry32 } from '../terrain.js';
 import { applyWindSway } from './wind.js';
+import { makeAtlasTexture } from '../utils/atlasTextures.js';
 
 /**
  * Creates an optimized forest border using InstancedMesh.
@@ -30,6 +31,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
     color: 0x41503a,
     roughness: 0.9,
     metalness: 0.1,
+    map: makeAtlasTexture('wood', 'forestGround', [0.5, 0.5]),
   });
   const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
   groundPlane.rotation.x = -Math.PI / 2;
@@ -53,14 +55,21 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
 
   // --- 3. Instanced meshes ---
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+  const trunkMat = new THREE.MeshStandardMaterial({
+    color: 0x4a3728,
+    map: makeAtlasTexture('wood', 'bark'),
+  });
   applyWindSway(trunkMat, { leaves: false, strength: 0.6 });
   const coneGeos = [
     new THREE.ConeGeometry(0.8, 1.5, 6),
     new THREE.ConeGeometry(0.6, 1.3, 6),
     new THREE.ConeGeometry(0.4, 1.0, 6),
   ];
-  const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3a6b1f, flatShading: true });
+  const foliageMat = new THREE.MeshStandardMaterial({
+    color: 0x3a6b1f,
+    flatShading: true,
+    map: makeAtlasTexture('wood', 'leafDark'),
+  });
   applyWindSway(foliageMat, { strength: 1 });
 
   const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, totalTrees);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VOXEL, HALF, CURVE, pointOnTrack } from './trackGeometry.js';
+import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 const VOXEL_SIZE = VOXEL;
 const STRAIGHT_TRACK_WIDTH = VOXEL;
@@ -23,11 +24,10 @@ const COLORS = {
 // Moonlit rail highlight: a faint blue emissive keeps rails distinguishable
 // from terrain at night without dynamic lights.
 function createRailMaterial() {
-  return new THREE.MeshLambertMaterial({
+  return makeAtlasMaterial('metal', 'rail', {
     color: COLORS.rail,
     emissive: 0x24365c,
     emissiveIntensity: 0.55,
-    flatShading: true,
   });
 }
 
@@ -43,9 +43,9 @@ function getStraightAssets() {
   if (straightAssets) return straightAssets;
   straightAssets = {
     gravelGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH),
-    gravelMat: new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true }),
+    gravelMat: makeAtlasMaterial('roads', 'ballast', { color: COLORS.gravel, repeat: [0.33, 0.33] }),
     sleeperGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
-    sleeperMat: new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true }),
+    sleeperMat: makeAtlasMaterial('wood', 'planks', { color: COLORS.sleeper, repeat: [1, 1] }),
     railGeo: new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH),
   };
   return straightAssets;
@@ -60,9 +60,9 @@ function getCurvedAssets() {
     segments,
     angleStep,
     gravelGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, CURVE.r * angleStep * 1.1),
-    gravelMat: new THREE.MeshLambertMaterial({ color: COLORS.gravel, flatShading: true }),
+    gravelMat: makeAtlasMaterial('roads', 'ballast', { color: COLORS.gravel, repeat: [0.33, 0.33] }),
     sleeperGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
-    sleeperMat: new THREE.MeshLambertMaterial({ color: COLORS.sleeper, flatShading: true }),
+    sleeperMat: makeAtlasMaterial('wood', 'planks', { color: COLORS.sleeper, repeat: [1, 1] }),
     railGeos: (() => {
       const innerRadius = CURVE.r - RAIL_OFFSET;
       const outerRadius = CURVE.r + RAIL_OFFSET;
@@ -102,10 +102,10 @@ let bridgeAssets = null;
 function getBridgeAssets() {
   if (bridgeAssets) return bridgeAssets;
   bridgeAssets = {
-    pillarMat: new THREE.MeshLambertMaterial({ color: COLORS.beam, flatShading: true }),
-    deckMat: new THREE.MeshLambertMaterial({ color: COLORS.deck, flatShading: true }),
-    braceMat: new THREE.MeshLambertMaterial({ color: COLORS.brace, flatShading: true }),
-    capMat: new THREE.MeshLambertMaterial({ color: COLORS.cap, flatShading: true }),
+    pillarMat: makeAtlasMaterial('wood', 'beam', { color: COLORS.beam, repeat: [1, 0.5] }),
+    deckMat: makeAtlasMaterial('wood', 'deck', { color: COLORS.deck, repeat: [1, 0.5] }),
+    braceMat: makeAtlasMaterial('wood', 'beam', { color: COLORS.brace, repeat: [1, 1] }),
+    capMat: makeAtlasMaterial('wood', 'beam', { color: COLORS.cap, repeat: [1, 1] }),
     deckGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 1.1, 0.08, TRACK_LENGTH),
     capGeo: new THREE.BoxGeometry(0.12, 0.04, 0.12),
     braceGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.7, 0.04, 0.04),

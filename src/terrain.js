@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
 import { applyWindSway } from './environment/wind.js';
+import { makeAtlasMaterial } from './utils/atlasTextures.js';
 
 // Voxel size - smaller than Minecraft for higher resolution
 export const VOXEL_SIZE = 0.5;
@@ -28,7 +29,7 @@ export const BIOME = {
 const TERRAIN_COLORS = {
   water: 0x4a90e2,
   sand: 0xd9b878, // warm sand — shallow water reads warm near the shore
-  grass: 0x5cb85c,
+  grass: 0x549e54, // slightly muted so the textured meadow reads, not glows
   rock: 0x808080,
   snow: 0xffffff,
   dirt: 0x6a4d33, // darker vertical dirt faces — more depth contrast
@@ -97,10 +98,10 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
   const cone2Geo = new THREE.ConeGeometry(0.25, 0.4, 5);
   const bushGeo = new THREE.DodecahedronGeometry(0.2, 0);
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e18, flatShading: true });
-  const leafMat1 = new THREE.MeshLambertMaterial({ color: 0x2d5a2d, flatShading: true });
-  const leafMat2 = new THREE.MeshLambertMaterial({ color: 0x3a7a3a, flatShading: true });
-  const bushMat = new THREE.MeshLambertMaterial({ color: 0x448844, flatShading: true });
+  const trunkMat = makeAtlasMaterial('wood', 'bark', { color: 0x4a2e18 });
+  const leafMat1 = makeAtlasMaterial('wood', 'leafDark', { color: 0x2d5a2d });
+  const leafMat2 = makeAtlasMaterial('wood', 'leafLight', { color: 0x3a7a3a });
+  const bushMat = makeAtlasMaterial('wood', 'bush', { color: 0x448844 });
 
   // Wind sway — vegetation breathes together, driven by the shared wind clock
   applyWindSway(trunkMat, { leaves: false, strength: 0.5 });
@@ -797,6 +798,22 @@ function buildWorld(length, breadth, seed, attempt, riverPlan) {
 }
 
 /**
+ * Patch a textured terrain material so every instanced voxel samples the
+ * atlas cell at a per-instance random offset. The shared BoxGeometry would
+ * otherwise stamp the identical crop onto every voxel face, making cliffs
+ * read as a checkerboard of repeated tiles.
+ */
+function patchTerrainUVOffset(material) {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <map_vertex>',
+      '#include <map_vertex>\n\tvMapUv += aUvOffset;'
+    );
+  };
+}
+
+/**
  * Generate voxel terrain using multi-scale simplex noise (OPTIMIZED)
  * @param {number} length - Length of the terrain (X axis)
  * @param {number} breadth - Breadth of the terrain (Z axis)
@@ -837,12 +854,14 @@ export function generateTerrain(length, breadth, seed = 1337) {
   const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
   const voxelChunks = new Map();
 
-  // Precomputed meadow→forest gradient (avoids per-voxel color math)
+  // Precomputed meadow→forest gradient (avoids per-voxel color math).
+  // Quantized to 16 buckets so the textured material cache stays small.
   const grassColor = new THREE.Color(TERRAIN_COLORS.grass);
   const forestColor = new THREE.Color(TERRAIN_COLORS.forest);
   const forestLerp = new Array(256);
   for (let b = 0; b < 256; b++) {
-    forestLerp[b] = grassColor.clone().lerp(forestColor, b / 255).getHex();
+    const q = Math.min(255, Math.floor(b / 16) * 16);
+    forestLerp[b] = grassColor.clone().lerp(forestColor, q / 255).getHex();
   }
 
   const surfaceColor = (biome, b) => {
@@ -858,6 +877,21 @@ export function generateTerrain(length, breadth, seed = 1337) {
     if (biome === BIOME.highland) return TERRAIN_COLORS.rock;
     if (biome === BIOME.industrial) return TERRAIN_COLORS.industrial;
     return TERRAIN_COLORS.dirt; // darker dirt on vertical/cut faces
+  };
+
+  // Textured material per terrain color — keeps the biome palette tint on
+  // top of the sheet detail. Repeat 0.5: each 0.5-unit voxel face shows half
+  // the tile (≈1 unit tile) so the stylized blobs read without stamping.
+  const TERRAIN_TEXTURE_REPEAT = [0.5, 0.5];
+  const makeTerrainMaterial = (color) => {
+    if (color === TERRAIN_COLORS.sand) return makeAtlasMaterial('terrain', 'sand', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.rock) return makeAtlasMaterial('terrain', 'rock', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.dirt) return makeAtlasMaterial('terrain', 'dirt', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.forest) return makeAtlasMaterial('terrain', 'forest', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.highland) return makeAtlasMaterial('terrain', 'highland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.wetland) return makeAtlasMaterial('terrain', 'wetland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.industrial) return makeAtlasMaterial('terrain', 'highland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    return makeAtlasMaterial('terrain', 'grass', { color, repeat: TERRAIN_TEXTURE_REPEAT });
   };
 
   // =================================================================
@@ -952,15 +986,27 @@ export function generateTerrain(length, breadth, seed = 1337) {
     colorChunks.forEach((instances, colorKey) => {
       let material = materials.get(colorKey);
       if (!material) {
-        material = new THREE.MeshLambertMaterial({
-          color: parseInt(colorKey),
-          flatShading: true,
-        });
+        material = makeTerrainMaterial(parseInt(colorKey));
+        patchTerrainUVOffset(material);
         materials.set(colorKey, material);
       }
 
+      // Per-instance random atlas offset (deterministic per chunk+color so
+      // a fixed seed always rebuilds an identical world).
+      const geo = voxelGeometry.clone();
+      const offsets = new Float32Array(instances.length * 2);
+      const hash =
+        ((seed * 131071) ^ (parseInt(colorKey) * 7919) ^
+          chunkKey.split(',').reduce((a, b) => ((a * 31 + parseInt(b)) >>> 0), 0)) >>> 0;
+      const rng = mulberry32(hash);
+      for (let i = 0; i < instances.length; i++) {
+        offsets[i * 2] = rng();
+        offsets[i * 2 + 1] = rng();
+      }
+      geo.setAttribute('aUvOffset', new THREE.InstancedBufferAttribute(offsets, 2));
+
       const instancedMesh = new THREE.InstancedMesh(
-        voxelGeometry,
+        geo,
         material,
         instances.length
       );

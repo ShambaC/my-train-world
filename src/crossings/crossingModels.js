@@ -7,6 +7,7 @@
  * materials are per-instance so each lamp can blink independently.
  */
 import * as THREE from 'three';
+import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 const POST_GEO = new THREE.CylinderGeometry(0.025, 0.035, 0.72, 6);
 const LAMP_POST_GEO = new THREE.CylinderGeometry(0.02, 0.028, 1.05, 6);
@@ -16,9 +17,9 @@ const STRIPE_GEO = new THREE.BoxGeometry(0.06, 0.036, 0.16);
 const LAMP_GEO = new THREE.SphereGeometry(0.035, 8, 8);
 const HALO_GEO = new THREE.SphereGeometry(0.075, 8, 8);
 
-const POST_MAT = new THREE.MeshLambertMaterial({ color: 0x3a3a3a, flatShading: true });
-const LAMP_POST_MAT = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
-const ARM_MAT = new THREE.MeshLambertMaterial({ color: 0xaa2e2e, flatShading: true });
+const POST_MAT = makeAtlasMaterial('metal', 'beam', { color: 0x3a3a3a });
+const LAMP_POST_MAT = makeAtlasMaterial('metal', 'lampPost', { color: 0x2b2b2b });
+const ARM_MAT = makeAtlasMaterial('metal', 'redPaint', { color: 0xaa2e2e });
 const STRIPE_MAT = new THREE.MeshLambertMaterial({ color: 0xe8e4da, flatShading: true });
 
 const makeLamp = (color) => {

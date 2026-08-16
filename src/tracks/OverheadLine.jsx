@@ -11,6 +11,7 @@
  */
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 const POLE_X = 0.55;        // posts stand ±0.55 across the track
 const BEAM_Y = 1.55;        // top beam height above track level (tune here)
@@ -34,9 +35,9 @@ function getGantryTemplate() {
   if (gantryTemplate) return gantryTemplate;
   gantryTemplate = new THREE.Group();
 
-  const postMat = new THREE.MeshLambertMaterial({ color: COLORS.post, flatShading: true });
-  const beamMat = new THREE.MeshLambertMaterial({ color: COLORS.beam, flatShading: true });
-  const insulatorMat = new THREE.MeshLambertMaterial({ color: COLORS.insulator, flatShading: true });
+  const postMat = makeAtlasMaterial('metal', 'beam', { color: COLORS.post });
+  const beamMat = makeAtlasMaterial('metal', 'beam', { color: COLORS.beam });
+  const insulatorMat = makeAtlasMaterial('cargo', 'insulator', { color: COLORS.insulator });
 
   const postGeo = new THREE.CylinderGeometry(0.035, 0.045, BEAM_Y, 6);
   for (const side of [-1, 1]) {

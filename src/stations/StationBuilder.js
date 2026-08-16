@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 import { PuffSystem } from '../environment/PuffSystem';
 import { mulberry32 } from '../terrain.js';
+import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
@@ -219,7 +220,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   };
 
   // --- platform deck (split into 1-voxel sections for the wave) ---
-  const deckMat = new THREE.MeshLambertMaterial({ color: DECK_COLOR, flatShading: true });
+  const deckMat = makeAtlasMaterial('roads', 'deck', { color: DECK_COLOR, repeat: [1, 0.33] });
   const deckGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
     const section = new THREE.Mesh(deckGeo, deckMat);
@@ -229,7 +230,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   }
 
   // --- edge trim along the platform sides ---
-  const edgeMat = new THREE.MeshLambertMaterial({ color: EDGE_COLOR, flatShading: true });
+  const edgeMat = makeAtlasMaterial('roads', 'edge', { color: EDGE_COLOR, repeat: [0.5, 0.5] });
   const edgeGeo = new THREE.BoxGeometry(0.1, 0.15, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
     for (const ex of [-STATION_WIDTH_WORLD / 2, STATION_WIDTH_WORLD / 2]) {

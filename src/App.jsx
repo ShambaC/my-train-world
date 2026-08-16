@@ -14,6 +14,7 @@ import { cameraBus } from "./utils/cameraBus";
 import { trainAudio } from "./audio/trainAudio";
 import { RoadManager } from "./environment/roadNetwork";
 import { SignalManager } from "./signals/SignalManager";
+import { preloadAtlases } from "./utils/atlasTextures";
 import {
   saveWorldToFile,
   loadWorldFromFile,
@@ -153,6 +154,7 @@ function App() {
 
   // Preload all GLB models with real progress
   useEffect(() => {
+    preloadAtlases().catch((err) => console.error('Atlas preload failed:', err));
     ModelLibrary.preloadAll(setLoadProgress)
       .then(() => setIsLoading(false))
       .catch((err) => {
