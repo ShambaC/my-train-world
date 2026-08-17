@@ -34,6 +34,7 @@ import { CrossingManager } from './crossings/CrossingManager';
 import CrossingRenderer from './crossings/CrossingRenderer';
 import { cameraBus } from './utils/cameraBus';
 import { clone } from './utils/editActions';
+import CameraCollision, { constrainCamera } from './environment/cameraCollision';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -171,12 +172,19 @@ function Scene({
     if (followTrain) {
       const hx = Math.sin(followTrain.rotation);
       const hz = Math.cos(followTrain.rotation);
-      const target = new THREE.Vector3(followTrain.position.x, followTrain.position.y, followTrain.position.z);
-      const desired = new THREE.Vector3(
-        target.x - hx * 2.4,
-        target.y + 1.1,
-        target.z - hz * 2.4
+      const sideX = hz;
+      const sideZ = -hx;
+      const target = new THREE.Vector3(
+        followTrain.position.x,
+        followTrain.position.y + 0.25,
+        followTrain.position.z,
       );
+      const desired = new THREE.Vector3(
+        target.x - hx * 3.6 + sideX * 1.4,
+        target.y + 2.25,
+        target.z - hz * 3.6 + sideZ * 1.4,
+      );
+      constrainCamera(desired, target, terrain?.userData, trackManager, trainManager);
       const k = 1 - Math.exp(-3.5 * Math.min(delta, 0.1));
       camera.position.lerp(desired, k);
       controls.target.lerp(target, k);
@@ -445,7 +453,7 @@ function Scene({
         ref={orbitRef}
         enableDamping
         dampingFactor={0.05}
-        minDistance={0.2}
+        minDistance={0.75}
         maxDistance={Math.max(120, Math.max(terrainSize.length, terrainSize.breadth) * 0.75)}
         maxPolarAngle={Math.PI / 2.1}
       />
@@ -457,6 +465,13 @@ function Scene({
         stationManager={stationManager}
         trainManager={trainManager}
         followTrainId={followTrainId}
+        orbitRef={orbitRef}
+      />
+
+      <CameraCollision
+        terrainData={terrain?.userData}
+        trackManager={trackManager}
+        trainManager={trainManager}
         orbitRef={orbitRef}
       />
 
