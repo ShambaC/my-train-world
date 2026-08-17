@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { BIOME, mulberry32 } from '../terrain.js';
 import { windTime } from './wind.js';
 import { scatterRegistry } from './scatterRegistry.js';
+import { addSetDiff, collectExclusionSets, cellKey } from './instanceExclusion.js';
 import { makeBladeGeometry, makeBladeMaterial, makeFlowerMaterial, makeFlowerDepthMaterial } from './grassMaterials.js';
 import maskFlowerA from '../assets/Textures/flower/flowers.png';
 import rgbFlowerA from '../assets/Textures/flower/flowersRGB.png';
@@ -116,6 +117,8 @@ FLOWER_GEO.translate(0, 0.5, 0);
 export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting }) {
   const groupRef = useRef(new THREE.Group());
   const layoutRef = useRef([]);
+  const layoutByCellRef = useRef(new Map());
+  const exclusionSetsRef = useRef(null);
 
   const length = terrainData?.length || 0;
   const breadth = terrainData?.breadth || 0;
@@ -156,6 +159,8 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
     }
     old.clear();
     layoutRef.current = [];
+    layoutByCellRef.current = new Map();
+    exclusionSetsRef.current = null;
 
     if (!terrainData?.heightMap) return;
 
@@ -237,6 +242,13 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
     bladeMesh.frustumCulled = false;
 
     const dummy = new THREE.Object3D();
+    const registerLayout = (entry) => {
+      layoutRef.current.push(entry);
+      const key = cellKey(entry.cellX, entry.cellZ);
+      const bucket = layoutByCellRef.current.get(key);
+      if (bucket) bucket.push(entry);
+      else layoutByCellRef.current.set(key, [entry]);
+    };
     let bi = 0;
     for (const p of patches) {
       const px = (p.cx - halfL + 0.5) * VOXEL;
@@ -267,7 +279,7 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
         dummy.scale.set(0.09, sLen, 1);
         dummy.updateMatrix();
         bladeMesh.setMatrixAt(bi, dummy.matrix);
-        layoutRef.current.push({
+        registerLayout({
           mesh: bladeMesh, index: bi,
           cellX: cx, cellZ: cz,
           ox: wx, oy: cy, oz: wz,
@@ -341,11 +353,11 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
       im.setMatrixAt(slot * 2 + 1, dummy.matrix);
       const rotQ2 = dummy.quaternion.clone();
 
-      layoutRef.current.push({
+      registerLayout({
         mesh: im, index: slot * 2, cellX: cell.x, cellZ: cell.z,
         ox, oy: cy, oz, rotQ: rotQ1, scale: [size, size, size],
       });
-      layoutRef.current.push({
+      registerLayout({
         mesh: im, index: slot * 2 + 1, cellX: cell.x, cellZ: cell.z,
         ox, oy: cy, oz, rotQ: rotQ2, scale: [size, size, size],
       });
@@ -354,66 +366,42 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
     if (flowers.length) old.add(flowerMeshes.A, flowerMeshes.B);
   }, [terrainData, length, breadth, flowerMats]);
 
-  // Exclusion pass: hide blades/flowers under tracks, stations, roads and
-  // scattered buildings. Roads can change at runtime (user placement), so a
-  // poll re-runs the pass when roadManager.version changes outside React.
+  // Exclusion pass: update only cells whose dynamic exclusion sources changed.
   useEffect(() => {
     const layout = layoutRef.current;
     if (!layout.length) return;
 
     const run = () => {
-      const excluded = new Set();
-      const markCell = (x, z, r) => {
-        for (let dx = -r; dx <= r; dx++) {
-          for (let dz = -r; dz <= r; dz++) {
-            excluded.add(`${x + dx},${z + dz}`);
-          }
-        }
-      };
+      const next = collectExclusionSets({ trackManager, stationManager, roadManager, length, breadth });
+      const previous = exclusionSetsRef.current;
+      const affected = new Set();
 
-      for (const track of trackManager.getAllTracks()) {
-        const cx = Math.round(track.position.x / VOXEL + length / 2 - 0.5);
-        const cz = Math.round(track.position.z / VOXEL + breadth / 2 - 0.5);
-        markCell(cx, cz, 2);
-      }
-
-      for (const station of stationManager.getAllStations()) {
-        const r = station.voxelRect;
-        for (let x = r.minX - 1; x <= r.maxX + 1; x++) {
-          for (let z = r.minZ - 1; z <= r.maxZ + 1; z++) {
-            excluded.add(`${x},${z}`);
-          }
+      if (!previous) {
+        for (const key of layoutByCellRef.current.keys()) affected.add(key);
+      } else {
+        for (const name of ['tracks', 'stations', 'roads', 'buildings']) {
+          addSetDiff(previous[name], next[name], affected);
         }
       }
+      exclusionSetsRef.current = next;
 
-      if (roadManager?.ready) {
-        for (const cell of roadManager.getRoadCells()) {
-          const [cx, cz] = cell.split(',').map(Number);
-          markCell(cx, cz, 1);
+      const dirtyMeshes = new Set();
+      for (const key of affected) {
+        const isExcluded = next.tracks.has(key) || next.stations.has(key) || next.roads.has(key) || next.buildings.has(key);
+        for (const inst of layoutByCellRef.current.get(key) || []) {
+          if (isExcluded === inst.hidden) continue;
+          inst.hidden = isExcluded;
+
+          const s = inst.scale;
+          position.set(inst.ox, inst.oy, inst.oz);
+          quaternion.copy(inst.rotQ);
+          scaleVec.set(isExcluded ? 0 : s[0], isExcluded ? 0 : s[1], isExcluded ? 0 : s[2]);
+          matrix.compose(position, quaternion, scaleVec);
+          inst.mesh.setMatrixAt(inst.index, matrix);
+          dirtyMeshes.add(inst.mesh);
         }
       }
-
-      for (const b of scatterRegistry.buildings) {
-        markCell(b.cellX, b.cellZ, 1);
-      }
-
-      for (const inst of layout) {
-        const isExcluded = excluded.has(`${inst.cellX},${inst.cellZ}`);
-        if (isExcluded === inst.hidden) continue;
-        inst.hidden = isExcluded;
-
-        const s = inst.scale;
-        position.set(inst.ox, inst.oy, inst.oz);
-        quaternion.copy(inst.rotQ);
-        scaleVec.set(
-          isExcluded ? 0 : s[0],
-          isExcluded ? 0 : s[1],
-          isExcluded ? 0 : s[2],
-        );
-        matrix.compose(position, quaternion, scaleVec);
-        inst.mesh.setMatrixAt(inst.index, matrix);
-        inst.mesh.instanceMatrix.needsUpdate = true;
-      }
+      for (const mesh of dirtyMeshes) mesh.instanceMatrix.needsUpdate = true;
     };
 
     run();

@@ -541,7 +541,6 @@ export default function GameScene({
     setStationsVersion((v) => v + 1);
     setStationCount(stationManager?.getAllStations().length || 0);
     stationManager?.rebuildBindings(trackManager);
-    bumpScatter(0);
   };
 
   // Station role picker (radial menu)
@@ -729,8 +728,8 @@ export default function GameScene({
           selectedTrainId={selectedTrainId}
           trainsVersion={trainsVersion}
           stationsScatterVersion={stationsScatterVersion}
-          showAxes={showAxes}
-        />
+           showAxes={showAxes}
+         />
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt
             blur and cel passes stay opt-in toggles. */}

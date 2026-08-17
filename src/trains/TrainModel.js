@@ -7,24 +7,51 @@ import { createElectricEngine, getElectricEngineDimensions } from './ElectricEng
 import { createCheckerEngine, getCheckerEngineDimensions } from './CheckerEngineModel';
 import { ENGINE_LENGTH, ENGINE_WIDTH, ENGINE_HEIGHT } from './engineTypes';
 
+const ENGINE_KEYS = ['steam-engine', 'diesel-engine', 'electric-engine', 'checker-engine'];
+const engineTemplates = new Map();
+
+function normalizeEngineKey(typeOrColor) {
+  const key = typeof typeOrColor === 'string' ? typeOrColor.toLowerCase() : 'steam-engine';
+  if (key === 'diesel' || key === 'diesel-engine') return 'diesel-engine';
+  if (key === 'electric' || key === 'electric-engine') return 'electric-engine';
+  if (key === 'checker' || key === 'checker-engine') return 'checker-engine';
+  return 'steam-engine';
+}
+
+function buildEngine(key) {
+  if (key === 'diesel-engine') return createDieselEngine();
+  if (key === 'electric-engine') return createElectricEngine();
+  if (key === 'checker-engine') return createCheckerEngine();
+  return createSteamEngine();
+}
+
+function markSharedResources(root) {
+  root.traverse((child) => {
+    if (child.isMesh) child.userData.sharedTrainResource = true;
+  });
+  return root;
+}
+
 /**
  * Create a procedural train engine based on type
  * @param {string|number} typeOrColor - engine type key (e.g. 'steam-engine', 'diesel-engine', etc.)
  */
 export function createTrainEngine(typeOrColor = 'steam-engine') {
-  const key = typeof typeOrColor === 'string' ? typeOrColor.toLowerCase() : 'steam-engine';
+  const key = normalizeEngineKey(typeOrColor);
+  let template = engineTemplates.get(key);
+  if (!template) {
+    template = markSharedResources(buildEngine(key));
+    engineTemplates.set(key, template);
+  }
+  return template.clone(true);
+}
 
-  if (key === 'diesel-engine' || key === 'diesel') {
-    return createDieselEngine();
+export function preloadTrainEngines() {
+  for (const key of ENGINE_KEYS) {
+    if (!engineTemplates.has(key)) {
+      engineTemplates.set(key, markSharedResources(buildEngine(key)));
+    }
   }
-  if (key === 'electric-engine' || key === 'electric') {
-    return createElectricEngine();
-  }
-  if (key === 'checker-engine' || key === 'checker') {
-    return createCheckerEngine();
-  }
-  // Default to Steam Engine
-  return createSteamEngine();
 }
 
 /**

@@ -41,6 +41,14 @@ function makeSelectRing(geo) {
   return mesh;
 }
 
+function disposeTrainNode(node) {
+  node.traverse((child) => {
+    if (child.userData?.sharedTrainResource) return;
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  });
+}
+
 /**
  * Train Renderer — renders all trains + their trailing coaches.
  *
@@ -53,7 +61,6 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
   const rootRef = useRef();
   const trainNodesRef = useRef(new Map()); // trainId -> THREE.Group (world)
   const coachNodesRef = useRef(new Map()); // coachId -> THREE.Group (world)
-  const headlightsRef = useRef(new Map()); // trainId -> pointLight
   const lastSigRef = useRef('');
   const [snapshot, setSnapshot] = useState(null);
   const highlightGroupRef = useRef(null);
@@ -125,14 +132,9 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
       }
     }
 
-    // Night-scaled headlight pool: fully off in daylight (saves dynamic
-    // light cost), warm and bright after dark. Beam cone and glow halo fade
-    // out almost entirely in daylight too.
+    // Night-scaled headlight glow. Emissive meshes avoid dynamic-light shader
+    // recompilation when an engine is placed.
     const nightness = lighting ? lighting.nightness : 0.6;
-    const intensity = nightness * 9.2;
-    for (const light of headlightsRef.current.values()) {
-      light.intensity = intensity;
-    }
     for (const node of trainNodesRef.current.values()) {
       node.traverse((child) => {
         const kind = child.userData?.lightGlow;
@@ -202,12 +204,8 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
     for (const [id, node] of trainNodesRef.current.entries()) {
       if (!trainIds.has(id)) {
         if (node.parent) node.parent.remove(node);
-        node.traverse((child) => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
-        });
+        disposeTrainNode(node);
         trainNodesRef.current.delete(id);
-        headlightsRef.current.delete(id);
       }
     }
     for (const [id, node] of coachNodesRef.current.entries()) {
@@ -231,12 +229,8 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
         // Recreate engine node if engineType changed
         if (existingNode && existingNode.userData?.engineType !== engineType) {
           if (existingNode.parent) existingNode.parent.remove(existingNode);
-          existingNode.traverse((child) => {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
-          });
+          disposeTrainNode(existingNode);
           trainNodesRef.current.delete(train.id);
-          headlightsRef.current.delete(train.id);
         }
 
         // Engine node (created once, updated imperatively)
@@ -248,12 +242,6 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
 
           const engineMesh = createTrainEngine(engineType);
           node.add(engineMesh);
-
-          // One warm point light per engine (engines are few).
-          const headlight = new THREE.PointLight(0xffd9a0, 0, 9, 2);
-          headlight.position.set(0, 0.3, 0.46);
-          node.add(headlight);
-          headlightsRef.current.set(train.id, headlight);
 
           trainNodesRef.current.set(train.id, node);
         }

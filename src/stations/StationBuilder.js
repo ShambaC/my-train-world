@@ -19,6 +19,11 @@ const VOXEL = 0.5;
 const DECK_COLOR = 0x9a9a9a;
 const EDGE_COLOR = 0x929292; // brighter platform edges for readability
 
+const STATION_DECK_MAT = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
+const STATION_EDGE_MAT = makeAtlasMaterial('edge', { repeat: [0.5, 0.5] });
+const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
+const STATION_EDGE_GEO = new THREE.BoxGeometry(0.1, 0.15, VOXEL);
+
 // Shared practical-light materials (additive, toneMapped off — cheap glow
 // that reads as a lit lamp/window without dynamic lights). Tagged nightGlow
 // so StationRenderer fades them to near-zero in daylight.
@@ -120,8 +125,9 @@ const addWindowGlows = (building, modelKey = 'station-building') => {
   }
 };
 
-// Lamp post beside a bench: pole + lamp head with a small warm point
-// light pool. One per bench, on the platform edge opposite the bench.
+// Lamp post beside a bench: pole + lamp head with a small warm glow. One per
+// bench, on the platform edge opposite the bench. Glow avoids dynamic-light
+// shader recompilation when stations are placed.
 const addLampPost = (addPiece, axial, side, groundY) => {
   const post = new THREE.Group();
   const poleMat = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
@@ -135,9 +141,6 @@ const addLampPost = (addPiece, axial, side, groundY) => {
   const glow = makeLampGlow();
   glow.position.y = 0.58;
   post.add(glow);
-  const light = new THREE.PointLight(0xffd9a0, 4.5, 6, 2);
-  light.position.y = 0.58;
-  post.add(light);
   addPiece(post, axial, side, groundY, 0.05);
   return post;
 };
@@ -220,21 +223,17 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   };
 
   // --- platform deck (split into 1-voxel sections for the wave) ---
-  const deckMat = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
-  const deckGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
-    const section = new THREE.Mesh(deckGeo, deckMat);
+    const section = new THREE.Mesh(STATION_DECK_GEO, STATION_DECK_MAT);
     section.castShadow = true;
     section.receiveShadow = true;
     addPiece(section, i * VOXEL + 0.25, 0, groundY + PLATFORM_HEIGHT / 2);
   }
 
   // --- edge trim along the platform sides ---
-  const edgeMat = makeAtlasMaterial('edge', { repeat: [0.5, 0.5] });
-  const edgeGeo = new THREE.BoxGeometry(0.1, 0.15, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
     for (const ex of [-STATION_WIDTH_WORLD / 2, STATION_WIDTH_WORLD / 2]) {
-      const edge = new THREE.Mesh(edgeGeo, edgeMat);
+      const edge = new THREE.Mesh(STATION_EDGE_GEO, STATION_EDGE_MAT);
       addPiece(edge, i * VOXEL + 0.25, ex, platformTop + 0.03);
     }
   }

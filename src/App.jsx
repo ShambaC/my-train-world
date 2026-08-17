@@ -6,6 +6,7 @@ import Hotbar from "./ui/Hotbar";
 import SelectionPanel from "./ui/SelectionPanel";
 import { TrackManager } from "./tracks/TrackManager";
 import { TrainManager } from "./trains/TrainManager";
+import { preloadTrainEngines } from "./trains/TrainModel";
 import { StationManager } from "./stations/StationManager";
 import ModelLibrary from "./models/ModelLibrary";
 import { loadSettings, saveSettings } from "./utils/settings";
@@ -163,11 +164,16 @@ function App() {
 
   // Preload all GLB models with real progress
   useEffect(() => {
-    preloadAtlases().catch((err) => console.error('Atlas preload failed:', err));
-    ModelLibrary.preloadAll(setLoadProgress)
-      .then(() => setIsLoading(false))
+    Promise.all([
+      preloadAtlases(),
+      ModelLibrary.preloadAll(setLoadProgress),
+    ])
+      .then(() => {
+        preloadTrainEngines();
+        setIsLoading(false);
+      })
       .catch((err) => {
-        console.error('Model preload failed:', err);
+        console.error('Asset preload failed:', err);
         setIsLoading(false);
       });
   }, []);
@@ -306,9 +312,7 @@ function App() {
       });
       if (ok) {
         refreshWorld();
-        if (data.camera) {
-          cameraBus.emit({ type: 'focus', target: data.camera.position, distance: 6 });
-        }
+        if (data.camera) cameraBus.emit({ type: 'restore', ...data.camera });
         setStatus('📂 World loaded');
       } else {
         setStatus('⚠ Load failed');
@@ -351,9 +355,7 @@ function App() {
     });
     if (ok) {
       refreshWorld();
-      if (data.camera) {
-        cameraBus.emit({ type: 'focus', target: data.camera.position, distance: 6 });
-      }
+      if (data.camera) cameraBus.emit({ type: 'restore', ...data.camera });
       setStatus('📂 World loaded');
     } else {
       setStatus('⚠ Load failed');
@@ -407,11 +409,6 @@ function App() {
     // Stations start fresh in horizontal orientation every time.
     if (TOOLS[index]?.type === 'station') {
       setStationOrientation('horizontal');
-    }
-    // Non-forced framing assist: pull the camera closer to a comfortable
-    // construction distance when it is far away (never disorienting).
-    if (TOOLS[index]?.type && TOOLS[index].type !== 'hand') {
-      cameraBus.emit({ type: 'ease', maxDistance: 22 });
     }
   };
 

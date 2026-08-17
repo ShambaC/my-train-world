@@ -30,7 +30,7 @@ export const cameraBus = {
     return () => state.listeners.delete(fn);
   },
 
-  /** Commands: {type:'focus',target,distance} | {type:'ease',maxDistance}
+  /** Commands: {type:'restore',position,target} | {type:'focus',target,distance}
    *  | {type:'reset',terrainSize} | {type:'frame',terrainSize} */
   emit(command) {
     for (const fn of state.listeners) {

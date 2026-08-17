@@ -16,12 +16,50 @@ export default function CameraCommands({ terrainSize, trackManager, stationManag
   const desiredTarget = useRef(null);
   const animating = useRef(false);
 
+  const cancelAnimation = () => {
+    if (!animating.current) return;
+    animating.current = false;
+    desiredPos.current = null;
+    desiredTarget.current = null;
+    if (controlsRef.current && !followTrainId) {
+      controlsRef.current.enabled = true;
+      controlsRef.current.update();
+    }
+  };
+
   useEffect(() => {
     controlsRef.current = orbitRef?.current || null;
   }, [orbitRef]);
 
+  useEffect(() => {
+    const cameraKeys = new Set(['w', 'a', 's', 'd', ' ', 'c']);
+    const onKeyDown = (event) => {
+      if (cameraKeys.has(event.key.toLowerCase())) cancelAnimation();
+    };
+
+    window.addEventListener('pointerdown', cancelAnimation);
+    window.addEventListener('wheel', cancelAnimation, { passive: true });
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', cancelAnimation);
+      window.removeEventListener('wheel', cancelAnimation);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [followTrainId]);
+
   const commandFor = (cmd) => {
-    if (cmd.type === 'focus') {
+    if (cmd.type === 'restore') {
+      animating.current = false;
+      desiredPos.current = null;
+      desiredTarget.current = null;
+      camera.position.set(cmd.position.x, cmd.position.y, cmd.position.z);
+      const ctrl = controlsRef.current;
+      if (ctrl && cmd.target) {
+        ctrl.target.set(cmd.target.x, cmd.target.y, cmd.target.z);
+        ctrl.enabled = true;
+        ctrl.update();
+      }
+    } else if (cmd.type === 'focus') {
       const t = new THREE.Vector3(cmd.target.x, cmd.target.y, cmd.target.z);
       const distance = cmd.distance ?? 3.5;
       const dir = camera.position.clone().sub(t);
@@ -32,18 +70,6 @@ export default function CameraCommands({ terrainSize, trackManager, stationManag
       desiredPos.current = t.clone().add(dir.multiplyScalar(distance));
       desiredPos.current.y = Math.max(t.y + 1.2, desiredPos.current.y);
       animating.current = true;
-    } else if (cmd.type === 'ease') {
-      // Non-forced framing assist: pull the camera closer only when the
-      // construction distance is far beyond the tool's comfortable range.
-      const ctrl = controlsRef.current;
-      const target = ctrl ? ctrl.target : desiredTarget.current || new THREE.Vector3(0, 0, 0);
-      const d = camera.position.distanceTo(target);
-      if (d > (cmd.maxDistance ?? 24)) {
-        const dir = camera.position.clone().sub(target).normalize();
-        desiredTarget.current = target.clone();
-        desiredPos.current = target.clone().add(dir.multiplyScalar(cmd.maxDistance ?? 24));
-        animating.current = true;
-      }
     } else if (cmd.type === 'reset') {
       const half = Math.max(terrainSize.length, terrainSize.breadth) * 0.5;
       desiredTarget.current = new THREE.Vector3(0, 0, 0);
