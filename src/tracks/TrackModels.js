@@ -271,8 +271,8 @@ export function createRampBeams(clearance, groundClearanceBack, groundClearanceF
   const b = getBridgeAssets();
 
   const offsetX = STRAIGHT_TRACK_WIDTH * 0.35;
-  // Pillar stations along the ramp (0 = back/low end, 1 = front/high end)
-  const stations = groundClearanceFront > 0.05 ? [0.15, 0.5, 0.85] : [0.5];
+  // Pillar stations along ramp (0 = back/low end, 1 = front/high end).
+  const stations = [0.1, 0.3, 0.5, 0.7, 0.9];
 
   for (const t of stations) {
     const stationClearance = groundClearanceBack + (groundClearanceFront - groundClearanceBack) * t;
@@ -280,15 +280,17 @@ export function createRampBeams(clearance, groundClearanceBack, groundClearanceF
     const pillarHeight = stationClearance;
     const pillarGeo = getPillarGeo(pillarHeight);
     const z = (t - 0.5) * TRACK_LENGTH;
+    const deckY = t * 0.5;
 
     for (const sx of [-offsetX, offsetX]) {
       const pillar = new THREE.Mesh(pillarGeo, b.pillarMat);
-      pillar.position.set(sx, -pillarHeight / 2, z);
+      // Top follows angled deck; bottom reaches local ground clearance.
+      pillar.position.set(sx, deckY - pillarHeight / 2, z);
       Object.assign(pillar, BRIDGE_MESH);
       group.add(pillar);
 
       const cap = new THREE.Mesh(b.capGeo, b.capMat);
-      cap.position.set(sx, -0.08, z);
+      cap.position.set(sx, deckY - 0.08, z);
       group.add(cap);
     }
   }

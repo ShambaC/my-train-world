@@ -12,6 +12,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { makeAtlasMaterial } from '../utils/atlasTextures.js';
+import { pointOnTrack } from './trackGeometry.js';
 
 const POLE_X = 0.55;        // posts stand ±0.55 across the track
 const BEAM_Y = 1.55;        // top beam height above track level (tune here)
@@ -167,14 +168,19 @@ function buildOverheadLine(tracks, terrainData) {
     const gantryPts = [];
     for (const i of gantryIdx) {
       const track = byId.get(chain[i]);
+      const center = pointOnTrack(track.type, 0.5);
       const g = template.clone(true);
-      g.position.set(track.position.x, track.position.y, track.position.z);
+      g.position.set(
+        track.position.x + center.x * Math.cos(track.rotation || 0) + center.z * Math.sin(track.rotation || 0),
+        track.position.y + (center.y || 0),
+        track.position.z - center.x * Math.sin(track.rotation || 0) + center.z * Math.cos(track.rotation || 0)
+      );
       g.rotation.y = track.rotation || 0;
 
       // Extend posts downward to ground on elevated tracks
       if (terrainData) {
-        const gy = groundYAt(terrainData, track.position.x, track.position.z);
-        const ext = track.position.y - gy;
+        const gy = groundYAt(terrainData, g.position.x, g.position.z);
+        const ext = g.position.y - gy;
         if (ext > 0.05) {
           let childIdx = 0;
           g.traverse((child) => {
@@ -191,9 +197,9 @@ function buildOverheadLine(tracks, terrainData) {
 
       group.add(g);
       gantryPts.push({
-        x: track.position.x,
-        y: track.position.y,
-        z: track.position.z,
+        x: g.position.x,
+        y: g.position.y,
+        z: g.position.z,
         rotation: track.rotation || 0,
       });
     }
@@ -216,16 +222,11 @@ function buildOverheadLine(tracks, terrainData) {
         const startY = a.y + CONTACT_Y;
         const endY = b.y + CONTACT_Y;
         const dy = endY - startY;
-        const len3d = Math.hypot(ex - sx, dy, ez - sz);
-        if (len3d < 0.01) continue;
-        const wire = new THREE.Mesh(getWireGeo(len3d, CONTACT_SAG, 0.018, 'contact', dy), contactMat);
+        const horizontalLen = Math.hypot(ex - sx, ez - sz);
+        if (horizontalLen < 0.01) continue;
+        const wire = new THREE.Mesh(getWireGeo(horizontalLen, CONTACT_SAG, 0.018, 'contact', dy), contactMat);
         wire.position.set(sx, startY, sz);
         wire.rotation.y = Math.atan2(-(ez - sz), ex - sx);
-        // Pitch wire along the height slope (rotate around local X after yaw)
-        if (Math.abs(dy) > 0.01) {
-          wire.rotation.order = 'YXZ';
-          wire.rotation.x = Math.atan2(dy, Math.hypot(ex - sx, ez - sz));
-        }
         group.add(wire);
       }
 
@@ -233,15 +234,11 @@ function buildOverheadLine(tracks, terrainData) {
       const messengerEndY = b.y + MESSENGER_Y;
       const messengerDY = messengerEndY - messengerStartY;
       // Messenger sits at track center (no lateral offset)
-      const mLen3d = Math.hypot(b.x - a.x, messengerDY, b.z - a.z);
-      if (mLen3d >= 0.01) {
-        const messenger = new THREE.Mesh(getWireGeo(mLen3d, 0.03, 0.012, 'messenger', messengerDY), messengerMat);
+      const messengerLen = Math.hypot(b.x - a.x, b.z - a.z);
+      if (messengerLen >= 0.01) {
+        const messenger = new THREE.Mesh(getWireGeo(messengerLen, 0.03, 0.012, 'messenger', messengerDY), messengerMat);
         messenger.position.set(a.x, messengerStartY, a.z);
         messenger.rotation.y = Math.atan2(-(b.z - a.z), b.x - a.x);
-        if (Math.abs(messengerDY) > 0.01) {
-          messenger.rotation.order = 'YXZ';
-          messenger.rotation.x = Math.atan2(messengerDY, Math.hypot(b.x - a.x, b.z - a.z));
-        }
         group.add(messenger);
       }
     }

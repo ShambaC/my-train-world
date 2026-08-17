@@ -29,7 +29,7 @@ export function pointOnTrack(type, t) {
     return { x: 0, z: (t - 0.5) * VOXEL, y: 0 };
   }
   if (type === 'ramp') {
-    return { x: 0, z: (t - 0.5) * VOXEL, y: (t - 0.5) * 0.5 };
+    return { x: 0, z: (t - 0.5) * VOXEL, y: t * 0.5 };
   }
   // Curved: sweep from 270° (back) down to 180° (front)
   const theta = (3 * Math.PI / 2) - t * (Math.PI / 2);
@@ -86,8 +86,8 @@ export function localToWorld(local, position, rotationY) {
  */
 export function getEndpoint(type, end, position, rotationY) {
   let localPt;
-  if (type === 'curved') {
-    localPt = pointOnTrack('curved', end === 'front' ? 1 : 0);
+  if (type === 'curved' || type === 'ramp') {
+    localPt = pointOnTrack(type, end === 'front' ? 1 : 0);
   } else {
     localPt = STRAIGHT[end];
   }

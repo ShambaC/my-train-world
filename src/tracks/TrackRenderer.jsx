@@ -380,16 +380,16 @@ export default function TrackRenderer({
               };
               const cos = Math.cos(track.rotation);
               const sin = Math.sin(track.rotation);
-              // Back endpoint (t=0): local z = -0.25
+              // Back endpoint (t=0): ramp low end at track.position.y
               const backX = track.position.x + (-0.25) * sin;
               const backZ = track.position.z + (-0.25) * cos;
               const backGround = groundAt(backX, backZ);
-              const backClearance = track.position.y - 0.25 - backGround;
-              // Front endpoint (t=1): local z = +0.25
+              const backClearance = track.position.y - backGround;
+              // Front endpoint (t=1): ramp high end is +0.5 above base
               const frontX = track.position.x + 0.25 * sin;
               const frontZ = track.position.z + 0.25 * cos;
               const frontGround = groundAt(frontX, frontZ);
-              const frontClearance = track.position.y + 0.25 - frontGround;
+              const frontClearance = track.position.y + 0.5 - frontGround;
               const avgClearance = (backClearance + frontClearance) / 2;
               if (avgClearance > 0.05) {
                 const beams = createRampBeams(avgClearance, Math.max(0, backClearance), Math.max(0, frontClearance));
