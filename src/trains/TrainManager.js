@@ -348,11 +348,13 @@ export class TrainManager {
       const sin = Math.sin(track.rotation);
       coach.position = {
         x: track.position.x + local.x * cos + local.z * sin,
-        y: track.position.y,
+        y: track.position.y + (local.y || 0),
         z: track.position.z + -local.x * sin + local.z * cos,
       };
       const tangent = rotLocalToWorld(tangentOnTrack(track.type, pos.progress), track.rotation);
       coach.rotation = Math.atan2(tangent.x * pos.travelDir, tangent.z * pos.travelDir);
+      const coachTangent = tangentOnTrack(track.type, pos.progress);
+      coach.pitch = coachTangent.y ? -Math.atan2(coachTangent.y, coachTangent.z) * (pos.travelDir >= 0 ? 1 : -1) : 0;
     }
   }
 
@@ -471,7 +473,7 @@ export class TrainManager {
   }
 
   /**
-   * Position + yaw from track geometry.
+   * Position + yaw + pitch from track geometry.
    */
   updateTrainPosition(train, track) {
     const local = pointOnTrack(track.type, train.progress);
@@ -479,10 +481,20 @@ export class TrainManager {
     const sin = Math.sin(track.rotation);
 
     train.position.x = track.position.x + local.x * cos + local.z * sin;
-    train.position.y = track.position.y;
+    train.position.y = track.position.y + (local.y || 0);
     train.position.z = track.position.z + -local.x * sin + local.z * cos;
 
     train.rotation = Math.atan2(train.heading.x, train.heading.z);
+
+    // Pitch from tangent y component (ramp tracks).
+    // Positive pitch = nose DOWN in Three.js, so negate for uphill = nose UP.
+    const tangent = tangentOnTrack(track.type, train.progress);
+    if (tangent.y) {
+      const sign = (train.heading.x * Math.sin(track.rotation) + train.heading.z * Math.cos(track.rotation)) >= 0 ? 1 : -1;
+      train.pitch = -Math.atan2(tangent.y, tangent.z) * sign;
+    } else {
+      train.pitch = 0;
+    }
   }
 
   getAllTrains() {

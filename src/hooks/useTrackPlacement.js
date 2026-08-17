@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WATER_LEVEL } from '../terrain.js';
+import { COACH_LENGTH, DEFAULT_COACH } from '../trains/coachTypes.js';
 
 /**
  * Custom hook for raycasting and track placement.
@@ -11,7 +12,7 @@ import { WATER_LEVEL } from '../terrain.js';
  * track/station count changes — so placement never needs a mouse-away nudge.
  * The click handler also recomputes synchronously from the click event.
  */
-export function useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager) {
+export function useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager, waterRef) {
   const { camera, gl } = useThree();
   const [ghostPosition, setGhostPosition] = useState(null);
   const [isValidPosition, setIsValidPosition] = useState(true);
@@ -25,6 +26,18 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
   const lastCamPos = useRef(new THREE.Vector3());
   const lastCamQuat = useRef(new THREE.Quaternion());
   selectedToolRef.current = selectedTool;
+
+  // Combined raycast: terrain first, water surface fallback.
+  // Returns { point, isWater, faceNormal } or null.
+  const raycastGround = useCallback(() => {
+    const targets = [terrainRef.current];
+    if (waterRef?.current) targets.push(waterRef.current);
+    const hits = raycaster.current.intersectObjects(targets, true);
+    if (hits.length === 0) return null;
+    const hit = hits[0];
+    const isWater = waterRef?.current && hit.object === waterRef.current;
+    return { point: hit.point, isWater, faceNormal: hit.face?.normal };
+  }, [terrainRef, waterRef]);
 
   // Keep the synchronous mirror current for click handlers that run before
   // React re-renders (placement right after tool/rotation/camera changes).
@@ -87,13 +100,23 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
         }
       }
       if (train) {
+        // Offset behind last coach (or engine if no coaches yet)
+        let totalOffset = 0;
+        for (const c of train.coaches) totalOffset += c.spacing;
+        const nextSpacing = COACH_LENGTH[DEFAULT_COACH] ?? 1.2;
+        totalOffset += nextSpacing;
+        const head = {
+          x: Math.sin(train.rotation),
+          z: Math.cos(train.rotation),
+        };
         publish({
-          x: train.position.x,
+          x: train.position.x - head.x * totalOffset,
           y: train.position.y,
-          z: train.position.z,
+          z: train.position.z - head.z * totalOffset,
           rotation: train.rotation,
           type: null,
           target: { kind: 'train', id: train.id },
+          coachCount: train.coaches.length,
         }, true, null);
       } else {
         publish(null, true, null);
@@ -111,10 +134,10 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       lastMousePos.current = { x: event.clientX, y: event.clientY };
 
       raycaster.current.setFromCamera(mouse.current, camera);
-      const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+      const groundHit = raycastGround();
 
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
+      if (groundHit) {
+        const point = groundHit.point;
 
         if (tool.type === 'train') {
           // Check if hovering over an existing train first (allows changing engine type)
@@ -138,7 +161,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
             }, true, null);
           } else {
             // Snap ghost to the actual track under cursor
-            const track = trackManager.getTrackAtPosition(point, 0.35);
+            const track = trackManager.getTrackAtPosition(point, 0.35, raycaster.current, camera);
             if (track) {
               const flip = trainDirection === -1 ? Math.PI : 0;
               publish({
@@ -173,7 +196,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
             }
           }
           if (!target) {
-            const track = trackManager.getTrackAtPosition(point, 0.35);
+            const track = trackManager.getTrackAtPosition(point, 0.35, raycaster.current, camera);
             if (track) {
               target = { kind: 'track', id: track.id, position: track.position, rotation: track.rotation || 0, type: track.type };
             }
@@ -220,21 +243,26 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
     // Update raycaster
     raycaster.current.setFromCamera(mouse.current, camera);
 
-    // Check intersection with terrain
-    const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+    // Check intersection with terrain + water surface
+    const groundHit = raycastGround();
 
-    if (intersects.length > 0) {
-      const point = intersects[0].point;
-      const normal = intersects[0].face ? intersects[0].face.normal : new THREE.Vector3(0, 1, 0);
+    if (groundHit) {
+      const point = groundHit.point;
+      const isWater = groundHit.isWater;
 
-      // Only allow placement on top surface (normal pointing up)
-      if (Math.abs(normal.y) < 0.8) {
-        publish(null, true, null);
-        return;
+      // Only allow placement on top surface (normal pointing up) — skip for water surface
+      if (!isWater) {
+        const normal = groundHit.faceNormal;
+        if (normal && Math.abs(normal.y) < 0.8) {
+          publish(null, true, null);
+          return;
+        }
       }
 
       // Snap to grid (y = voxel top) + height offset
       const snapped = trackManager.snapToGrid(point);
+      // For water hits, use WATER_LEVEL as the base instead of terrain voxel top
+      if (isWater) snapped.y = WATER_LEVEL;
       snapped.y = snapped.y + heightOffset;
 
       let valid = true;
@@ -245,10 +273,10 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
           selectedToolRef.current.trackType,
           rotation,
           point.y,
-          normal
+          isWater ? null : groundHit.faceNormal
         );
         if (!valid) {
-          reason = point.y < WATER_LEVEL ? 'water' : 'occupied or invalid spot';
+          reason = (point.y < WATER_LEVEL && snapped.y < WATER_LEVEL + 0.15) ? 'water' : 'occupied or invalid spot';
         }
 
         publish({
@@ -259,9 +287,13 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
         return;
       } else if (selectedToolRef.current.type === 'road') {
         // Roads stay permissive: allow track overlap/crossings, reject only
-        // water and duplicate same-axis road tiles.
+        // water, duplicate same-axis road tiles, and stations.
         valid = point.y >= WATER_LEVEL && roadManager?.isRoadPlacementValid(snapped, rotation) !== false;
-        if (!valid) reason = point.y < WATER_LEVEL ? 'water' : 'road already here';
+        if (valid && stationManager) {
+          const st = stationManager.getStationAtPosition(snapped, 0);
+          if (st) { valid = false; reason = 'station here'; }
+        }
+        if (!valid && !reason) reason = point.y < WATER_LEVEL ? 'water' : 'road already here';
       }
 
       publish({
@@ -272,7 +304,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
     } else {
       publish(null, true, null);
     }
-  }, [camera, gl, terrainRef, trackManager, trainManager, rotation, heightOffset, trainDirection, roadManager]);
+  }, [camera, gl, terrainRef, waterRef, trackManager, trainManager, rotation, heightOffset, trainDirection, roadManager]);
 
   // Recalculate ghost position when rotation, height, direction or tool changes
   const recalculateGhostPosition = useCallback(() => {

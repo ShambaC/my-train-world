@@ -91,7 +91,7 @@ export function trackPointWorld(trackManager, trackId, progress) {
   const sin = Math.sin(track.rotation);
   return {
     x: track.position.x + local.x * cos + local.z * sin,
-    y: track.position.y,
+    y: track.position.y + (local.y || 0),
     z: track.position.z + -local.x * sin + local.z * cos,
   };
 }

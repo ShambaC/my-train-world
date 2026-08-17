@@ -49,7 +49,7 @@ function makeSelectRing(geo) {
  * imperatively to cached Object3D groups in useFrame, so moving trains and
  * coaches never trigger React re-renders.
  */
-export default function TrainRenderer({ trainManager, lighting, selectedTrainId }) {
+export default function TrainRenderer({ trainManager, lighting, selectedTrainId, trainsVersion = 0 }) {
   const rootRef = useRef();
   const trainNodesRef = useRef(new Map()); // trainId -> THREE.Group (world)
   const coachNodesRef = useRef(new Map()); // coachId -> THREE.Group (world)
@@ -61,35 +61,41 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
   const selectedTrainIdRef = useRef(selectedTrainId);
   selectedTrainIdRef.current = selectedTrainId;
 
+  // Sync topology — used by interval poll AND event-driven trainsVersion bump.
+  const sync = () => {
+    const trains = trainManager.getAllTrains();
+    const sig = trains
+      .map((t) =>
+        `${t.id}:${t.engineType || 'steam-engine'}:${(t.coaches || []).map((c) => c.id + (c.position ? 'p' : 'x')).join(',')}`
+      )
+      .join('|');
+    if (sig !== lastSigRef.current) {
+      lastSigRef.current = sig;
+      setSnapshot({
+        trains: trains.map((t) => ({
+          id: t.id,
+          engineType: t.engineType || 'steam-engine',
+          coaches: (t.coaches || []).map((c) => ({
+            id: c.id,
+            type: c.type,
+            placed: !!c.position,
+          })),
+        })),
+      });
+    }
+  };
+
   // Topology poll — state updates only when the train/coach set changes.
   useEffect(() => {
-    const sync = () => {
-      const trains = trainManager.getAllTrains();
-      const sig = trains
-        .map((t) =>
-          `${t.id}:${t.engineType || 'steam-engine'}:${(t.coaches || []).map((c) => c.id + (c.position ? 'p' : 'x')).join(',')}`
-        )
-        .join('|');
-      if (sig !== lastSigRef.current) {
-        lastSigRef.current = sig;
-        setSnapshot({
-          trains: trains.map((t) => ({
-            id: t.id,
-            engineType: t.engineType || 'steam-engine',
-            coaches: (t.coaches || []).map((c) => ({
-              id: c.id,
-              type: c.type,
-              placed: !!c.position,
-            })),
-          })),
-        });
-      }
-    };
-
     sync();
     const interval = setInterval(sync, 500);
     return () => clearInterval(interval);
   }, [trainManager]);
+
+  // Event-driven sync on trainsVersion bump (immediate, no 500ms wait).
+  useEffect(() => {
+    sync();
+  }, [trainsVersion]);
 
   // Animate trains imperatively — no React state involved.
   useFrame((state, delta) => {
@@ -104,6 +110,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
         const bobY = parked ? Math.sin(t * 2.2 + train.id.length) * 0.012 : 0;
         node.position.set(train.position.x, train.position.y + 0.1 + bobY, train.position.z);
         node.rotation.y = train.rotation;
+        node.rotation.x = train.pitch || 0;
         node.rotation.z = train.bank || 0;
       }
       for (const coach of train.coaches || []) {
@@ -113,6 +120,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
           const bobY = parked ? Math.sin(t * 2.2 + coach.id.length) * 0.01 : 0;
           cnode.position.set(coach.position.x, coach.position.y + 0.1 + bobY, coach.position.z);
           cnode.rotation.y = coach.rotation;
+          cnode.rotation.x = coach.pitch || 0;
         }
       }
     }
@@ -236,6 +244,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
           const node = new THREE.Group();
           node.name = `train_${train.id}`;
           node.userData.engineType = engineType;
+          node.rotation.order = 'YXZ';
 
           const engineMesh = createTrainEngine(engineType);
           node.add(engineMesh);
@@ -257,6 +266,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId 
             if (!coachNodesRef.current.has(coach.id)) {
               const node = new THREE.Group();
               node.name = `coach_${coach.id}`;
+              node.rotation.order = 'YXZ';
               node.add(createCoachMesh(coach.type));
               node.add(createContactPatch(0.34, 0.26, 0.012));
               coachNodesRef.current.set(coach.id, node);

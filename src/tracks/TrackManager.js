@@ -2,6 +2,7 @@
  * Track Manager - Handles track data storage and validation
  */
 
+import * as THREE from 'three';
 import { getEndpoints as getEndpointsFromGeometry } from './trackGeometry.js';
 import { WATER_LEVEL } from '../terrain.js';
 
@@ -45,12 +46,9 @@ export class TrackManager {
     for (const [otherId, otherTrack] of this.tracks) {
       if (otherId === track.id) continue;
 
-      // Check height difference
-      if (Math.abs(track.position.y - otherTrack.position.y) > 0.15) continue;
-
       const otherEndpoints = this.getEndpoints(otherTrack);
 
-      // Compute distances for all 4 combinations
+      // Compute distances for all 4 combinations (endpoint proximity)
       const combos = [
         { d: this.distance(endpoints.front, otherEndpoints.front), myEnd: 'front', otherEnd: 'front' },
         { d: this.distance(endpoints.front, otherEndpoints.back),  myEnd: 'front', otherEnd: 'back' },
@@ -63,6 +61,14 @@ export class TrackManager {
       const best = combos[0];
 
       if (best.d < tolerance) {
+        // Check height match at the connecting endpoints
+        const myEnd = best.myEnd === 'front' ? endpoints.front : endpoints.back;
+        const otherEnd = best.otherEnd === 'front' ? otherEndpoints.front : otherEndpoints.back;
+        if (myEnd.y !== undefined && otherEnd.y !== undefined) {
+          if (Math.abs(myEnd.y - otherEnd.y) > 0.15) continue;
+        } else {
+          if (Math.abs(track.position.y - otherTrack.position.y) > 0.15) continue;
+        }
         // Connect even if one end is already taken (for now, allow reconnection)
         if (!track.connections[best.myEnd] && !otherTrack.connections[best.otherEnd]) {
           track.connections[best.myEnd] = otherId;
@@ -116,15 +122,41 @@ export class TrackManager {
   }
 
   /**
-   * Get track at position
+   * Get track at position — XZ distance from a known point.
+   * For elevated tracks, also try ray-plane intersection at each track's Y.
    */
-  getTrackAtPosition(position, tolerance = 0.5) {
+  getTrackAtPosition(position, tolerance = 0.5, raycaster, camera) {
+    // First: fast XZ check from the known hit point (ground-level tracks)
+    let best = null;
+    let bestDist = tolerance;
     for (const [id, track] of this.tracks) {
       const dx = Math.abs(track.position.x - position.x);
       const dz = Math.abs(track.position.z - position.z);
-      
-      if (dx < tolerance && dz < tolerance) {
-        return track;
+      if (dx < bestDist && dz < bestDist) {
+        bestDist = Math.max(dx, dz);
+        best = track;
+      }
+    }
+    if (best) return best;
+
+    // Second: for elevated tracks, intersect ray with horizontal plane at each track's Y
+    if (raycaster && camera) {
+      const ray = raycaster.ray;
+      const plane = new THREE.Plane();
+      const intersectPoint = new THREE.Vector3();
+      for (const [id, track] of this.tracks) {
+        if (Math.abs(track.position.y - position.y) < 0.01) continue; // already checked above
+        plane.setFromNormalAndCoplanarPoint(
+          new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(0, track.position.y, 0)
+        );
+        if (ray.intersectPlane(plane, intersectPoint)) {
+          const dx = Math.abs(track.position.x - intersectPoint.x);
+          const dz = Math.abs(track.position.z - intersectPoint.z);
+          if (dx < tolerance && dz < tolerance) {
+            return track;
+          }
+        }
       }
     }
     return null;
@@ -134,9 +166,9 @@ export class TrackManager {
    * Check if position is valid for track placement
    */
   isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
-    // Check if on terrain (not in water)
-    if (terrainHeight < WATER_LEVEL) return false;
-    
+    // Check if on terrain (not in water) — allow over water when elevated
+    if (terrainHeight < WATER_LEVEL && position.y < WATER_LEVEL + 0.15) return false;
+
     // Check if placement is on top surface only (not on sides)
     if (surfaceNormal) {
       // Normal should point mostly upward (y component should be dominant)

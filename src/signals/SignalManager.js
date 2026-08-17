@@ -36,12 +36,24 @@ export class SignalManager {
   /**
    * Create a signal record beside a track (used by the auto-scatter).
    */
-  _create(trackId, progress, side, type, auto) {
+  _create(trackId, progress, side, type, auto, terrainData = null) {
     const track = this.trackManager.tracks.get(trackId);
     if (!track) return null;
     const pos = trackPointWorld(this.trackManager, trackId, progress);
     const tan = rotLocalToWorld(tangentOnTrack(track.type, progress), track.rotation);
     const perp = { x: -tan.z, z: tan.x };
+    const signalX = pos.x + perp.x * side * SIDE_OFFSET;
+    const signalZ = pos.z + perp.z * side * SIDE_OFFSET;
+    // Compute ground Y for mast extension
+    let groundY = 0;
+    if (terrainData?.heightMap) {
+      const { heightMap, length, breadth } = terrainData;
+      const cx = Math.round(signalX / 0.5 + length / 2 - 0.5);
+      const cz = Math.round(signalZ / 0.5 + breadth / 2 - 0.5);
+      if (cx >= 0 && cx < length && cz >= 0 && cz < breadth) {
+        groundY = heightMap[cx][cz] * 0.5;
+      }
+    }
     const signal = {
       id: auto ? `sig_auto_${this.nextId++}` : `sig_${this.nextId++}`,
       auto,
@@ -50,10 +62,11 @@ export class SignalManager {
       side,
       type,
       position: {
-        x: pos.x + perp.x * side * SIDE_OFFSET,
+        x: signalX,
         y: pos.y,
-        z: pos.z + perp.z * side * SIDE_OFFSET,
+        z: signalZ,
       },
+      groundY,
       rotation: Math.atan2(tan.x, tan.z),
       state: 'clear',
       litLamp: 'green',
@@ -79,7 +92,7 @@ export class SignalManager {
    * signals from the current layout — user signals are never touched.
    * Seed-based, so the same track layout + world seed = same signals.
    */
-  rebuildAuto(trackManager, seed) {
+  rebuildAuto(trackManager, seed, terrainData = null) {
     this.trackManager = trackManager;
     for (const [id, s] of this.signals) {
       if (s.auto) this.signals.delete(id);
@@ -151,7 +164,7 @@ export class SignalManager {
         const side = rng() < 0.5 ? -1 : 1;
         const pos = trackPointWorld(trackManager, trackId, 0.5);
         if (!clearOf(pos.x, pos.z)) continue;
-        const sig = this._create(trackId, 0.5, side, type, true);
+        const sig = this._create(trackId, 0.5, side, type, true, terrainData);
         if (sig) placed.push({ x: sig.position.x, z: sig.position.z });
       }
 
@@ -163,7 +176,7 @@ export class SignalManager {
           const progress = end === 'front' ? 0.92 : 0.08;
           const pos = trackPointWorld(trackManager, trackId, progress);
           if (!clearOf(pos.x, pos.z)) continue;
-          const sig = this._create(trackId, progress, rng() < 0.5 ? -1 : 1, 'two', true);
+          const sig = this._create(trackId, progress, rng() < 0.5 ? -1 : 1, 'two', true, terrainData);
           if (sig) placed.push({ x: sig.position.x, z: sig.position.z });
         }
       }

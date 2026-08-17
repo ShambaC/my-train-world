@@ -74,11 +74,14 @@ export default function SignalsRenderer({ signalManager, trainManager, lighting,
         }
         const node = nodesRef.current.get(sig.id);
         const signal = signalManager?.getSignals().find((s) => s.id === sig.id);
+        // Extend mast to ground on elevated tracks
+        const mastExt = signal ? signal.position.y - (signal.groundY || 0) : 0;
         return (
           <primitive
             key={sig.id}
             object={node}
-            position={signal ? [signal.position.x, signal.position.y, signal.position.z] : undefined}
+            position={signal ? [signal.position.x, signal.groundY || 0, signal.position.z] : undefined}
+            scale={mastExt > 0.05 ? [1, 1 + mastExt / 1.5, 1] : undefined}
             rotation={signal ? [0, signal.rotation, 0] : undefined}
             visible={enabled}
           />

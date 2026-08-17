@@ -26,13 +26,17 @@ export const CURVE = { cx: HALF, cz: HALF, r: HALF };
  */
 export function pointOnTrack(type, t) {
   if (type === 'straight') {
-    return { x: 0, z: (t - 0.5) * VOXEL };
+    return { x: 0, z: (t - 0.5) * VOXEL, y: 0 };
+  }
+  if (type === 'ramp') {
+    return { x: 0, z: (t - 0.5) * VOXEL, y: (t - 0.5) * 0.5 };
   }
   // Curved: sweep from 270° (back) down to 180° (front)
   const theta = (3 * Math.PI / 2) - t * (Math.PI / 2);
   return {
     x: CURVE.cx + CURVE.r * Math.cos(theta),
     z: CURVE.cz + CURVE.r * Math.sin(theta),
+    y: 0,
   };
 }
 
@@ -45,14 +49,16 @@ export function pointOnTrack(type, t) {
  */
 export function tangentOnTrack(type, t) {
   if (type === 'straight') {
-    // Tangent always points +Z (back→front)
-    return { x: 0, z: 1 };
+    return { x: 0, z: 1, y: 0 };
+  }
+  if (type === 'ramp') {
+    return { x: 0, z: 1, y: 1 };
   }
   // Curved: derivative of (cx + r*cos θ, cz + r*sin θ) w.r.t t is
   //   d/dt = (-r*sin θ, r*cos θ) * dθ/dt  where dθ/dt = -π/2
   // So tangent = (r*sin(θ)*π/2, -r*cos(θ)*π/2), normalized = (sin θ, -cos θ)
   const theta = (3 * Math.PI / 2) - t * (Math.PI / 2);
-  return { x: Math.sin(theta), z: -Math.cos(theta) };
+  return { x: Math.sin(theta), z: -Math.cos(theta), y: 0 };
 }
 
 /**
@@ -79,13 +85,14 @@ export function localToWorld(local, position, rotationY) {
  * @returns {{x: number, z: number}}
  */
 export function getEndpoint(type, end, position, rotationY) {
-  const local = type === 'straight' ? STRAIGHT[end] : (end === 'front' ? CURVE : CURVE);
-  // For curved, both endpoints come from CURVE arc:
-  //   back = pointOnTrack('curved', 0), front = pointOnTrack('curved', 1)
-  const localPt = type === 'curved'
-    ? pointOnTrack('curved', end === 'front' ? 1 : 0)
-    : STRAIGHT[end];
-  return localToWorld(localPt, position, rotationY);
+  let localPt;
+  if (type === 'curved') {
+    localPt = pointOnTrack('curved', end === 'front' ? 1 : 0);
+  } else {
+    localPt = STRAIGHT[end];
+  }
+  const world = localToWorld(localPt, position, rotationY);
+  return { ...world, y: position.y + localPt.y };
 }
 
 /**

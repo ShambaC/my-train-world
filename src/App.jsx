@@ -50,6 +50,14 @@ const TOOLS = [
     trackType: 'curved'
   },
   { 
+    id: 'ramp', 
+    name: 'Ramp Track (45°)', 
+    label: 'Ramp',
+    icon: '⟋', 
+    type: 'track',
+    trackType: 'ramp'
+  },
+  { 
     id: 'road', 
     name: 'Place Road', 
     label: 'Road',
@@ -90,6 +98,7 @@ function App() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [terrainSeed, setTerrainSeed] = useState(1337);
   const [showDebug, setShowDebug] = useState(false);
+  const [showAxes, setShowAxes] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
@@ -460,6 +469,7 @@ function App() {
         terrainSize={terrainSize} 
         terrainSeed={terrainSeed}
         showDebug={showDebug}
+        showAxes={showAxes}
         trackManager={trackManagerRef.current}
         stationManager={stationManagerRef.current}
         trainManager={trainManagerRef.current}
@@ -498,6 +508,8 @@ function App() {
         onSeedChange={handleSeedChange}
         onToggleDebug={setShowDebug}
         showDebug={showDebug}
+        showAxes={showAxes}
+        onToggleAxes={setShowAxes}
         isGenerating={isGenerating}
         trainManager={trainManagerRef.current}
         timeOfDay={timeOfDay}

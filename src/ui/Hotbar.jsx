@@ -9,6 +9,7 @@ const TOOL_KEYS = {
   '6': 5,
   '7': 6,
   '8': 7,
+  '9': 8,
   'Escape': -1, // Deselect
 };
 
@@ -27,7 +28,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
           onSelect(index);
         }
       }
-      
+
       // R key for rotation
       if (e.key.toLowerCase() === 'r') {
         onRotate();
@@ -54,8 +55,8 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
                   flex flex-col items-center justify-center
                   ${disabled
                     ? 'bg-gray-800 opacity-40 cursor-not-allowed'
-                    : selectedIndex === index 
-                      ? 'bg-blue-600 shadow-lg scale-110' 
+                    : selectedIndex === index
+                      ? 'bg-blue-600 shadow-lg scale-110'
                       : 'bg-gray-700 hover:bg-gray-600'
                   }
                 `}
@@ -63,17 +64,17 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
               >
                 {/* Icon */}
                 <span className="text-2xl mb-1">{tool.icon}</span>
-                
+
                 {/* Label */}
                 <span className="text-xs text-white font-medium">
                   {tool.label}
                 </span>
-                
+
                 {/* Hotkey indicator */}
                 <span className="absolute top-1 right-1 text-xs text-gray-400 bg-gray-900 rounded px-1">
                   {index + 1}
                 </span>
-                
+
                 {/* Selection indicator */}
                 {selectedIndex === index && !disabled && (
                   <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
@@ -84,10 +85,10 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
             );
           })}
         </div>
-        
+
         {/* Instructions */}
         <div className="mt-2 text-xs text-gray-400 text-center">
-          Press <kbd className="bg-gray-900 px-1 rounded">1-8</kbd> to select • 
+          Press <kbd className="bg-gray-900 px-1 rounded">1-8</kbd> to select •
           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
           <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
         </div>

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
-import { createStraightTrack, createCurvedTrack, createSupportBeams } from './TrackModels';
+import { createStraightTrack, createCurvedTrack, createSupportBeams, createRampTrack, createRampBeams } from './TrackModels';
 import { createTrainEngine } from '../trains/TrainModel';
 import { createPassengerCoach } from '../trains/PassengerCoachModel';
 import { createCoalCart } from '../trains/CoalCartModel';
@@ -12,7 +12,7 @@ import { useTrackPlacement } from '../hooks/useTrackPlacement';
 import OverheadLine from './OverheadLine';
 import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/editActions';
 import ModelLibrary from '../models/ModelLibrary';
-import { DEFAULT_COACH, COACH_SPACING } from '../trains/coachTypes';
+import { DEFAULT_COACH } from '../trains/coachTypes';
 import * as THREE from 'three';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
@@ -22,6 +22,7 @@ export default function TrackRenderer({
   trackManager,
   stationManager,
   terrainRef,
+  waterRef,
   selectedTool,
   rotation,
   heightOffset,
@@ -36,6 +37,7 @@ export default function TrackRenderer({
   roadManager,
   history,
   onSelect,
+  terrainData,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -50,7 +52,7 @@ export default function TrackRenderer({
     latestRef,
     updateGhostPosition,
     handlePlacement,
-  } = useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager);
+  } = useTrackPlacement(terrainRef, trackManager, stationManager, trainManager, selectedTool, rotation, heightOffset, trainDirection, signalManager, roadManager, waterRef);
 
   // Latest values via refs — canvas listeners attach ONCE so re-renders
   // during a click event never re-attach mid-dispatch (which made clicks
@@ -280,6 +282,8 @@ export default function TrackRenderer({
     if (selectedTool.type === 'track') {
       mesh = ghostPosition?.type === 'straight'
         ? makeGhost(createStraightTrack(), color)
+        : ghostPosition?.type === 'ramp'
+        ? makeGhost(createRampTrack(), color)
         : makeGhost(createCurvedTrack(), color);
     } else if (selectedTool.type === 'road') {
       mesh = ghostPosition?.type === 'road'
@@ -293,20 +297,9 @@ export default function TrackRenderer({
         mesh = makeGhost(createTrainEngine(currentEngineType || 'steam-engine'), isValidPosition ? GHOST_GREEN : GHOST_RED);
       }
     } else if (selectedTool.type === 'coach') {
-      // Green ghost of the default coach, hovering behind the engine
+      // Green ghost of the default coach, positioned behind the engine
       if (ghostPosition?.target?.kind === 'train') {
-        const spacing = COACH_SPACING[DEFAULT_COACH] ?? 1.2;
-        const head = new THREE.Vector3(
-          Math.sin(ghostPosition.rotation),
-          0,
-          Math.cos(ghostPosition.rotation)
-        );
-        const ghostPos = {
-          x: ghostPosition.x - head.x * spacing,
-          y: ghostPosition.y,
-          z: ghostPosition.z - head.z * spacing,
-        };
-        ghostOffsetRef.current = ghostPos;
+        ghostOffsetRef.current = null; // use ghostPosition directly (offset computed in useTrackPlacement)
         const coachMesh = DEFAULT_COACH === 'passenger-coach'
           ? createPassengerCoach()
           : DEFAULT_COACH === 'coal-cart'
@@ -343,13 +336,15 @@ export default function TrackRenderer({
       } else if (ghostPosition?.type) {
         mesh = ghostPosition.type === 'straight'
           ? makeGhost(createStraightTrack(), GHOST_RED, 0.5)
+          : ghostPosition.type === 'ramp'
+          ? makeGhost(createRampTrack(), GHOST_RED, 0.5)
           : makeGhost(createCurvedTrack(), GHOST_RED, 0.5);
       }
     }
 
     ghostMeshRef.current = mesh;
     return mesh;
-  }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.target?.id]);
+  }, [selectedTool?.type, selectedTool?.trackType, isValidPosition, ghostPosition?.type, ghostPosition?.target?.id, ghostPosition?.coachCount]);
 
   // Debug-only ghost reason (advisory, never a blocker).
   useEffect(() => {
@@ -367,12 +362,43 @@ export default function TrackRenderer({
         if (!trackMeshesRef.current.has(track.id)) {
           const trackMesh = track.type === 'straight'
             ? createStraightTrack()
+            : track.type === 'ramp'
+            ? createRampTrack()
             : createCurvedTrack();
 
           const effectiveHeight = track.heightOffset > 0.05 ? track.heightOffset : (track.position.y > 0.6 ? track.position.y : 0);
           if (effectiveHeight > 0.05) {
-            const beams = createSupportBeams(effectiveHeight, track.type);
-            if (beams) trackMesh.add(beams);
+            if (track.type === 'ramp' && terrainData?.heightMap) {
+              // Ramp: compute clearance at each endpoint from terrain heightmap
+              const { heightMap, length, breadth } = terrainData;
+              const VOXEL = 0.5;
+              const groundAt = (wx, wz) => {
+                const cx = Math.round(wx / VOXEL + length / 2 - 0.5);
+                const cz = Math.round(wz / VOXEL + breadth / 2 - 0.5);
+                if (cx < 0 || cx >= length || cz < 0 || cz >= breadth) return 0;
+                return heightMap[cx][cz] * VOXEL;
+              };
+              const cos = Math.cos(track.rotation);
+              const sin = Math.sin(track.rotation);
+              // Back endpoint (t=0): local z = -0.25
+              const backX = track.position.x + (-0.25) * sin;
+              const backZ = track.position.z + (-0.25) * cos;
+              const backGround = groundAt(backX, backZ);
+              const backClearance = track.position.y - 0.25 - backGround;
+              // Front endpoint (t=1): local z = +0.25
+              const frontX = track.position.x + 0.25 * sin;
+              const frontZ = track.position.z + 0.25 * cos;
+              const frontGround = groundAt(frontX, frontZ);
+              const frontClearance = track.position.y + 0.25 - frontGround;
+              const avgClearance = (backClearance + frontClearance) / 2;
+              if (avgClearance > 0.05) {
+                const beams = createRampBeams(avgClearance, Math.max(0, backClearance), Math.max(0, frontClearance));
+                if (beams) trackMesh.add(beams);
+              }
+            } else {
+              const beams = createSupportBeams(effectiveHeight, track.type);
+              if (beams) trackMesh.add(beams);
+            }
           }
 
           trackMeshesRef.current.set(track.id, trackMesh);
@@ -402,7 +428,7 @@ export default function TrackRenderer({
       )}
 
       {/* Electrification gantries + overhead wires (derived from track layout) */}
-      <OverheadLine tracks={tracks} />
+      <OverheadLine tracks={tracks} terrainData={terrainData} />
     </group>
   );
 }

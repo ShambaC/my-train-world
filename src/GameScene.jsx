@@ -28,6 +28,7 @@ import Roads from './environment/Roads';
 import { TrafficManager } from './environment/TrafficManager';
 import TrafficRenderer from './environment/TrafficRenderer';
 import CameraCommands from './environment/CameraCommands';
+import AxisGizmo from './environment/AxisGizmo';
 import SignalsRenderer from './signals/SignalsRenderer';
 import { CrossingManager } from './crossings/CrossingManager';
 import CrossingRenderer from './crossings/CrossingRenderer';
@@ -78,8 +79,12 @@ function Scene({
   history,
   onSelect,
   selectedTrainId,
+  trainsVersion,
+  stationsScatterVersion,
+  showAxes,
 }) {
   const terrainRef = useRef();
+  const waterRef = useRef();
   const orbitRef = useRef(null);
   const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
@@ -137,7 +142,7 @@ function Scene({
   // Auto-scatter signals beside long track runs
   useEffect(() => {
     if (!terrain) return;
-    signalManager?.rebuildAuto(trackManager, terrainSeed);
+    signalManager?.rebuildAuto(trackManager, terrainSeed, terrain?.userData);
   }, [trackLayoutVersion, tracksVersion, terrainSeed, terrain, signalManager, trackManager]);
 
   useFrame((_, delta) => {
@@ -259,7 +264,7 @@ function Scene({
       )}
 
       {/* Water Surface */}
-      <WaterSurface terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} lighting={lighting} />
+      <WaterSurface ref={waterRef} terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} lighting={lighting} />
 
       {/* Forest Border */}
       {forestBorder && (
@@ -282,6 +287,7 @@ function Scene({
           stationManager={stationManager}
           trainManager={trainManager}
           terrainRef={terrainRef}
+          waterRef={waterRef}
           selectedTool={selectedTool}
           rotation={rotation}
           heightOffset={heightOffset}
@@ -295,6 +301,7 @@ function Scene({
           roadManager={roadManager}
           history={history}
           onSelect={onSelect}
+          terrainData={terrain?.userData}
         />
       )}
 
@@ -311,6 +318,8 @@ function Scene({
           onStationPlaced={onStationPlaced}
           lighting={lighting}
           history={history}
+          trackManager={trackManager}
+          roadManager={roadManager}
         />
       )}
 
@@ -341,7 +350,7 @@ function Scene({
           trackManager={trackManager}
           stationManager={stationManager}
           trackCount={trackCount}
-          stationsVersion={stationsVersion}
+          stationsVersion={stationsScatterVersion}
           roadManager={roadManager}
         />
       )}
@@ -353,7 +362,7 @@ function Scene({
           trackManager={trackManager}
           stationManager={stationManager}
           trackCount={trackCount}
-          stationsVersion={stationsVersion}
+          stationsVersion={stationsScatterVersion}
           roadManager={roadManager}
           lighting={lighting}
         />
@@ -398,6 +407,7 @@ function Scene({
           trainManager={trainManager}
           lighting={lighting}
           selectedTrainId={selectedTrainId}
+          trainsVersion={trainsVersion}
         />
       )}
       
@@ -423,6 +433,9 @@ function Scene({
         followTrainId={followTrainId}
         orbitRef={orbitRef}
       />
+
+      {/* Axis indicator gizmo */}
+      <AxisGizmo visible={showAxes} />
     </>
   );
 }
@@ -431,7 +444,8 @@ function Scene({
 export default function GameScene({ 
   terrainSize, 
   terrainSeed = 1337,
-  showDebug, 
+  showDebug,
+  showAxes,
   trackManager,
   stationManager,
   trainManager,
@@ -473,6 +487,8 @@ export default function GameScene({
   const [stationCount, setStationCount] = useState(0);
   const [stationsVersion, setStationsVersion] = useState(0);
   const [trackLayoutVersion, setTrackLayoutVersion] = useState(0);
+  const [trainsVersion, setTrainsVersion] = useState(0);
+  const [stationsScatterVersion, setStationsScatterVersion] = useState(0);
   const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
   const [currentEngineType, setCurrentEngineType] = useState('steam-engine');
@@ -489,10 +505,25 @@ export default function GameScene({
     crossingManagerRef.current = new CrossingManager(trackManager, roadManager);
   }
 
+  // Deferred scatter rebuild — prevents GrassField/ScatterProps rebuild from
+  // blocking the station wave pop animation.
+  const scatterTimeoutRef = useRef(null);
+  const bumpScatter = (delayMs = 0) => {
+    if (scatterTimeoutRef.current) clearTimeout(scatterTimeoutRef.current);
+    scatterTimeoutRef.current = delayMs > 0
+      ? setTimeout(() => { scatterTimeoutRef.current = null; setStationsScatterVersion(v => v + 1); }, delayMs)
+      : (setStationsScatterVersion(v => v + 1), null);
+  };
+
   // Ambient sound master switch
   useEffect(() => {
     trainAudio.setEnabled(soundsEnabled);
   }, [soundsEnabled]);
+
+  // Cleanup scatter timeout on unmount
+  useEffect(() => {
+    return () => { if (scatterTimeoutRef.current) clearTimeout(scatterTimeoutRef.current); };
+  }, []);
 
   // Re-sync ambient targets when stations change
   useEffect(() => {
@@ -510,6 +541,7 @@ export default function GameScene({
     setStationsVersion((v) => v + 1);
     setStationCount(stationManager?.getAllStations().length || 0);
     stationManager?.rebuildBindings(trackManager);
+    bumpScatter(0);
   };
 
   // Station role picker (radial menu)
@@ -517,6 +549,9 @@ export default function GameScene({
 
   const handleStationPlaced = (station, x, y) => {
     setRoleMenu({ stationId: station.id, x, y });
+    // Defer scatter rebuild so wave pop animation isn't blocked
+    const waveDuration = station.lengthCells * 0.5 * 0.1 + 0.45 + 0.3;
+    bumpScatter(waveDuration * 1000);
   };
 
   const handleRoleSelect = (role) => {
@@ -545,6 +580,7 @@ export default function GameScene({
           redo: () => trainManager.restoreCoach(trainId, coach, idx),
         });
       }
+      setTrainsVersion(v => v + 1);
     }
     setCoachMenu(null);
   };
@@ -580,6 +616,7 @@ export default function GameScene({
             redo: () => trainManager.restoreTrain(clone(snap)),
           });
         }
+        setTrainsVersion(v => v + 1);
       } else if (engineMenu.trainId) {
         // Switch engine of existing train
         const train = trainManager?.getTrain(engineMenu.trainId);
@@ -592,6 +629,7 @@ export default function GameScene({
           });
         }
         trainManager?.setEngineType(engineMenu.trainId, engineType);
+        setTrainsVersion(v => v + 1);
       }
     }
     setEngineMenu(null);
@@ -601,6 +639,7 @@ export default function GameScene({
   useEffect(() => {
     setStationsVersion((v) => v + 1);
     setStationCount(stationManager?.getAllStations().length || 0);
+    bumpScatter(0);
   }, [terrainSize, stationManager]);
 
   useEffect(() => {
@@ -610,6 +649,7 @@ export default function GameScene({
     setTrackCount(trackManager?.getAllTracks().length || 0);
     setStationCount(stationManager?.getAllStations().length || 0);
     stationManager?.rebuildBindings(trackManager);
+    bumpScatter(0);
   }, [worldVersion, trackManager, stationManager]);
 
   useEffect(() => {
@@ -687,6 +727,9 @@ export default function GameScene({
           history={history}
           onSelect={onSelect}
           selectedTrainId={selectedTrainId}
+          trainsVersion={trainsVersion}
+          stationsScatterVersion={stationsScatterVersion}
+          showAxes={showAxes}
         />
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt

@@ -2,6 +2,7 @@
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } from '../stations/StationBuilder';
+import { pointOnTrack } from '../tracks/trackGeometry.js';
 
 /**
  * Station placement hook — two-click flow:
@@ -12,7 +13,7 @@ import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } f
  * either side of the start marker — the side the cursor sits on.
  * Validates flat same-height ground, no holes, no water, no overlap.
  */
-export function useStationPlacement(terrainRef, stationManager, orientation, terrainData) {
+export function useStationPlacement(terrainRef, stationManager, orientation, terrainData, active = true, trackManager = null, roadManager = null) {
   const { camera, gl } = useThree();
   const [ghost, setGhost] = useState(null);
   const [stationStart, setStationStart] = useState(null);
@@ -51,26 +52,73 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       }
     }
 
+    // Compute station cell rect bounds
+    const axMinX = Math.min(start.cell.x, start.cell.x + dir.x * (lengthCells - 1));
+    const axMaxX = Math.max(start.cell.x, start.cell.x + dir.x * (lengthCells - 1));
+    const axMinZ = Math.min(start.cell.z, start.cell.z + dir.z * (lengthCells - 1));
+    const axMaxZ = Math.max(start.cell.z, start.cell.z + dir.z * (lengthCells - 1));
+    const ppMinX = Math.min(0, perp.x * (STATION_WIDTH - 1));
+    const ppMaxX = Math.max(0, perp.x * (STATION_WIDTH - 1));
+    const ppMinZ = Math.min(0, perp.z * (STATION_WIDTH - 1));
+    const ppMaxZ = Math.max(0, perp.z * (STATION_WIDTH - 1));
+    const minX = axMinX + ppMinX;
+    const maxX = axMaxX + ppMaxX;
+    const minZ = axMinZ + ppMinZ;
+    const maxZ = axMaxZ + ppMaxZ;
+
     for (const other of stationManager.getAllStations()) {
       const r = other.voxelRect;
-      const axMinX = Math.min(start.cell.x, start.cell.x + dir.x * (lengthCells - 1));
-      const axMaxX = Math.max(start.cell.x, start.cell.x + dir.x * (lengthCells - 1));
-      const axMinZ = Math.min(start.cell.z, start.cell.z + dir.z * (lengthCells - 1));
-      const axMaxZ = Math.max(start.cell.z, start.cell.z + dir.z * (lengthCells - 1));
-      const ppMinX = Math.min(0, perp.x * (STATION_WIDTH - 1));
-      const ppMaxX = Math.max(0, perp.x * (STATION_WIDTH - 1));
-      const ppMinZ = Math.min(0, perp.z * (STATION_WIDTH - 1));
-      const ppMaxZ = Math.max(0, perp.z * (STATION_WIDTH - 1));
       const overlaps =
-        axMinX + ppMinX <= r.maxX + 1 && axMaxX + ppMaxX >= r.minX - 1 &&
-        axMinZ + ppMinZ <= r.maxZ + 1 && axMaxZ + ppMaxZ >= r.minZ - 1;
+        minX <= r.maxX + 1 && maxX >= r.minX - 1 &&
+        minZ <= r.maxZ + 1 && maxZ >= r.minZ - 1;
       if (overlaps) {
         return { ok: false, reason: 'overlaps another station' };
       }
     }
 
+    // Reject if any track cell falls inside the station rectangle
+    if (trackManager) {
+      for (const track of trackManager.getAllTracks()) {
+        const samples = [0, 0.25, 0.5, 0.75, 1];
+        for (const t of samples) {
+          const local = pointOnTrack(track.type, t);
+          const cos = Math.cos(track.rotation);
+          const sin = Math.sin(track.rotation);
+          const wx = track.position.x + local.x * cos + local.z * sin;
+          const wz = track.position.z + -local.x * sin + local.z * cos;
+          const cx = Math.round(wx / 0.5 + length / 2 - 0.5);
+          const cz = Math.round(wz / 0.5 + breadth / 2 - 0.5);
+          // Check against expanded rect (+1 cell margin for track width)
+          if (
+            cx >= minX - 1 && cx <= maxX + 1 &&
+            cz >= minZ - 1 && cz <= maxZ + 1 &&
+            Math.abs(track.position.y - start.height * 0.5 - 0.25) < 0.6
+          ) {
+            return { ok: false, reason: 'track in the way' };
+          }
+        }
+      }
+    }
+
+    // Reject if road cells overlap the station
+    if (roadManager) {
+      const roadCells = roadManager.getRoadCells();
+      for (let i = 0; i < lengthCells; i++) {
+        for (let j = 0; j < STATION_WIDTH; j++) {
+          const cx = start.cell.x + dir.x * i + perp.x * j;
+          const cz = start.cell.z + dir.z * i + perp.z * j;
+          // Check this cell and adjacent cells (road width spans ~1 cell)
+          for (const [dx, dz] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]) {
+            if (roadCells.has(`${cx+dx},${cz+dz}`)) {
+              return { ok: false, reason: 'road in the way' };
+            }
+          }
+        }
+      }
+    }
+
     return { ok: true };
-  }, [heightMap, length, breadth, stationManager]);
+  }, [heightMap, length, breadth, stationManager, trackManager, roadManager]);
 
   const cellToWorld = useCallback((cell, h) => ({
     x: (cell.x - length / 2 + 0.5) * 0.5,
@@ -182,11 +230,11 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
   }, [terrainRef, gl, camera, heightMap, length, breadth, stationStart, orientation, worldToCell, cellToWorld, extensionFor, validate]);
   // Recompute ghost when the orientation toggles
   useEffect(() => {
-    if (!stationStart) return;
+    if (!active || !stationStart) return;
     if (lastMousePos.current.x !== undefined) {
       computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
     }
-  }, [orientation, stationStart, computeGhost]);
+  }, [active, orientation, stationStart, computeGhost]);
 
   // Pointer leave/enter: hide the ghost while away, keep the start marker
   // and the last pointer position so returning restores it immediately.
@@ -194,7 +242,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
     const canvas = gl.domElement;
     const onEnter = () => {
       pointerInside.current = true;
-      if (lastMousePos.current.x !== undefined) {
+      if (active && lastMousePos.current.x !== undefined) {
         computeGhost({ clientX: lastMousePos.current.x, clientY: lastMousePos.current.y });
       }
     };
@@ -208,11 +256,12 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       canvas.removeEventListener('pointerenter', onEnter);
       canvas.removeEventListener('pointerleave', onLeave);
     };
-  }, [gl, computeGhost]);
+  }, [gl, active, computeGhost]);
 
   // Camera-driven recompute: orbit/pan/zoom/WASD/follow must keep the ghost
   // slab under the cursor without any pointer motion.
   useFrame(() => {
+    if (!active) return;
     if (camera.position.distanceToSquared(lastCamPos.current) < 1e-6 && camera.quaternion.equals(lastCamQuat.current)) {
       return;
     }

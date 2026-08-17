@@ -36,6 +36,8 @@ export default function StationRenderer({
   onStationPlaced,
   lighting,
   history,
+  trackManager,
+  roadManager,
 }) {
   const [stations, setStations] = useState([]);
   const mouseDownPosRef = useRef(null);
@@ -43,7 +45,7 @@ export default function StationRenderer({
   const camera = useThree((s) => s.camera);
 
   const { ghost, stationStart, handleClick, computeGhost, reset } = useStationPlacement(
-    terrainRef, stationManager, orientation, terrainData
+    terrainRef, stationManager, orientation, terrainData, selectedTool?.type === 'station', trackManager, roadManager
   );
 
   // Latest callbacks via refs — the canvas listeners attach ONCE so that

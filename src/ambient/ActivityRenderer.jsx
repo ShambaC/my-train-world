@@ -49,6 +49,7 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
           type: item.type,
           mesh: item.type === 'passenger' ? createPerson() : createCargo(item.type),
         };
+        if (item.type === 'passenger') node.mesh.scale.setScalar(1.15);
         node.group.add(node.mesh);
         nodesRef.current.set(item.id, node);
       }

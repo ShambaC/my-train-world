@@ -115,6 +115,7 @@ function getBridgeAssets() {
 
 // Track pieces receive and cast realtime shadows (original behavior).
 const TRACK_MESH = { castShadow: true, receiveShadow: true };
+const SLEEPER_MESH = { castShadow: false, receiveShadow: true };
 const BRIDGE_MESH = { castShadow: true, receiveShadow: true };
 
 /**
@@ -134,7 +135,7 @@ export function createStraightTrack() {
   for (let z = -TRACK_LENGTH / 2 + 0.05; z <= TRACK_LENGTH / 2 - 0.05; z += SLEEPER_SPACING) {
     const sleeper = new THREE.Mesh(a.sleeperGeo, a.sleeperMat);
     sleeper.position.set(0, RAIL_HEIGHT * 0.5, z);
-    Object.assign(sleeper, TRACK_MESH);
+    Object.assign(sleeper, SLEEPER_MESH);
     group.add(sleeper);
   }
 
@@ -183,7 +184,7 @@ export function createCurvedTrack() {
       const sleeper = new THREE.Mesh(a.sleeperGeo, a.sleeperMat);
       sleeper.position.set(x, RAIL_HEIGHT * 0.5, z);
       sleeper.rotation.y = rotY;
-      Object.assign(sleeper, TRACK_MESH);
+      Object.assign(sleeper, SLEEPER_MESH);
       group.add(sleeper);
     }
   }
@@ -196,6 +197,101 @@ export function createCurvedTrack() {
   const rail2 = new THREE.Mesh(a.railGeos[1], RAIL_MAT);
   Object.assign(rail2, TRACK_MESH);
   group.add(rail2);
+
+  return group;
+}
+
+/**
+ * Create a ramp track piece — 45° incline/decline, one voxel rise over one tile.
+ * Local back (t=0) at y=0, front (t=1) at y=+0.5.
+ */
+let rampAssets = null;
+function getRampAssets() {
+  if (rampAssets) return rampAssets;
+  rampAssets = {
+    gravelGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH),
+    gravelMat: makeAtlasMaterial('ballast', { repeat: [0.33, 0.33] }),
+    sleeperGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
+    sleeperMat: makeAtlasMaterial('planks', { repeat: [1, 1] }),
+    railGeo: new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH),
+  };
+  return rampAssets;
+}
+
+export function createRampTrack() {
+  const group = new THREE.Group();
+  const a = getRampAssets();
+
+  // Slope angle = 45° over one tile
+  const rise = 0.5;
+  const run = TRACK_LENGTH;
+  const slopeAngle = Math.atan2(rise, run);
+  const slopeLen = Math.sqrt(rise * rise + run * run);
+  const midY = rise / 2;
+
+  // Gravel base — tilted box along the slope
+  const gravel = new THREE.Mesh(a.gravelGeo, a.gravelMat);
+  gravel.position.set(0, midY + RAIL_HEIGHT * 0.25, 0);
+  gravel.rotation.x = -slopeAngle;
+  Object.assign(gravel, TRACK_MESH);
+  group.add(gravel);
+
+  // Sleepers along the slope
+  for (let z = -TRACK_LENGTH / 2 + 0.05; z <= TRACK_LENGTH / 2 - 0.05; z += SLEEPER_SPACING) {
+    const sleeper = new THREE.Mesh(a.sleeperGeo, a.sleeperMat);
+    const t = (z + TRACK_LENGTH / 2) / TRACK_LENGTH;
+    const y = t * rise;
+    sleeper.position.set(0, y + RAIL_HEIGHT * 0.5, z);
+    sleeper.rotation.x = -slopeAngle;
+    Object.assign(sleeper, SLEEPER_MESH);
+    group.add(sleeper);
+  }
+
+  // Rails — two parallel rails along the slope
+  for (const side of [-RAIL_OFFSET, RAIL_OFFSET]) {
+    const rail = new THREE.Mesh(a.railGeo, RAIL_MAT);
+    rail.position.set(side, midY + RAIL_HEIGHT, 0);
+    rail.rotation.x = -slopeAngle;
+    Object.assign(rail, TRACK_MESH);
+    group.add(rail);
+  }
+
+  return group;
+}
+
+/**
+ * Create support beams for ramp tracks — pillars at multiple stations along
+ * the slope, each extending from the deck height down to ground level.
+ * `clearance` = average height of the ramp above ground (world units).
+ * `groundClearanceBack` / `groundClearanceFront` = clearance at each end.
+ */
+export function createRampBeams(clearance, groundClearanceBack, groundClearanceFront) {
+  if (clearance <= 0.05) return null;
+  const group = new THREE.Group();
+  const b = getBridgeAssets();
+
+  const offsetX = STRAIGHT_TRACK_WIDTH * 0.35;
+  // Pillar stations along the ramp (0 = back/low end, 1 = front/high end)
+  const stations = groundClearanceFront > 0.05 ? [0.15, 0.5, 0.85] : [0.5];
+
+  for (const t of stations) {
+    const stationClearance = groundClearanceBack + (groundClearanceFront - groundClearanceBack) * t;
+    if (stationClearance < 0.05) continue;
+    const pillarHeight = stationClearance;
+    const pillarGeo = getPillarGeo(pillarHeight);
+    const z = (t - 0.5) * TRACK_LENGTH;
+
+    for (const sx of [-offsetX, offsetX]) {
+      const pillar = new THREE.Mesh(pillarGeo, b.pillarMat);
+      pillar.position.set(sx, -pillarHeight / 2, z);
+      Object.assign(pillar, BRIDGE_MESH);
+      group.add(pillar);
+
+      const cap = new THREE.Mesh(b.capGeo, b.capMat);
+      cap.position.set(sx, -0.08, z);
+      group.add(cap);
+    }
+  }
 
   return group;
 }

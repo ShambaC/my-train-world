@@ -66,20 +66,21 @@ function getGantryTemplate() {
   return gantryTemplate;
 }
 
-// Wire tube geometries cached per quantized span length (per wire kind),
-// built in LOCAL space along +X (0 → len) with the sag baked into Y, so a
-// wire mesh is placed/rotated per span while sharing one buffer per length.
-const wireGeoCache = new Map(); // key `${kind}:${lenKey}` -> TubeGeometry
+// Wire tube geometries cached per quantized span length + ΔY (per wire kind),
+// built in LOCAL space along +X (0 → len) with sag baked into Y relative to
+// the chord between endpoints, so a wire mesh handles height differences.
+const wireGeoCache = new Map(); // key `${kind}:${lenKey}:${dyKey}` -> TubeGeometry
 
-function getWireGeo(length, sag, radius, kind) {
+function getWireGeo(length, sag, radius, kind, deltaY = 0) {
   const lenKey = Math.round(length * 4) / 4;
-  const key = `${kind}:${lenKey}`;
+  const dyKey = Math.round(deltaY * 4) / 4;
+  const key = `${kind}:${lenKey}:${dyKey}`;
   let geo = wireGeoCache.get(key);
   if (!geo) {
     const pts = [
       new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(lenKey / 2, -sag, 0),
-      new THREE.Vector3(lenKey, 0, 0),
+      new THREE.Vector3(lenKey / 2, deltaY / 2 - sag, 0),
+      new THREE.Vector3(lenKey, deltaY, 0),
     ];
     const curve = new THREE.CatmullRomCurve3(pts);
     geo = new THREE.TubeGeometry(curve, 10, radius, 5, false);
@@ -119,7 +120,16 @@ function walkChain(byId, visited, startId) {
   return chain;
 }
 
-function buildOverheadLine(tracks) {
+function groundYAt(terrainData, worldX, worldZ) {
+  if (!terrainData?.heightMap) return 0;
+  const { heightMap, length, breadth } = terrainData;
+  const cx = Math.round(worldX / 0.5 + length / 2 - 0.5);
+  const cz = Math.round(worldZ / 0.5 + breadth / 2 - 0.5);
+  if (cx < 0 || cx >= length || cz < 0 || cz >= breadth) return 0;
+  return heightMap[cx][cz] * 0.5;
+}
+
+function buildOverheadLine(tracks, terrainData) {
   const byId = new Map(tracks.map((t) => [t.id, t]));
   if (byId.size === 0) return null;
 
@@ -160,6 +170,25 @@ function buildOverheadLine(tracks) {
       const g = template.clone(true);
       g.position.set(track.position.x, track.position.y, track.position.z);
       g.rotation.y = track.rotation || 0;
+
+      // Extend posts downward to ground on elevated tracks
+      if (terrainData) {
+        const gy = groundYAt(terrainData, track.position.x, track.position.z);
+        const ext = track.position.y - gy;
+        if (ext > 0.05) {
+          let childIdx = 0;
+          g.traverse((child) => {
+            if (child.isMesh && child.geometry?.parameters?.height === BEAM_Y) {
+              // Post cylinder — scale Y to reach ground, shift down
+              const scale = (BEAM_Y + ext) / BEAM_Y;
+              child.scale.y = scale;
+              child.position.y = (BEAM_Y + ext) / 2 - ext;
+              childIdx++;
+            }
+          });
+        }
+      }
+
       group.add(g);
       gantryPts.push({
         x: track.position.x,
@@ -172,10 +201,11 @@ function buildOverheadLine(tracks) {
     // Wires between consecutive gantries along the chain. Wire geometry is
     // built along local +X; rotation.y maps local +X to world (cosθ, -sinθ),
     // so the yaw is atan2(-dz, dx) — otherwise wires point backward.
+    // Per-endpoint Y accounts for gantries at different heights (ramps, bridges).
     for (let i = 0; i < gantryPts.length - 1; i++) {
       const a = gantryPts[i];
       const b = gantryPts[i + 1];
-      const wireY = (a.y + b.y) / 2 + CONTACT_Y;
+
       for (const side of [-1, 1]) {
         const wa = rotOffset(side * CONTACT_X, 0, a.rotation);
         const wb = rotOffset(side * CONTACT_X, 0, b.rotation);
@@ -183,19 +213,35 @@ function buildOverheadLine(tracks) {
         const sz = a.z + wa.z;
         const ex = b.x + wb.x;
         const ez = b.z + wb.z;
-        const len = Math.hypot(ex - sx, ez - sz);
-        if (len < 0.01) continue;
-        const wire = new THREE.Mesh(getWireGeo(len, CONTACT_SAG, 0.018, 'contact'), contactMat);
-        wire.position.set(sx, wireY, sz);
+        const startY = a.y + CONTACT_Y;
+        const endY = b.y + CONTACT_Y;
+        const dy = endY - startY;
+        const len3d = Math.hypot(ex - sx, dy, ez - sz);
+        if (len3d < 0.01) continue;
+        const wire = new THREE.Mesh(getWireGeo(len3d, CONTACT_SAG, 0.018, 'contact', dy), contactMat);
+        wire.position.set(sx, startY, sz);
         wire.rotation.y = Math.atan2(-(ez - sz), ex - sx);
+        // Pitch wire along the height slope (rotate around local X after yaw)
+        if (Math.abs(dy) > 0.01) {
+          wire.rotation.order = 'YXZ';
+          wire.rotation.x = Math.atan2(dy, Math.hypot(ex - sx, ez - sz));
+        }
         group.add(wire);
       }
-      const messengerY = (a.y + b.y) / 2 + MESSENGER_Y;
-      const len = Math.hypot(b.x - a.x, b.z - a.z);
-      if (len >= 0.01) {
-        const messenger = new THREE.Mesh(getWireGeo(len, 0.03, 0.012, 'messenger'), messengerMat);
-        messenger.position.set(a.x, messengerY, a.z);
+
+      const messengerStartY = a.y + MESSENGER_Y;
+      const messengerEndY = b.y + MESSENGER_Y;
+      const messengerDY = messengerEndY - messengerStartY;
+      // Messenger sits at track center (no lateral offset)
+      const mLen3d = Math.hypot(b.x - a.x, messengerDY, b.z - a.z);
+      if (mLen3d >= 0.01) {
+        const messenger = new THREE.Mesh(getWireGeo(mLen3d, 0.03, 0.012, 'messenger', messengerDY), messengerMat);
+        messenger.position.set(a.x, messengerStartY, a.z);
         messenger.rotation.y = Math.atan2(-(b.z - a.z), b.x - a.x);
+        if (Math.abs(messengerDY) > 0.01) {
+          messenger.rotation.order = 'YXZ';
+          messenger.rotation.x = Math.atan2(messengerDY, Math.hypot(b.x - a.x, b.z - a.z));
+        }
         group.add(messenger);
       }
     }
@@ -209,8 +255,8 @@ function buildOverheadLine(tracks) {
  * Rebuilds from scratch on every track list change; all geometries and
  * materials are shared module-level caches.
  */
-export default function OverheadLine({ tracks }) {
-  const group = useMemo(() => buildOverheadLine(tracks), [tracks]);
+export default function OverheadLine({ tracks, terrainData }) {
+  const group = useMemo(() => buildOverheadLine(tracks, terrainData), [tracks, terrainData]);
   if (!group) return null;
   return <primitive object={group} />;
 }

@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VOXEL_SIZE } from '../terrain.js';
@@ -169,10 +169,12 @@ const WaterShader = {
   `,
 };
 
-export default function WaterSurface({ terrainSize, heightData, timeOfDay, lighting }) {
+const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting }, ref) {
   const materialRef = useRef();
   const meshRef = useRef();
   const { camera } = useThree();
+
+  useImperativeHandle(ref, () => meshRef.current);
 
   const width = (terrainSize.length) * VOXEL_SIZE;
   const height = (terrainSize.breadth) * VOXEL_SIZE;
@@ -258,4 +260,6 @@ export default function WaterSurface({ terrainSize, heightData, timeOfDay, light
       />
     </mesh>
   );
-}
+});
+
+export default WaterSurface;
