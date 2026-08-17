@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { WATER_LEVEL } from '../terrain.js';
 import { COACH_LENGTH, DEFAULT_COACH } from '../trains/coachTypes.js';
 
+// Water plane sits at WATER_LEVEL but the shader waves crest ~0.08 above.
+// Tracks placed at exact WATER_LEVEL get partially submerged by wave peaks.
+const WATER_TRACK_OFFSET = 0.25;
+
 /**
  * Custom hook for raycasting and track placement.
  *
@@ -20,6 +24,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
   const raycaster = useRef(new THREE.Raycaster());
   const mouse = useRef(new THREE.Vector2());
   const lastMousePos = useRef({ x: 0, y: 0 }); // Store last mouse position
+  const hasMouseRef = useRef(false);
   const pointerInside = useRef(false); // pointer currently over the canvas
   const latestRef = useRef({ ghostPosition: null, isValidPosition: true, ghostReason: null, hitPoint: null }); // synchronous mirror for clicks
   const selectedToolRef = useRef(selectedTool);
@@ -55,6 +60,8 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
     }
 
     const tool = selectedToolRef.current;
+    lastMousePos.current = { x: event.clientX, y: event.clientY };
+    hasMouseRef.current = true;
 
     // Hand tool: no ghost, but remember the exact terrain hit so the
     // hand-tool click can select whatever sits under the cursor.
@@ -237,9 +244,6 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
     mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-    // Store last mouse position
-    lastMousePos.current = { x: event.clientX, y: event.clientY };
-
     // Update raycaster
     raycaster.current.setFromCamera(mouse.current, camera);
 
@@ -261,8 +265,9 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
 
       // Snap to grid (y = voxel top) + height offset
       const snapped = trackManager.snapToGrid(point);
-      // For water hits, use WATER_LEVEL as the base instead of terrain voxel top
-      if (isWater) snapped.y = WATER_LEVEL;
+      // For water hits, use WATER_LEVEL as the base instead of terrain voxel top.
+      // Offset above the water plane so tracks sit on the surface, not inside waves.
+      if (isWater) snapped.y = WATER_LEVEL + WATER_TRACK_OFFSET;
       snapped.y = snapped.y + heightOffset;
 
       let valid = true;
@@ -308,7 +313,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
 
   // Recalculate ghost position when rotation, height, direction or tool changes
   const recalculateGhostPosition = useCallback(() => {
-    if (!terrainRef.current || !selectedToolRef.current || !pointerInside.current || lastMousePos.current.x === undefined) {
+    if (!terrainRef.current || !selectedToolRef.current || !hasMouseRef.current) {
       return;
     }
 

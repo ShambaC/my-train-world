@@ -366,7 +366,22 @@ export default function TrackRenderer({
             ? createRampTrack()
             : createCurvedTrack();
 
-          const effectiveHeight = track.heightOffset > 0.05 ? track.heightOffset : (track.position.y > 0.6 ? track.position.y : 0);
+          let groundY = null;
+          if (terrainData?.heightMap) {
+            const { heightMap, length, breadth } = terrainData;
+            const cx = Math.round(track.position.x / 0.5 + length / 2 - 0.5);
+            const cz = Math.round(track.position.z / 0.5 + breadth / 2 - 0.5);
+            if (cx >= 0 && cx < length && cz >= 0 && cz < breadth) {
+              // Match OverheadLine support logic: post bottoms target voxel
+              // center height, leaving lower section visibly underwater.
+              groundY = heightMap[cx][cz] * 0.5;
+            }
+          }
+          // Support clearance is world track Y minus real terrain top. Never
+          // use world Y as height; that sends ordinary land beams to y=0.
+          const effectiveHeight = groundY === null
+            ? (track.heightOffset > 0.05 ? track.heightOffset : 0)
+            : Math.max(0, track.position.y - groundY);
           if (effectiveHeight > 0.05) {
             if (track.type === 'ramp' && terrainData?.heightMap) {
               // Ramp: compute clearance at each endpoint from terrain heightmap
@@ -392,7 +407,11 @@ export default function TrackRenderer({
               const frontClearance = track.position.y + 0.5 - frontGround;
               const avgClearance = (backClearance + frontClearance) / 2;
               if (avgClearance > 0.05) {
-                const beams = createRampBeams(avgClearance, Math.max(0, backClearance), Math.max(0, frontClearance));
+                const beams = createRampBeams(
+                  avgClearance,
+                  Math.max(0, backClearance),
+                  Math.max(0, frontClearance),
+                );
                 if (beams) trackMesh.add(beams);
               }
             } else {

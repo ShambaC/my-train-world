@@ -264,7 +264,15 @@ function Scene({
       )}
 
       {/* Water Surface */}
-      <WaterSurface ref={waterRef} terrainSize={terrainSize} heightData={terrain?.userData} timeOfDay={timeOfDay} lighting={lighting} />
+       <WaterSurface
+         ref={waterRef}
+         terrainSize={terrainSize}
+         heightData={terrain?.userData}
+         timeOfDay={timeOfDay}
+         lighting={lighting}
+         trackManager={trackManager}
+         trainManager={trainManager}
+       />
 
       {/* Forest Border */}
       {forestBorder && (

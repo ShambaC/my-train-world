@@ -1,7 +1,9 @@
 import { useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { VOXEL_SIZE } from '../terrain.js';
+import { VOXEL_SIZE, WATER_LEVEL } from '../terrain.js';
+
+const MAX_FOAM_POINTS = 64;
 
 const WaterShader = {
   uniforms: {
@@ -18,6 +20,8 @@ const WaterShader = {
     uWaterY: { value: 1.0 },
     uVoxel: { value: VOXEL_SIZE },
     uFlowDir: { value: new THREE.Vector2(0, 1) },
+    uFoamPoints: { value: Array.from({ length: MAX_FOAM_POINTS }, () => new THREE.Vector3(9999, 0, 9999)) },
+    uFoamCount: { value: 0 },
   },
   vertexShader: `
     uniform float uTime;
@@ -57,6 +61,8 @@ const WaterShader = {
     uniform float uWaterY;
     uniform float uVoxel;
     uniform vec2 uFlowDir;
+    uniform vec3 uFoamPoints[${MAX_FOAM_POINTS}];
+    uniform float uFoamCount;
     varying vec2 vUv;
     varying vec3 vWorldPos;
 
@@ -146,6 +152,19 @@ const WaterShader = {
       shoreRipple = smoothstep(0.4, 1.0, shoreRipple * 0.5 + 0.5) * rippleMask;
       col = mix(col, uColorFoam, shoreRipple * 0.18);
 
+      // Interactive foam rings around supports/objects crossing water. Points
+      // are supplied from live track/train layout; no foam meshes needed.
+      float objectFoam = 0.0;
+      for (int i = 0; i < ${MAX_FOAM_POINTS}; i++) {
+        if (float(i) >= uFoamCount) break;
+        float distanceToObject = distance(vWorldPos.xz, uFoamPoints[i].xz);
+        float ring = 1.0 - smoothstep(0.045, 0.2, distanceToObject);
+        float pulse = sin(distanceToObject * 48.0 - uTime * 3.2);
+        pulse = 0.65 + 0.35 * smoothstep(0.0, 1.0, pulse * 0.5 + 0.5);
+        objectFoam = max(objectFoam, ring * pulse);
+      }
+      col = mix(col, uColorFoam, objectFoam * 0.78);
+
       // --- Waterfall / steep-bank churn ---
       col = mix(col, uColorFoam, churn * 0.4);
 
@@ -169,10 +188,14 @@ const WaterShader = {
   `,
 };
 
-const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting }, ref) {
+const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager }, ref) {
   const materialRef = useRef();
   const meshRef = useRef();
   const { camera } = useThree();
+  const foamPoints = useMemo(
+    () => Array.from({ length: MAX_FOAM_POINTS }, () => new THREE.Vector3(9999, 0, 9999)),
+    [],
+  );
 
   useImperativeHandle(ref, () => meshRef.current);
 
@@ -218,6 +241,51 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
       mat.uniforms.uSunColor.value.copy(lighting.sunTint);
       mat.uniforms.uSkyColor.value.copy(lighting.skyTint);
     }
+
+    let foamCount = 0;
+    const { heightMap, length, breadth } = heightData || {};
+    const groundAt = (x, z) => {
+      if (!heightMap) return null;
+      const cx = Math.round(x / VOXEL_SIZE + length / 2 - 0.5);
+      const cz = Math.round(z / VOXEL_SIZE + breadth / 2 - 0.5);
+      if (cx < 0 || cx >= length || cz < 0 || cz >= breadth) return null;
+      return heightMap[cx][cz] * VOXEL_SIZE;
+    };
+    const addFoamPoint = (x, z, deckY) => {
+      if (foamCount >= MAX_FOAM_POINTS) return;
+      const groundY = groundAt(x, z);
+      if (groundY === null || groundY >= WATER_LEVEL || deckY <= WATER_LEVEL) return;
+      foamPoints[foamCount++].set(x, 0, z);
+    };
+    const addTrackSupportPoints = (track) => {
+      const cos = Math.cos(track.rotation);
+      const sin = Math.sin(track.rotation);
+      const addLocal = (x, z, deckY = 0) => addFoamPoint(
+        track.position.x + x * cos + z * sin,
+        track.position.z - x * sin + z * cos,
+        track.position.y + deckY,
+      );
+      if (track.type === 'straight') {
+        for (const x of [-0.175, 0.175]) for (const z of [-0.175, 0.175]) addLocal(x, z);
+      } else if (track.type === 'curved') {
+        for (let i = 0; i <= 4; i++) {
+          const angle = Math.PI + i * (Math.PI / 2) / 4;
+          addLocal(0.25 + Math.cos(angle) * 0.25, 0.25 + Math.sin(angle) * 0.25);
+        }
+      } else if (track.type === 'ramp') {
+        for (const t of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+          for (const x of [-0.175, 0.175]) addLocal(x, (t - 0.5) * 0.5, t * 0.5);
+        }
+      }
+    };
+    for (const track of trackManager?.getAllTracks?.() ?? []) addTrackSupportPoints(track);
+    for (const train of trainManager?.getAllTrains?.() ?? []) {
+      if (foamCount >= MAX_FOAM_POINTS) break;
+      addFoamPoint(train.position.x, train.position.z, train.position.y);
+    }
+    for (let i = foamCount; i < MAX_FOAM_POINTS; i++) foamPoints[i].set(9999, 0, 9999);
+    mat.uniforms.uFoamPoints.value = foamPoints;
+    mat.uniforms.uFoamCount.value = foamCount;
   });
 
   // Fallback: static time-of-day tint when no lighting state is provided
@@ -257,6 +325,8 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
         uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
         uniforms-uWaterY-value={2.0}
         uniforms-uFlowDir-value={flowDir}
+        uniforms-uFoamPoints-value={foamPoints}
+        uniforms-uFoamCount-value={0}
       />
     </mesh>
   );

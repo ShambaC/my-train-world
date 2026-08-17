@@ -167,7 +167,8 @@ export class TrackManager {
    */
   isValidPlacement(position, type, rotation, terrainHeight, surfaceNormal = null) {
     // Check if on terrain (not in water) — allow over water when elevated
-    if (terrainHeight < WATER_LEVEL && position.y < WATER_LEVEL + 0.15) return false;
+    // Threshold accounts for WATER_TRACK_OFFSET (0.1) + tolerance
+    if (terrainHeight < WATER_LEVEL && position.y < WATER_LEVEL + 0.2) return false;
 
     // Check if placement is on top surface only (not on sides)
     if (surfaceNormal) {

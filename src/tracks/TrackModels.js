@@ -291,6 +291,7 @@ export function createRampBeams(clearance, groundClearanceBack, groundClearanceF
 
       const cap = new THREE.Mesh(b.capGeo, b.capMat);
       cap.position.set(sx, deckY - 0.08, z);
+      Object.assign(cap, BRIDGE_MESH);
       group.add(cap);
     }
   }
@@ -335,6 +336,7 @@ export function createSupportBeams(height, trackType = 'straight') {
 
       const cap = new THREE.Mesh(b.capGeo, b.capMat);
       cap.position.set(pos[0], -0.08, pos[2]);
+      Object.assign(cap, BRIDGE_MESH);
       group.add(cap);
     });
 
@@ -344,6 +346,7 @@ export function createSupportBeams(height, trackType = 'straight') {
         const yPos = -height + (l + 0.5) * (height / braceLevels);
         const hBrace = new THREE.Mesh(b.braceGeo, b.braceMat);
         hBrace.position.set(0, yPos, -offsetZ);
+        Object.assign(hBrace, BRIDGE_MESH);
         group.add(hBrace);
         const hBrace2 = hBrace.clone();
         hBrace2.position.set(0, yPos, offsetZ);
@@ -362,6 +365,7 @@ export function createSupportBeams(height, trackType = 'straight') {
 
       const cap = new THREE.Mesh(b.curvedCapGeo, b.deckMat);
       cap.position.set(cx, -0.04, cz);
+      Object.assign(cap, BRIDGE_MESH);
       group.add(cap);
 
       const pillar = new THREE.Mesh(pillarGeo, b.pillarMat);
