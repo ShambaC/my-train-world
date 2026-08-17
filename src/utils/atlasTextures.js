@@ -70,6 +70,7 @@ const TILES = {
 
 // ── State ─────────────────────────────────────────────────────────────────
 const baseTextures = new Map();   // name → THREE.Texture (base, repeat 1)
+const baseTexturePromises = new Map();
 const pendingMats = [];           // { mat, name, opts }
 
 /**
@@ -99,9 +100,16 @@ function getBaseTexture(name) {
     console.warn(`[atlasTextures] Unknown tile: ${name}`);
     return null;
   }
-  tex = new THREE.TextureLoader().load(url);
+  let resolveTexture;
+  let rejectTexture;
+  const ready = new Promise((resolve, reject) => {
+    resolveTexture = resolve;
+    rejectTexture = reject;
+  });
+  tex = new THREE.TextureLoader().load(url, () => resolveTexture(tex), undefined, rejectTexture);
   configureTexture(tex);
   baseTextures.set(name, tex);
+  baseTexturePromises.set(name, ready);
   return tex;
 }
 
@@ -109,12 +117,18 @@ function getBaseTexture(name) {
  * Preload all tiles. Called from App.jsx — resolves once every image
  * has been decoded by the browser. Keeps the old call site happy.
  */
-export function preloadAtlases() {
-  const promises = Object.values(TILES).map((url) =>
-    new Promise((resolve, reject) => {
-      new THREE.TextureLoader().load(url, resolve, undefined, reject);
-    })
-  );
+export const ATLAS_TEXTURE_COUNT = Object.keys(TILES).length;
+
+export function preloadAtlases(onProgress) {
+  const names = Object.keys(TILES);
+  let loaded = 0;
+  const promises = names.map((name) => {
+    getBaseTexture(name);
+    return baseTexturePromises.get(name).then(() => {
+      loaded += 1;
+      onProgress?.(loaded / names.length);
+    });
+  });
   return Promise.all(promises).then(() => {
     for (const { mat, name, opts } of pendingMats.splice(0)) {
       assignMap(mat, name, opts);

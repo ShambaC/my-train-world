@@ -1,41 +1,49 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-/**
- * Dynamic Skybox with Day/Night Cycle
- */
+const SKYBOX_FACES = ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'];
+export const SKYBOX_TIMES = ['dawn', 'day', 'dusk', 'night'];
+export const SKYBOX_COUNT = SKYBOX_TIMES.length;
+const skyboxCache = new Map();
+
+export function loadSkyboxTexture(timeOfDay) {
+  const cached = skyboxCache.get(timeOfDay);
+  if (cached) return cached;
+
+  const promise = new Promise((resolve, reject) => {
+    const loader = new THREE.CubeTextureLoader();
+    loader.setPath(`${import.meta.env.BASE_URL}textures/${timeOfDay}/`);
+    loader.load(SKYBOX_FACES, resolve, undefined, reject);
+  });
+  skyboxCache.set(timeOfDay, promise);
+  return promise;
+}
+
+export function preloadSkyboxes(onProgress) {
+  let loaded = 0;
+  return Promise.all(SKYBOX_TIMES.map((timeOfDay) =>
+    loadSkyboxTexture(timeOfDay).then(() => {
+      loaded += 1;
+      onProgress?.(loaded / SKYBOX_TIMES.length);
+    })
+  ));
+}
+
+/** Dynamic Skybox with Day/Night Cycle. */
 export default function Skybox({ timeOfDay = 'day', transitionSpeed = 1.0 }) {
   const { scene } = useThree();
-  const skyboxRef = useRef(null);
-  const currentTextureRef = useRef(null);
 
   useEffect(() => {
-    // Load cubemap textures for the selected time of day
-    const loader = new THREE.CubeTextureLoader();
-    loader.setPath(`/textures/${timeOfDay}/`);
-
-    const texture = loader.load(
-      ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'],
-      () => {
-        // On successful load, set as scene background
-        if (currentTextureRef.current) {
-          currentTextureRef.current.dispose();
-        }
-        scene.background = texture;
-        currentTextureRef.current = texture;
-      },
-      undefined,
-      (error) => {
-        console.error('Error loading skybox:', error);
-      }
-    );
+    let active = true;
+    loadSkyboxTexture(timeOfDay).then((texture) => {
+      if (active) scene.background = texture;
+    }).catch((error) => {
+      console.error('Error loading skybox:', error);
+    });
 
     return () => {
-      // Cleanup on unmount
-      if (currentTextureRef.current) {
-        currentTextureRef.current.dispose();
-      }
+      active = false;
     };
   }, [timeOfDay, scene]);
 

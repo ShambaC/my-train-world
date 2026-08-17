@@ -15,7 +15,10 @@ import { cameraBus } from "./utils/cameraBus";
 import { trainAudio } from "./audio/trainAudio";
 import { RoadManager } from "./environment/roadNetwork";
 import { SignalManager } from "./signals/SignalManager";
-import { preloadAtlases } from "./utils/atlasTextures";
+import { ATLAS_TEXTURE_COUNT, preloadAtlases } from "./utils/atlasTextures";
+import { GRASS_TEXTURE_COUNT, preloadGrassTextures } from "./environment/GrassField";
+import { SKYBOX_COUNT, preloadSkyboxes } from "./environment/Skybox";
+import { MODEL_DEFS } from "./models/ModelLibrary";
 import {
   saveWorldToFile,
   loadWorldFromFile,
@@ -131,6 +134,7 @@ function App() {
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
   const [loadProgress, setLoadProgress] = useState(0);
+  const [sceneReady, setSceneReady] = useState(false);
   const [trainCount, setTrainCount] = useState(0);
 
   // QoL state: selection, history, world refresh counter, status, audio.
@@ -164,12 +168,29 @@ function App() {
 
   // Preload all GLB models with real progress
   useEffect(() => {
+    const counts = {
+      models: MODEL_DEFS.length,
+      atlases: ATLAS_TEXTURE_COUNT,
+      grass: GRASS_TEXTURE_COUNT,
+      skyboxes: SKYBOX_COUNT,
+    };
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+    const loaded = { models: 0, atlases: 0, grass: 0, skyboxes: 0 };
+    const updateProgress = (name, fraction) => {
+      loaded[name] = Math.round(fraction * counts[name]);
+      const complete = Object.values(loaded).reduce((sum, count) => sum + count, 0);
+      setLoadProgress((complete / total) * 0.8);
+    };
+
     Promise.all([
-      preloadAtlases(),
-      ModelLibrary.preloadAll(setLoadProgress),
+      preloadAtlases((progress) => updateProgress('atlases', progress)),
+      ModelLibrary.preloadAll((progress) => updateProgress('models', progress)),
+      preloadGrassTextures((progress) => updateProgress('grass', progress)),
+      preloadSkyboxes((progress) => updateProgress('skyboxes', progress)),
     ])
       .then(() => {
         preloadTrainEngines();
+        setLoadProgress(0.8);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -387,6 +408,7 @@ function App() {
 
   const handleTerrainSizeChange = (newSize) => {
     snapshotBeforeDestructive();
+    setSceneReady(false);
     setIsGenerating(true);
     setTerrainSize(newSize);
     clearWorld();
@@ -397,6 +419,7 @@ function App() {
   const handleSeedChange = (newSeed) => {
     if (newSeed === terrainSeed) return;
     snapshotBeforeDestructive();
+    setSceneReady(false);
     setIsGenerating(true);
     clearWorld();
     setTerrainSeed(newSeed);
@@ -455,6 +478,15 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [doUndo, doRedo]);
 
+  const handleSceneProgress = useCallback((progress) => {
+    setLoadProgress(0.8 + progress * 0.2);
+  }, []);
+
+  const handleSceneReady = useCallback(() => {
+    setLoadProgress(1);
+    setSceneReady(true);
+  }, []);
+
   if (isLoading) {
     return <LoadingScreen progress={loadProgress} />;
   }
@@ -492,6 +524,8 @@ function App() {
         history={historyRef.current}
         onSelect={setSelection}
         onTerrainReady={handleTerrainReady}
+        onSceneProgress={handleSceneProgress}
+        onSceneReady={handleSceneReady}
         worldVersion={worldVersion}
         selectedTrainId={selection?.kind === 'train' ? selection.id : null}
         roadManager={roadManagerRef.current}
@@ -591,6 +625,8 @@ function App() {
           Build your railway empire
         </p>
       </div>
+
+      {!sceneReady && <LoadingScreen progress={loadProgress} />}
     </div>
   );
 }

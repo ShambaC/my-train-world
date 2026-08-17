@@ -41,6 +41,8 @@ function Scene({
   terrainSeed,
   onTerrainGenerated, 
   onTerrainReady,
+  onSceneProgress,
+  onSceneReady,
   trackManager,
   stationManager,
   trainManager,
@@ -89,6 +91,8 @@ function Scene({
   const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
+  const sceneBootFramesRef = useRef(0);
+  const sceneReadyRef = useRef(false);
 
   // Realtime shadow mode: none / hard (BasicShadowMap) / soft (PCFSoft).
   useEffect(() => {
@@ -146,6 +150,17 @@ function Scene({
   }, [trackLayoutVersion, tracksVersion, terrainSeed, terrain, signalManager, trackManager]);
 
   useFrame((_, delta) => {
+    if (!sceneReadyRef.current && terrain && roadManager?.ready &&
+      (!trafficEnabled || trafficManager?.resetCount > 0)) {
+      sceneBootFramesRef.current += 1;
+      if (sceneBootFramesRef.current === 1) onSceneProgress?.(0.7);
+      if (sceneBootFramesRef.current >= 3) {
+        sceneReadyRef.current = true;
+        onSceneProgress?.(1);
+        onSceneReady?.();
+      }
+    }
+
     lighting.update(delta);
     advanceWind(delta);
 
@@ -205,6 +220,9 @@ function Scene({
     const t0 = performance.now();
     const newTerrain = generateTerrain(terrainSize.length, terrainSize.breadth, terrainSeed);
     setTerrain(newTerrain);
+    sceneBootFramesRef.current = 0;
+    sceneReadyRef.current = false;
+    onSceneProgress?.(0.2);
 
     const border = createForestBorder(terrainSize, terrainSeed);
     setForestBorder(border);
@@ -233,7 +251,7 @@ function Scene({
         });
       }
     };
-  }, [terrainSize, terrainSeed, onTerrainGenerated, onTerrainReady]);
+  }, [terrainSize, terrainSeed, onTerrainGenerated, onTerrainReady, onSceneProgress]);
 
   return (
     <>
@@ -480,6 +498,8 @@ export default function GameScene({
   history,
   onSelect,
   onTerrainReady,
+  onSceneProgress,
+  onSceneReady,
   worldVersion = 0,
   selectedTrainId = null,
   roadManager,
@@ -694,8 +714,10 @@ export default function GameScene({
         <Scene 
           terrainSize={terrainSize} 
           terrainSeed={terrainSeed}
-          onTerrainGenerated={setSceneStats}
-          onTerrainReady={onTerrainReady}
+           onTerrainGenerated={setSceneStats}
+           onTerrainReady={onTerrainReady}
+           onSceneProgress={onSceneProgress}
+           onSceneReady={onSceneReady}
           trackManager={trackManager}
           stationManager={stationManager}
           trainManager={trainManager}

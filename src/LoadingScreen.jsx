@@ -1,18 +1,5 @@
-import { useEffect, useState } from 'react';
-
 export default function LoadingScreen({ progress }) {
-  const [display, setDisplay] = useState(0);
-
-  useEffect(() => {
-    const target = Math.round((progress || 0) * 100);
-    const t = setInterval(() => {
-      setDisplay((prev) => {
-        if (prev >= target) return prev;
-        return Math.min(target, prev + Math.max(1, Math.floor((target - prev) / 4)));
-      });
-    }, 30);
-    return () => clearInterval(t);
-  }, [progress]);
+  const display = Math.round(Math.max(0, Math.min(1, progress || 0)) * 100);
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 flex items-center justify-center z-50">

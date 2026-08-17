@@ -60,10 +60,25 @@ const bladeUniforms = {
 };
 
 // ── Flower textures ─────────────────────────────────────────────────────────
+const flowerTextureCache = new Map();
+const flowerTexturePromises = new Map();
+
 function loadTexture(path) {
-  const tex = new THREE.TextureLoader().load(path);
+  const cached = flowerTextureCache.get(path);
+  if (cached) return cached;
+
+  let tex;
+  let resolveTexture;
+  let rejectTexture;
+  const ready = new Promise((resolve, reject) => {
+    resolveTexture = resolve;
+    rejectTexture = reject;
+  });
+  tex = new THREE.TextureLoader().load(path, () => resolveTexture(tex), undefined, rejectTexture);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
+  flowerTextureCache.set(path, tex);
+  flowerTexturePromises.set(path, ready);
   return tex;
 }
 
@@ -77,6 +92,17 @@ const FLOWER_TEX_B = {
   rgb: loadTexture(rgbFlowerB),
   grad: loadTexture(gradFlowerB),
 };
+
+export const GRASS_TEXTURE_COUNT = flowerTexturePromises.size;
+
+export function preloadGrassTextures(onProgress) {
+  const promises = [...flowerTexturePromises.values()];
+  let loaded = 0;
+  return Promise.all(promises.map((promise) => promise.then(() => {
+    loaded += 1;
+    onProgress?.(loaded / promises.length);
+  })));
+}
 
 function makeFlowerUniforms(tex) {
   return {
