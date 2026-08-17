@@ -31,7 +31,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
     color: 0x41503a,
     roughness: 0.9,
     metalness: 0.1,
-    map: makeAtlasTexture('wood', 'forestGround', [0.5, 0.5]),
+    map: makeAtlasTexture('forest_ground', [0.5, 0.5]),
   });
   const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
   groundPlane.rotation.x = -Math.PI / 2;
@@ -57,7 +57,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
   const trunkMat = new THREE.MeshStandardMaterial({
     color: 0x4a3728,
-    map: makeAtlasTexture('wood', 'bark'),
+    map: makeAtlasTexture('bark'),
   });
   applyWindSway(trunkMat, { leaves: false, strength: 0.6 });
   const coneGeos = [
@@ -68,7 +68,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
   const foliageMat = new THREE.MeshStandardMaterial({
     color: 0x3a6b1f,
     flatShading: true,
-    map: makeAtlasTexture('wood', 'leafDark'),
+    map: makeAtlasTexture('leaf_dark'),
   });
   applyWindSway(foliageMat, { strength: 1 });
 

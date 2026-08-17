@@ -220,7 +220,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   };
 
   // --- platform deck (split into 1-voxel sections for the wave) ---
-  const deckMat = makeAtlasMaterial('roads', 'deck', { color: DECK_COLOR, repeat: [1, 0.33] });
+  const deckMat = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
   const deckGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
     const section = new THREE.Mesh(deckGeo, deckMat);
@@ -230,7 +230,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   }
 
   // --- edge trim along the platform sides ---
-  const edgeMat = makeAtlasMaterial('roads', 'edge', { color: EDGE_COLOR, repeat: [0.5, 0.5] });
+  const edgeMat = makeAtlasMaterial('edge', { repeat: [0.5, 0.5] });
   const edgeGeo = new THREE.BoxGeometry(0.1, 0.15, VOXEL);
   for (let i = 0; i < lengthCells; i++) {
     for (const ex of [-STATION_WIDTH_WORLD / 2, STATION_WIDTH_WORLD / 2]) {

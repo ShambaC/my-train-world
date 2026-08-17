@@ -98,10 +98,10 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
   const cone2Geo = new THREE.ConeGeometry(0.25, 0.4, 5);
   const bushGeo = new THREE.DodecahedronGeometry(0.2, 0);
 
-  const trunkMat = makeAtlasMaterial('wood', 'bark', { color: 0x4a2e18 });
-  const leafMat1 = makeAtlasMaterial('wood', 'leafDark', { color: 0x2d5a2d });
-  const leafMat2 = makeAtlasMaterial('wood', 'leafLight', { color: 0x3a7a3a });
-  const bushMat = makeAtlasMaterial('wood', 'bush', { color: 0x448844 });
+  const trunkMat = makeAtlasMaterial('bark');
+  const leafMat1 = makeAtlasMaterial('leaf_dark');
+  const leafMat2 = makeAtlasMaterial('leaf_light');
+  const bushMat = makeAtlasMaterial('bush');
 
   // Wind sway — vegetation breathes together, driven by the shared wind clock
   applyWindSway(trunkMat, { leaves: false, strength: 0.5 });
@@ -884,14 +884,14 @@ export function generateTerrain(length, breadth, seed = 1337) {
   // the tile (≈1 unit tile) so the stylized blobs read without stamping.
   const TERRAIN_TEXTURE_REPEAT = [0.5, 0.5];
   const makeTerrainMaterial = (color) => {
-    if (color === TERRAIN_COLORS.sand) return makeAtlasMaterial('terrain', 'sand', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.rock) return makeAtlasMaterial('terrain', 'rock', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.dirt) return makeAtlasMaterial('terrain', 'dirt', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.forest) return makeAtlasMaterial('terrain', 'forest', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.highland) return makeAtlasMaterial('terrain', 'highland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.wetland) return makeAtlasMaterial('terrain', 'wetland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.industrial) return makeAtlasMaterial('terrain', 'highland', { color, repeat: TERRAIN_TEXTURE_REPEAT });
-    return makeAtlasMaterial('terrain', 'grass', { color, repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.sand) return makeAtlasMaterial('sand', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.rock) return makeAtlasMaterial('rock', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.dirt) return makeAtlasMaterial('dirt', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.forest) return makeAtlasMaterial('forest', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.highland) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.wetland) return makeAtlasMaterial('wetland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.industrial) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    return makeAtlasMaterial('grass', { repeat: TERRAIN_TEXTURE_REPEAT });
   };
 
   // =================================================================
