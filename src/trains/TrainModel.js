@@ -10,6 +10,13 @@ import { ENGINE_LENGTH, ENGINE_WIDTH, ENGINE_HEIGHT } from './engineTypes';
 const ENGINE_KEYS = ['steam-engine', 'diesel-engine', 'electric-engine', 'checker-engine'];
 const engineTemplates = new Map();
 
+const HEADLIGHT_CONFIG = {
+  'steam-engine': { position: { x: 0, y: 0.24, z: 0.468 }, target: { x: 0, y: -0.25, z: 2.5 } },
+  'diesel-engine': { position: { x: 0, y: 0.28, z: 0.468 }, target: { x: 0, y: -0.23, z: 2.5 } },
+  'electric-engine': { position: { x: 0, y: 0.38, z: 0.522 }, target: { x: 0, y: -0.12, z: 2.5 } },
+  'checker-engine': { position: { x: 0, y: 0.30, z: 0.465 }, target: { x: 0, y: -0.26, z: 2.5 } },
+};
+
 function normalizeEngineKey(typeOrColor) {
   const key = typeof typeOrColor === 'string' ? typeOrColor.toLowerCase() : 'steam-engine';
   if (key === 'diesel' || key === 'diesel-engine') return 'diesel-engine';
@@ -52,6 +59,10 @@ export function preloadTrainEngines() {
       engineTemplates.set(key, markSharedResources(buildEngine(key)));
     }
   }
+}
+
+export function getTrainHeadlightConfig(type = 'steam-engine') {
+  return HEADLIGHT_CONFIG[normalizeEngineKey(type)] || HEADLIGHT_CONFIG['steam-engine'];
 }
 
 /**

@@ -35,6 +35,7 @@ import CrossingRenderer from './crossings/CrossingRenderer';
 import { cameraBus } from './utils/cameraBus';
 import { clone } from './utils/editActions';
 import CameraCollision, { constrainCamera } from './environment/cameraCollision';
+import PracticalLights from './environment/PracticalLights';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -444,6 +445,12 @@ function Scene({
           trainsVersion={trainsVersion}
         />
       )}
+
+      <PracticalLights
+        trainManager={trainManager}
+        stationManager={stationManager}
+        lighting={lighting}
+      />
       
       {/* Grid helper */}
       <primitive object={createGrid(Math.max(terrainSize.length, terrainSize.breadth))} />
