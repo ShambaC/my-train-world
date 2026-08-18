@@ -11,6 +11,7 @@ export default function GameHud({
   onRedo,
   onHelp,
   onPause,
+  onTrainManagement,
 }) {
   const hint = selectedTool?.type === 'train'
     ? `${selectedTool.label} · R changes direction`
@@ -36,6 +37,7 @@ export default function GameHud({
           <button type="button" onClick={onUndo} aria-label="Undo" className="hidden min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b] sm:block"><img src={UI_ICONS.actions.undo} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onRedo} aria-label="Redo" className="hidden min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b] sm:block"><img src={UI_ICONS.actions.redo} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onHelp} aria-label="Open help" className="min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b]"><img src={UI_ICONS.actions.help} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
+          <button type="button" onClick={onTrainManagement} aria-label="Open train management" className="min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b]"><img src={UI_ICONS.trainControls.entityTrain} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onPause} aria-label="Pause game" className="min-h-10 rounded-xl bg-[#e5a94f] px-3 text-xs font-bold text-[#101a2b] hover:bg-[#f1bd63]"><img src={UI_ICONS.actions.pause} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
         </div>
       </div>

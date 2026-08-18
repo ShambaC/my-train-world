@@ -689,8 +689,12 @@ function AppRuntime() {
       const target = document.createElement('canvas');
       target.width = 320;
       target.height = 180;
-      const context = target.getContext('2d');
+      const context = target.getContext('2d', { willReadFrequently: true });
       context.drawImage(canvas, 0, 0, target.width, target.height);
+      const pixels = context.getImageData(0, 0, target.width, target.height).data;
+      let brightness = 0;
+      for (let index = 0; index < pixels.length; index += 16) brightness += pixels[index] + pixels[index + 1] + pixels[index + 2];
+      if (brightness / (pixels.length / 16) < 8) return null;
       return target.toDataURL('image/jpeg', 0.65);
     } catch {
       return null;
@@ -703,7 +707,8 @@ function AppRuntime() {
       setStatus('World is still loading');
       return false;
     }
-    const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current, thumbnail: captureWorldThumbnail() });
+    const thumbnail = captureWorldThumbnail();
+    const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current, ...(thumbnail ? { thumbnail } : {}) });
     if (!saved.ok) {
       setStatus('Local save unavailable');
       return false;
@@ -888,6 +893,7 @@ function AppRuntime() {
         onRedo={doRedo}
         onHelp={() => { setHelpOpen(true); setIsPaused(true); }}
         onPause={() => setIsPaused(true)}
+        onTrainManagement={() => setTrainControlsOpen(true)}
       />
       {helpOpen && <HelpPanel onClose={() => { setHelpOpen(false); setIsPaused(false); }} />}
       <ToastRegion message={worldStatus} onDismiss={() => setWorldStatus('')} />

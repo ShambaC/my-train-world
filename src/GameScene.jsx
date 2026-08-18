@@ -734,7 +734,7 @@ export default function GameScene({
         camera={{ position: [20, 15, 20], fov: 60 }}
         shadows
         frameloop="never"
-        gl={{ antialias: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
         onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
       >
         <RenderScheduler frameLimit={frameLimit} vsync={vsync} paused={paused} />

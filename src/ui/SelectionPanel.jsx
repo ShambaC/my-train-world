@@ -110,11 +110,11 @@ export default function SelectionPanel({
       stops.length > 0 ? `Stations reachable: ${stops.length}` : null,
     ].filter(Boolean);
     actions = [
-      <button key="toggle" className={train.active ? btnYellow : btnGreen} onClick={() => { trainManager.toggleTrain(selection.id); setNow(Date.now()); }}>{train.active ? '⏸ Stop' : '▶ Start'}</button>,
-      <button key="reverse" className={btnGray} onClick={() => { trainManager.reverseTrain(selection.id); }}>Reverse</button>,
-      <button key="focus" className={btnPrimary} onClick={() => focus(train.position, 3.5)}>Focus</button>,
-      <button key="follow" className={followTrainId === train.id ? btnYellow : btnPrimary} onClick={() => onFollowTrain?.(followTrainId === train.id ? null : train.id)}>{followTrainId === train.id ? 'Unfollow' : 'Follow'}</button>,
-      <button key="del" className={btnRed} onClick={doDelete}>Delete</button>,
+      <button type="button" key="toggle" className={train.active ? btnYellow : btnGreen} onClick={() => { trainManager.toggleTrain(selection.id); setNow(Date.now()); onRefreshWorld?.(); }}>{train.active ? 'Stop' : 'Start'}</button>,
+      <button type="button" key="reverse" className={btnGray} onClick={() => { trainManager.reverseTrain(selection.id); setNow(Date.now()); onRefreshWorld?.(); }}>Reverse</button>,
+      <button type="button" key="focus" className={btnPrimary} onClick={() => focus(train.position, 3.5)}>Focus</button>,
+      <button type="button" key="follow" className={followTrainId === train.id ? btnYellow : btnPrimary} onClick={() => onFollowTrain?.(followTrainId === train.id ? null : train.id)}>{followTrainId === train.id ? 'Unfollow' : 'Follow'}</button>,
+      <button type="button" key="del" className={btnRed} onClick={doDelete}>Delete</button>,
     ];
   } else if (selection.kind === 'station') {
     const station = stationManager.getStation(selection.id);
@@ -133,8 +133,8 @@ export default function SelectionPanel({
       `Size ${Math.round(station.worldRect.maxX - station.worldRect.minX)}x${Math.round(station.worldRect.maxZ - station.worldRect.minZ)}u`,
     ];
     actions = [
-      <button key="focus" className={btnPrimary} onClick={() => focus(station.centerWorld, 8)}>Focus</button>,
-      <button key="del" className={btnRed} onClick={doDelete}>Delete</button>,
+      <button type="button" key="focus" className={btnPrimary} onClick={() => focus(station.centerWorld, 8)}>Focus</button>,
+      <button type="button" key="del" className={btnRed} onClick={doDelete}>Delete</button>,
     ];
   } else if (selection.kind === 'track') {
     const track = trackManager.getTrack(selection.id);
@@ -153,8 +153,8 @@ export default function SelectionPanel({
       `Total network: ${trackManager.getAllTracks().length} tracks • ${totalTrackDistance(trackManager).toFixed(1)}u • ${disconnectedSegments(trackManager)} segment(s)`,
     ].filter(Boolean);
     actions = [
-      <button key="focus" className={btnPrimary} onClick={() => focus(track.position, 4)}>Focus</button>,
-      <button key="del" className={btnRed} onClick={doDelete}>Delete</button>,
+      <button type="button" key="focus" className={btnPrimary} onClick={() => focus(track.position, 4)}>Focus</button>,
+      <button type="button" key="del" className={btnRed} onClick={doDelete}>Delete</button>,
     ];
   } else {
     return null;
@@ -164,7 +164,7 @@ export default function SelectionPanel({
     <div className="absolute bottom-24 left-4 z-30 w-80 max-w-[90vw] bg-black bg-opacity-75 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-sm space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-bold text-green-400">{title}</div>
-        <button className="text-gray-400 hover:text-white text-xs px-1" onClick={() => onSelect?.(null)} title="Deselect">✕</button>
+        <button type="button" className="text-gray-400 hover:text-white text-xs px-1" onClick={() => onSelect?.(null)} title="Close details">×</button>
       </div>
       <div className="space-y-0.5 text-xs text-gray-300">
         {[...body, ...(showTechnicalInfo ? technicalBody : [])].map((line, i) => (

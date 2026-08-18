@@ -36,7 +36,7 @@ export default function PauseMenu({
     return () => previouslyFocused?.focus?.();
   }, [isPaused, settingsOpen]);
 
-  if (!isPaused && !settingsOpen) return null;
+  if (!isPaused && !settingsOpen && !trainControlsOpen) return null;
 
   return (
     <>
@@ -73,13 +73,13 @@ export default function PauseMenu({
           <div className="scrollbar-none max-h-[min(44rem,calc(100dvh-2rem))] w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/10 bg-[#101a2b] p-5 text-white shadow-2xl sm:p-7">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#63c9dc]">Paused</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#63c9dc]">{isPaused ? 'Paused' : 'Live operations'}</p>
                 <h2 id="train-management-title" className="mt-1 text-2xl font-bold">Train management</h2>
               </div>
               <button type="button" onClick={onCloseTrainControls} aria-label="Close train management" className="min-h-11 min-w-11 rounded-xl bg-white/10 text-2xl leading-none hover:bg-white/20">×</button>
             </div>
             <TrainControl trainManager={trainManager} followTrainId={followTrainId} onFollowTrain={onFollowTrain} history={history} />
-            <button type="button" onClick={onCloseTrainControls} className="mt-6 min-h-12 w-full rounded-xl bg-[#4b8dff] px-4 py-3 font-semibold">Back to pause menu</button>
+            <button type="button" onClick={onCloseTrainControls} className="mt-6 min-h-12 w-full rounded-xl bg-[#4b8dff] px-4 py-3 font-semibold">{isPaused ? 'Back to pause menu' : 'Back to railway'}</button>
           </div>
         </div>
       )}
