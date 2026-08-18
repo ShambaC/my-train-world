@@ -32,7 +32,7 @@ export default function CameraCommands({ terrainSize, trackManager, stationManag
   }, [orbitRef]);
 
   useEffect(() => {
-    const cameraKeys = new Set(['w', 'a', 's', 'd', ' ', 'c']);
+    const cameraKeys = new Set(['w', 'a', 's', 'd', ' ', 'c', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright']);
     const onKeyDown = (event) => {
       if (cameraKeys.has(event.key.toLowerCase())) cancelAnimation();
     };

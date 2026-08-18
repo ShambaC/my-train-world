@@ -125,9 +125,8 @@ const addWindowGlows = (building, modelKey = 'station-building') => {
   }
 };
 
-// Lamp post beside a bench: pole + lamp head with a small warm glow. One per
-// bench, on the platform edge opposite the bench. Glow avoids dynamic-light
-// shader recompilation when stations are placed.
+// Lamp post beside a bench: pole + lamp head with warm glow and a downward
+// spotlight. One per bench, on platform edge opposite bench.
 const addLampPost = (addPiece, axial, side, groundY) => {
   const post = new THREE.Group();
   const poleMat = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
@@ -141,6 +140,13 @@ const addLampPost = (addPiece, axial, side, groundY) => {
   const glow = makeLampGlow();
   glow.position.y = 0.58;
   post.add(glow);
+  const light = new THREE.SpotLight(0xffd9a0, 0, 6, Math.PI / 4, 0.5, 2);
+  light.position.y = 0.58;
+  light.userData.stationLight = true;
+  const target = new THREE.Object3D();
+  target.position.set(0, -1, 0);
+  light.target = target;
+  post.add(light, target);
   addPiece(post, axial, side, groundY, 0.05);
   return post;
 };
@@ -300,7 +306,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
       prop.add(glow);
     }
 
-    // Lamp post with point light opposite every bench
+    // Lamp post with spotlight opposite every bench
     if (type === 'platform-bench') {
       addLampPost(addPiece, i * VOXEL + 0.25 + jitter, -STATION_WIDTH_WORLD / 2 + 0.1, groundY);
     }

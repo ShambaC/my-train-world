@@ -264,7 +264,7 @@ function Scene({
   return (
     <>
       <Skybox timeOfDay={timeOfDay} />
-      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} />
+      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} />
       
       {/* Lighting */}
       <ambientLight name="ambientLight" intensity={0.5} />
@@ -455,7 +455,7 @@ function Scene({
         dampingFactor={0.05}
         minDistance={0.75}
         maxDistance={Math.max(120, Math.max(terrainSize.length, terrainSize.breadth) * 0.75)}
-        maxPolarAngle={Math.PI / 2.1}
+        maxPolarAngle={Math.PI - 0.08}
       />
 
       {/* QoL camera commands */}

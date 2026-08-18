@@ -203,6 +203,7 @@ export default function StationRenderer({
       }
       // All station lamps/glows fade to near-zero during the day
       station.group.traverse((child) => {
+        if (child.userData?.stationLight) child.intensity = nightness * 4.5;
         const mat = child.material;
         if (mat?.userData?.nightGlow) {
           mat.opacity = mat.userData.baseOpacity * (0.03 + nightness * 0.97);

@@ -135,7 +135,9 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
     // Night-scaled headlight glow. Emissive meshes avoid dynamic-light shader
     // recompilation when an engine is placed.
     const nightness = lighting ? lighting.nightness : 0.6;
+    const headlightIntensity = nightness * 9.2;
     for (const node of trainNodesRef.current.values()) {
+      if (node.userData.headlight) node.userData.headlight.intensity = headlightIntensity;
       node.traverse((child) => {
         const kind = child.userData?.lightGlow;
         if (!kind) return;
@@ -242,6 +244,16 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
 
           const engineMesh = createTrainEngine(engineType);
           node.add(engineMesh);
+
+          // Warm forward beam. Train node yaw follows motion, so local +Z
+          // keeps beam aligned through curves and reversals.
+          const headlight = new THREE.SpotLight(0xffd9a0, 0, 9, 0.48, 0.45, 2);
+          headlight.position.set(0, 0.3, 0.46);
+          const headlightTarget = new THREE.Object3D();
+          headlightTarget.position.set(0, 0.2, 3.5);
+          headlight.target = headlightTarget;
+          node.add(headlight, headlightTarget);
+          node.userData.headlight = headlight;
 
           trainNodesRef.current.set(train.id, node);
         }
