@@ -161,7 +161,7 @@ export default function SelectionPanel({
   }
 
   return (
-    <div className="absolute bottom-24 left-4 z-30 w-80 max-w-[90vw] bg-black bg-opacity-75 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-sm space-y-2">
+    <div className="absolute bottom-24 left-4 z-50 w-80 max-w-[90vw] bg-black bg-opacity-75 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-sm space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-bold text-green-400">{title}</div>
         <button type="button" className="text-gray-400 hover:text-white text-xs px-1" onClick={() => onSelect?.(null)} title="Close details">×</button>
