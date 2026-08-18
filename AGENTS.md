@@ -131,12 +131,31 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Post-Processing (`src/postprocessing/Effects.jsx`)**:
   - `EffectComposer` pipeline always mounted: an unconditional final color pass (ACES exposure 1.1, saturation 1.2, vignette 0.15 — vanilla now matches miniature-mode grading) plus toggleable `TiltShiftShader` blur (miniature mode) and `CelShader` (posterized luminance + Sobel edge detection). Tone mapping/output color space are handled by the final pass while mounted.
 
-- **UI & Controls (`src/ui/`, `src/ControlPanel.jsx`, `src/hooks/useTrackPlacement.js`)**:
+- **UI & Controls (`src/ui/`, `src/hooks/useTrackPlacement.js`)**:
   - `Hotbar.jsx`: Tool switcher (Hand, Straight, Curved, Road, Train, Station, Coach, Delete) with keyboard shortcuts (1-8, Escape to deselect, R to rotate/flip, Q/E/X for bridge heights).
-  - `ControlPanel.jsx`, `TrainControl.jsx` (per-train start/stop, reverse, focus, follow, coach removal), `EnvironmentSettings.jsx` (time-of-day, fog, shadows, effects, ambient/traffic/signals toggles, audio volume sliders via `trainAudio` buses) & `PerformanceSettings.jsx`: frame limit/vsync and debug statistics.
+  - `TrainControl.jsx` (per-train start/stop, reverse, focus, follow, coach removal), `EnvironmentSettings.jsx` (time-of-day, fog, shadows, effects, ambient/traffic/signals toggles, audio volume sliders via `trainAudio` buses) & `PerformanceSettings.jsx`: frame limit/vsync and debug statistics.
   - `WorldControls.jsx`: Undo/redo (Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, `src/utils/history.js`), save/load as user-picked `.world` files (`src/utils/worldSave.js` — JSON; File System Access API with download/file-input fallbacks), quiet localStorage autosave + recovery snapshots (recent + fallback rotation, snapshot before destructive terrain regen), reset-overview/frame-railway camera buttons.
   - `SelectionPanel.jsx`: Hand-tool entity selection (train/station/track) with read-only route inspection (`src/utils/inspect.js` — connected tracks, route distance, dead ends, segments) and permissive controls; consist highlight rings in `TrainRenderer.jsx`.
   - `src/environment/CameraCommands.jsx` & `src/utils/cameraBus.js`: In-scene camera focus/frame/reset/ease commands (non-forced construction framing assist on tool select).
   - Placement QoL (`src/hooks/useTrackPlacement.js`, `src/hooks/useStationPlacement.js`): ghost recomputes on camera/tool/rotation/height/terrain/track changes; clicks recompute ghost synchronously from the event (no mouse-away workaround); grid snapping only (no endpoint snap assist); pointer-leave hides ghost while keeping the last pointer position.
   - `CoachMenu.jsx`: Radial coach picker (thumbnails in a circle) opened by clicking an engine with the Coach tool; `GameScene.jsx` orchestrates scene composition (terrain, tracks, stations, activity, roads/traffic, signals, crossings, trains) and `LoadingScreen.jsx` shows asset-load progress.
   - `App.jsx` owns all managers (track/station/train/road/signal refs, `HistoryManager`), selection state, save/load/recover handlers and autosave scheduling; `GameScene.jsx` receives them as props and owns traffic/crossing managers, version counters and camera follow. `handleTerrainReady` applies pending world loads after terrain regeneration.
+
+- **Application Shell & World Browser (`src/App.jsx`, `src/ui/`)**:
+  - Main menu replaces former `ControlPanel.jsx` and provides world browser, new-world creation, local world cards, rename, duplicate, delete-with-name-confirmation, import, and export.
+  - `PauseMenu.jsx` provides resume, world settings, train management, diagnostics, save/recover, camera framing, and save-and-return-to-worlds actions.
+  - `WorldSettingsModal.jsx` exposes per-world environment, performance, audio, accessibility, and developer settings; global defaults remain in main-menu settings.
+  - `GameHud.jsx`, `HelpPanel.jsx`, and `ToastRegion.jsx` provide gameplay HUD, controls/help overlay, and transient status feedback. `iconRegistry.js` centralizes branded UI artwork and cropped control icons.
+  - `DeviceAccessGate.jsx` warns mobile/touch users, requires landscape orientation after approval, and explains keyboard/mouse-first controls.
+  - `worldSave.js` stores versioned JSON worlds with localStorage world browser metadata, thumbnail support, File System Access API import/export, and download/file-input fallbacks. Autosave and recovery snapshots remain local-only.
+  - `RenderScheduler.jsx` applies frame-limit/vsync scheduling. `index.css` contains game font, scrollbar, focus, and UI utility styles.
+
+- **Audio (`src/audio/trainAudio.js`, `src/assets/audio/`)**:
+  - Lazy Web Audio engine activates after user gesture to satisfy autoplay rules; separate master, train, ambient, music, tools, station, and crossing buses support runtime volume/toggle control.
+  - Opus assets provide engine idle/moving loops for all four engine types, wheel/rail rolling and clack, horns, startup/shutdown/brakes, coach coupling, station activity, tool feedback, crossing bells/motors/warnings, biome ambience, distant events, and rotating background music.
+  - Positional train/crossing/station playback follows camera listener; ambient loops derive from biome and time of day; music rotates tracks after each source ends.
+
+- **Recent UI and interaction changes**:
+  - Branded menu art, logo, world-card art, tool icons, environment icons, station-role icons, train-control icons, status icons, and action icons are loaded from `src/assets/ui/`.
+  - Selection panel supports train/station/track inspection, technical-detail toggle, and train-management actions; pause and train dialogs restore focus and expose keyboard-safe modal behavior.
+  - Tool, station, train, coach, crossing, undo, redo, and selection actions emit matching audio feedback through `trainAudio`.

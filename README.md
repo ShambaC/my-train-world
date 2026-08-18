@@ -1,213 +1,102 @@
-# 🚂 MyTrainWorld - Railway Sandbox Game
+<p align="center">
+  <img src="src/assets/ui/ui-brand-mark.png" alt="MyTrainWorld logo" width="128">
+</p>
 
-A voxel-based train sandbox game built with React, Three.js, and Tauri.
+<h1 align="center">MyTrainWorld</h1>
 
-## 🎮 Features
+<p align="center">A stylized railway sandbox built with React, Three.js, React Three Fiber, and Tauri.</p>
 
-### Current Implementation (Phase 1 + Phase 2)
-- ✅ **Randomized Voxel Terrain Generation**
-  - Procedurally generated terrain using Simplex noise
-  - Customizable terrain size (length × breadth)
-  - **Optimized for railway construction** - Mostly flat plains with gentle hills
-  - Multiple terrain types: water, sand, and grass
-  - High-resolution voxels (smaller than Minecraft for better detail)
-  - Optimized rendering using instanced meshes
+<p align="center">
+  <a href="https://mytrain.world"><img src="https://img.shields.io/badge/Play%20Online-mytrain.world-2563eb?style=flat-square&logo=googlechrome&logoColor=white" alt="Play Online"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19"></a>
+  <a href="https://threejs.org/"><img src="https://img.shields.io/badge/Three.js-r180-000000?style=flat-square&logo=threedotjs&logoColor=white" alt="Three.js"></a>
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-v2-24C8DB?style=flat-square&logo=tauri&logoColor=white" alt="Tauri"></a>
+  <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-v7-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite"></a>
+  <img src="https://img.shields.io/badge/License-GPLV3-success?style=flat-square" alt="License GPL-V3">
+</p>
 
-- ✅ **Vegetation System**
-  - Procedurally placed trees (3-4 voxels tall with canopy)
-  - Simple bushes (rounded, 2 voxels high)
-  - Natural distribution using noise-based placement
-  - Proper spacing between vegetation
-  - ~8% coverage on suitable terrain
+<p align="center">
+  <img src="screenshots/Screenshot%202026-08-18%20221012.png" alt="MyTrainWorld railway scene" width="49%">
+  <img src="screenshots/Screenshot%202026-08-18%20220851.png" alt="MyTrainWorld world browser" width="49%">
+</p>
 
-- ✅ **Track Placement System** 🆕
-  - **Two track types**: Straight and curved (90°)
-  - **Click-to-place** on terrain with mouse
-  - **Ghost preview** showing track before placement
-  - **Visual feedback**: Green for valid placement, red for invalid
-  - **Rotation system**: Press R or use hotbar to rotate tracks
-  - **Hotbar interface**: Select tools with mouse or number keys (1-2)
-  - **Delete mode**: Remove placed tracks
-  - **Bridge mode**: Adjustable height with Q/E keys for elevated tracks
-  - **Snap-to-grid** for perfect alignment
-  - **UI-aware clicking**: Control panel clicks don't interfere with world
+## Overview
 
-- ✅ **Interactive Hotbar**
-  - Tool selection with mouse or number keys (1-5)
-  - Visual feedback for selected tool
-  - Keyboard shortcuts displayed
-  - Expandable for future tools (trains, stations, etc.)
+🎮 **Play Online**: [mytrain.world](https://mytrain.world)
 
-- ✅ **Interactive 3D Camera**
-  - Orbit controls for navigation
-  - Mouse controls: Left-click to rotate, right-click to pan, scroll to zoom
-  - Smooth camera damping
+MyTrainWorld lets players generate voxel landscapes, build connected railways, run trains, decorate worlds, and manage saved railways through a desktop-focused interface.
 
-- ✅ **Control Panel UI**
-  - Adjustable terrain dimensions (20-200 units)
-  - Quick preset sizes (Small, Medium, Large)
-  - Toggle menu for clean gameplay view
+## Features
 
-- ✅ **Performance Monitoring**
-  - Real-time FPS counter
-  - Voxel count display
-  - Debug information overlay
-  - Performance-optimized rendering
+- Procedural voxel terrain with water, sand, meadow, forest, wetland, and highland biomes.
+- Instanced terrain, vegetation, grass patches, props, roads, traffic, and ambient activity.
+- Straight, curved, and elevated ramp tracks with grid snapping, ghosts, validation, bridges, and automatic endpoint connections.
+- Stations with roles, decorated platforms, track binding, and animated construction reveals.
+- Four engine types: steam, diesel, electric, and checker.
+- Six coach types with coupling, uncoupling, consist highlighting, route traversal, reversing, stops, and follow camera.
+- Automatic signals, road traffic, pedestrians, and animated rail crossings.
+- Day, dusk, dawn, and night lighting with fog, water shaders, wind, fireflies, miniature mode, and cel shading.
+- World browser with local worlds, thumbnails, rename, duplicate, delete confirmation, import, and export.
+- Undo/redo, autosave recovery, versioned JSON world files, and camera framing commands.
+- Positional train, station, crossing, tool, biome, ambient, and rotating music audio.
+- Desktop keyboard and mouse controls with mobile/touch access warning and landscape requirement.
 
-- ✅ **Responsive UI with Tailwind CSS v3**
-  - Modern, clean interface
-  - Dark theme suitable for gameplay
-  - Smooth transitions and animations
+## Controls
 
-### Coming Soon (Phase 3+)
-- 🚧 Train placement and movement
-- 🚧 Multiple train types with physics
-- 🚧 Track switching and signaling
-- 🚧 Landscape editing tools
-- 🚧 Station system
-- 🚧 Save/Load functionality (using Tauri)
+| Input | Action |
+| --- | --- |
+| `1`-`9` | Select Hand, Straight, Curved, Ramp, Road, Train, Station, Coach, or Delete tool |
+| `R` | Rotate or flip placement |
+| `Q` / `E` | Lower or raise bridge/ramp height |
+| `X` | Reset placement height to ground |
+| `Escape` | Deselect tool, close menus, or resume from pause |
+| `WASD` | Move camera relative to view |
+| `Shift` | Sprint camera movement |
+| `Space` / `C` | Raise / lower camera |
+| Left mouse | Rotate camera or interact with world |
+| Right mouse | Pan camera |
+| Mouse wheel | Zoom |
+| `F9` | Toggle diagnostics overlay |
 
-## 🛠️ Tech Stack
+## Development
 
-- **Frontend Framework**: React 19
-- **3D Rendering**: Three.js + React Three Fiber
-- **3D Helpers**: @react-three/drei
-- **Styling**: Tailwind CSS v3
-- **Build Tool**: Vite
-- **Desktop Framework**: Tauri 2
-- **Terrain Generation**: Simplex Noise
-
-## 📦 Installation
+Requirements: Node.js and npm.
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
+```
 
-# Build for production
+Open `http://localhost:1420/`.
+
+Build web assets:
+
+```bash
 npm run build
+```
 
-# Run Tauri app (desktop)
+Run Tauri desktop development mode:
+
+```bash
 npm run tauri dev
 ```
 
-## 🎯 Usage
+## Architecture
 
-1. **Launch the application**: `npm run dev` and open http://localhost:1420/
-2. **Adjust terrain size**: Use the control panel sliders or preset buttons
-3. **Generate terrain**: Click "Generate Terrain" to create a new world
-4. **Navigate**: 
-   - Left mouse button: Rotate camera
-   - Right mouse button: Pan camera
-   - Mouse wheel: Zoom in/out
+- `src/App.jsx` owns managers, world lifecycle, settings, selection, history, save/load, and autosave.
+- `src/GameScene.jsx` composes terrain, environment, tracks, stations, trains, roads, traffic, signals, crossings, and camera systems.
+- `src/tracks/` handles track geometry, graph management, placement, rendering, and overhead lines.
+- `src/trains/` handles engines, coaches, traversal, rendering, smoke, and train controls.
+- `src/stations/` handles station validation, roles, construction, and rendering.
+- `src/environment/` handles terrain-adjacent scenery, lighting, roads, traffic, grass, water, and ambient activity.
+- `src/ui/` contains menus, HUD, settings, tools, selection, help, notifications, and accessibility gates.
+- `src/utils/worldSave.js` handles world serialization, local storage metadata, autosaves, recovery, and file import/export.
+- `src/audio/trainAudio.js` provides lazy Web Audio buses and positional playback.
 
-### Building Railways 🛤️
+## Project Status
 
-5. **Select track type**: 
-   - Press `1` for straight tracks
-   - Press `2` for curved tracks
-   - Press `3` for delete tool
-   - Or click tools in the hotbar at the bottom
+Core sandbox systems are playable. Project remains under active development. Mobile touch play is unsupported beyond access guidance; keyboard and mouse remain required for full controls.
 
-6. **Place tracks**:
-   - Move mouse over terrain to see ghost preview
-   - Green = valid placement, Red = invalid
-   - Press `R` to rotate before placing
-   - Click to place the track
+## License
 
-7. **Build bridges** (elevated tracks):
-   - Press `Q` to lower track height
-   - Press `E` to raise track height
-   - Press `X` to reset to ground level
-   - Tracks will angle automatically between different heights
-
-8. **Delete tracks**:
-   - Select delete tool (press `3`)
-   - Click on tracks to remove them
-
-9. **Toggle debug info**: Enable "Show Debug Info" to see FPS, track count, and performance stats
-
-## 🎨 Terrain Generation
-
-The terrain uses multi-octave Simplex noise for natural-looking landscapes, optimized for railway construction:
-
-- **Water level**: Blue voxels at lower elevations
-- **Sand**: Transition zone near water
-- **Grass**: Primary terrain surface (plains and gentle hills)
-- **Trees**: Dark green canopy with brown trunks (3-4 voxels tall)
-- **Bushes**: Rounded vegetation (2 voxels high)
-
-The terrain is intentionally flatter than typical voxel games to make it suitable for placing railway tracks. Mountains are rare, with most of the terrain consisting of plains and gentle, gradual slopes.
-
-Voxel size is set to 0.5 units for higher resolution compared to Minecraft-style games.
-
-## ⚡ Performance
-
-- Instanced rendering for efficient GPU usage
-- Optimized for terrains up to 200×200 units
-- Real-time FPS monitoring
-- Flat shading for authentic low-poly aesthetic
-
-## 🗺️ Project Structure
-
-```
-src/
-├── App.jsx              # Main application component
-├── GameScene.jsx        # 3D scene with terrain and camera
-├── ControlPanel.jsx     # UI controls for terrain generation
-├── LoadingScreen.jsx    # Initial loading screen
-├── terrain.js           # Terrain & vegetation generation logic
-├── main.jsx            # React entry point
-├── index.css           # Tailwind styles
-├── tracks/
-│   ├── TrackModels.js   # 3D track model generation
-│   ├── TrackManager.js  # Track data management
-│   └── TrackRenderer.jsx # Track rendering component
-├── hooks/
-│   └── useTrackPlacement.js # Track placement logic hook
-└── ui/
-    └── Hotbar.jsx       # Tool selection hotbar
-```
-
-## 🚀 Next Steps
-
-1. **Phase 2**: Track placement system
-   - Click-to-place track pieces
-   - Track connection validation
-   - Multiple track types (straight, curved, switches)
-
-2. **Phase 3**: Train system
-   - Train spawning
-   - Physics-based movement
-   - Train control (start/stop/speed)
-
-3. **Phase 4**: Advanced features
-   - Terrain editing
-   - Multiple train types with different characteristics
-   - Station system
-   - Save/Load game state
-
-## 📝 Development Notes
-
-- Tauri functionality is prepared but not yet implemented
-- All 3D models are currently procedurally generated
-- The game is designed with performance in mind for smooth gameplay
-- Debug mode provides valuable insights during development
-
-## 🤝 Contributing
-
-This is a personal project, but suggestions and ideas are welcome!
-
-## 📄 License
-
-MIT License - See package.json for details
-
----
-
-Built with ❤️ using React, Three.js, and Tauri
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+MIT. See `package.json` for project metadata.
