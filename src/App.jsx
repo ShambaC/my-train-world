@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import GameScene from "./GameScene";
-import ControlPanel from "./ControlPanel";
+import PauseMenu from "./ui/PauseMenu";
 import LoadingScreen from "./LoadingScreen";
 import MainMenu from "./ui/MainMenu";
 import DeviceAccessGate from "./ui/DeviceAccessGate";
@@ -132,8 +132,6 @@ function AppRuntime() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [terrainSeed, setTerrainSeed] = useState(1337);
   const [showDebug, setShowDebug] = useState(() => loadSettings().developerDiagnostics ?? false);
-  const [showAxes, setShowAxes] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
   const [rotation, setRotation] = useState(0);
@@ -172,6 +170,8 @@ function AppRuntime() {
   const [currentWorldId, setCurrentWorldId] = useState(null);
   const [currentWorldName, setCurrentWorldName] = useState('');
   const [storageStatus, setStorageStatus] = useState(() => getStorageStatus());
+  const [isPaused, setIsPaused] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // QoL state: selection, history, world refresh counter, status, audio.
   const [selection, setSelection] = useState(null);
@@ -451,7 +451,6 @@ function AppRuntime() {
     setCurrentWorldName(name);
     clearWorld();
     setSceneReady(false);
-    setIsGenerating(true);
     setTerrainSize(size);
     setTerrainSeed(seed);
     setTimeOfDay(globalGraphics.timeOfDay);
@@ -465,7 +464,6 @@ function AppRuntime() {
     setTrafficEnabled(globalGraphics.trafficEnabled);
     setSignalsEnabled(globalGraphics.signalsEnabled);
     setAppView('gameplay');
-    window.setTimeout(() => setIsGenerating(false), 500);
   };
 
   const handleLoadWorld = async () => {
@@ -542,27 +540,6 @@ function AppRuntime() {
     setTracksVersion(v => v + 1); // Trigger re-render
   };
 
-  const handleTerrainSizeChange = (newSize) => {
-    snapshotBeforeDestructive();
-    setSceneReady(false);
-    setIsGenerating(true);
-    setTerrainSize(newSize);
-    clearWorld();
-    // Simulate generation delay for UI feedback
-    setTimeout(() => setIsGenerating(false), 500);
-  };
-
-  const handleSeedChange = (newSeed) => {
-    if (newSeed === terrainSeed) return;
-    snapshotBeforeDestructive();
-    setSceneReady(false);
-    setIsGenerating(true);
-    clearWorld();
-    setTerrainSeed(newSeed);
-    // Simulate generation delay for UI feedback
-    setTimeout(() => setIsGenerating(false), 500);
-  };
-
   const handleToolSelect = (index) => {
     setSelectedToolIndex(index);
     // Stations start fresh in horizontal orientation every time.
@@ -590,6 +567,13 @@ function AppRuntime() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (settingsOpen) setSettingsOpen(false);
+        else setIsPaused((value) => !value);
+        return;
+      }
+      if (isPaused) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
         e.preventDefault();
@@ -612,7 +596,23 @@ function AppRuntime() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [doUndo, doRedo]);
+  }, [doUndo, doRedo, isPaused, settingsOpen]);
+
+  const saveCurrentWorldLocally = useCallback(() => {
+    const id = currentWorldIdRef.current;
+    if (!id) {
+      setWorldStatus('World is still loading');
+      return false;
+    }
+    const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current });
+    if (!saved.ok) {
+      setWorldStatus('Local save unavailable');
+      return false;
+    }
+    refreshLibrary();
+    setWorldStatus('Saved locally');
+    return true;
+  }, [makeWorldPayload, refreshLibrary]);
 
   const handleSceneProgress = useCallback((progress) => {
     setLoadProgress(0.8 + progress * 0.2);
@@ -674,7 +674,8 @@ function AppRuntime() {
         terrainSize={terrainSize} 
         terrainSeed={terrainSeed}
         showDebug={showDebug}
-        showAxes={showAxes}
+        showAxes={false}
+        paused={isPaused}
         trackManager={trackManagerRef.current}
         stationManager={stationManagerRef.current}
         trainManager={trainManagerRef.current}
@@ -708,17 +709,14 @@ function AppRuntime() {
         signalManager={signalManagerRef.current}
       />
       
-      {/* Control Panel */}
-      <ControlPanel
-        onTerrainSizeChange={handleTerrainSizeChange}
-        terrainSeed={terrainSeed}
-        onSeedChange={handleSeedChange}
-        onToggleDebug={setShowDebug}
-        showDebug={showDebug}
-        showAxes={showAxes}
-        onToggleAxes={setShowAxes}
-        isGenerating={isGenerating}
-        trainManager={trainManagerRef.current}
+      <PauseMenu
+        isPaused={isPaused}
+        settingsOpen={settingsOpen}
+        onResume={() => { setSettingsOpen(false); setIsPaused(false); }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCloseSettings={() => setSettingsOpen(false)}
+        onSave={saveCurrentWorldLocally}
+        onExit={() => { saveCurrentWorldLocally(); setSettingsOpen(false); setIsPaused(false); setAppView('menu'); }}
         timeOfDay={timeOfDay}
         onTimeChange={setTimeOfDay}
         fogEnabled={fogEnabled}
@@ -743,17 +741,8 @@ function AppRuntime() {
         onTrafficChange={setTrafficEnabled}
         signalsEnabled={signalsEnabled}
         onSignalsChange={setSignalsEnabled}
-        followTrainId={followTrainId}
-        onFollowTrain={setFollowTrainId}
         audioVolumes={audioVolumes}
         onAudioVolumeChange={(patch) => setAudioVolumes((v) => ({ ...v, ...patch }))}
-        history={historyRef.current}
-        terrainSize={terrainSize}
-        onSaveWorld={handleSaveWorld}
-        onLoadWorld={handleLoadWorld}
-        onRecoverWorld={handleRecoverWorld}
-        onUndo={doUndo}
-        onRedo={doRedo}
         worldStatus={worldStatus}
       />
       
@@ -763,6 +752,7 @@ function AppRuntime() {
         selectedIndex={selectedToolIndex}
         onSelect={handleToolSelect}
         onRotate={handleRotate}
+        paused={isPaused}
         disabledToolIds={trainCount === 0 ? ['coach'] : []}
       />
       

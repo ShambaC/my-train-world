@@ -526,6 +526,7 @@ export default function GameScene({
   selectedTrainId = null,
   roadManager,
   signalManager,
+  paused = false,
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -732,7 +733,7 @@ export default function GameScene({
         frameloop="never"
         gl={{ antialias: true }}
       >
-        <RenderScheduler frameLimit={frameLimit} vsync={vsync} />
+        <RenderScheduler frameLimit={frameLimit} vsync={vsync} paused={paused} />
         <Scene 
           terrainSize={terrainSize} 
           terrainSeed={terrainSeed}

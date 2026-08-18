@@ -11,21 +11,19 @@ const TOOL_KEYS = {
   '7': 6,
   '8': 7,
   '9': 8,
-  'Escape': -1, // Deselect
 };
 
 /**
  * Hotbar component for track and tool selection
  */
-export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disabledToolIds = [] }) {
+export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disabledToolIds = [], paused = false }) {
   useEffect(() => {
     const handleKeyPress = (e) => {
+      if (paused) return;
       // Number keys for tool selection
       if (TOOL_KEYS[e.key] !== undefined) {
         const index = TOOL_KEYS[e.key];
-        if (index === -1) {
-          onSelect(0); // Select hand tool
-        } else if (index < tools.length && !disabledToolIds.includes(tools[index].id)) {
+        if (index < tools.length && !disabledToolIds.includes(tools[index].id)) {
           onSelect(index);
         }
       }
@@ -38,7 +36,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [tools.length, onSelect, onRotate, disabledToolIds]);
+  }, [tools.length, onSelect, onRotate, disabledToolIds, paused]);
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-2 sm:bottom-3 sm:px-4">
@@ -48,7 +46,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
             Build tools
           </span>
           <span className="hidden text-[10px] text-[#aebbd0] sm:inline">
-            R rotate · Esc select
+             R rotate
           </span>
         </div>
 
@@ -109,8 +107,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
         {/* Instructions */}
         <div className="mt-1.5 hidden text-center text-[10px] text-[#aebbd0] sm:block">
           Press <kbd className="bg-gray-900 px-1 rounded">1-9</kbd> to select •
-          <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
-          <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
+           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate
         </div>
       </div>
     </div>

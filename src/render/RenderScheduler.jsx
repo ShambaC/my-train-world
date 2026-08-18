@@ -16,7 +16,7 @@ import { useThree } from '@react-three/fiber';
  * Simulation is delta-time based, so train speed, smoke, water and camera
  * movement stay identical at every limit.
  */
-export default function RenderScheduler({ frameLimit, vsync }) {
+export default function RenderScheduler({ frameLimit, vsync, paused = false }) {
   const advance = useThree((state) => state.advance);
   const limitRef = useRef(frameLimit);
   const vsyncRef = useRef(vsync);
@@ -25,6 +25,7 @@ export default function RenderScheduler({ frameLimit, vsync }) {
   vsyncRef.current = vsync;
 
   useEffect(() => {
+    if (paused) return undefined;
     let rafId = 0;
     let timerId = 0;
     let lastFrame = performance.now();
@@ -69,7 +70,7 @@ export default function RenderScheduler({ frameLimit, vsync }) {
       cancelAnimationFrame(rafId);
       clearTimeout(timerId);
     };
-  }, [advance]);
+  }, [advance, paused]);
 
   return null;
 }
