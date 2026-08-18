@@ -97,6 +97,15 @@ npm run tauri dev
 
 Core sandbox systems are playable. Project remains under active development. Mobile touch play is unsupported beyond access guidance; keyboard and mouse remain required for full controls.
 
-## License
+## Story Time
 
-MIT. See `package.json` for project metadata.
+I made this game because I wanted to play it. I was looking for a train game where I could simply place tracks and put a train on it and watch it move along. I wanted something without any progression system or an economy system. A plain zen mode game. But I could not find any. Maybe I am growing old and my searching skills are getting rusty. 
+
+In any case, I made this game after that and had very fun. This game is in no way complete at the moment but fully playable none the less. I hope you have fun playing it too. Made with <3
+
+## Plans
+[ ] More biomes and terrain types
+[ ] Change all textures and icons to hand drawn ones. (I recently got a drawing tab as a gift. I'd like to draw the textures and give this game a hand drawn aesthetic)
+[ ] Controller support
+[ ] Mobile support
+[ ] Multiplayer ?

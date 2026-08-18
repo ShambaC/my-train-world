@@ -1,8 +1,8 @@
 {
   "name": "mytrainworld",
-  "private": true,
   "version": "0.1.0",
   "type": "module",
+  "author": "ShambaC",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
