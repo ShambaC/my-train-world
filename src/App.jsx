@@ -608,7 +608,7 @@ function App() {
       
       {/* Height Control Indicator - Moved to bottom-left */}
       {heightOffset !== 0 && (
-        <div className="absolute bottom-24 left-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg font-mono text-sm z-30">
+        <div className="absolute bottom-28 left-4 z-30 rounded-xl border border-[#e5a94f]/40 bg-[#101a2b]/85 px-4 py-2 font-mono text-sm text-white shadow-lg backdrop-blur-md sm:bottom-24">
           <div className="font-bold text-blue-400 mb-1">Bridge Mode</div>
           <div>Height: {heightOffset.toFixed(1)}</div>
           <div className="text-xs text-gray-400 mt-1">
@@ -618,20 +618,20 @@ function App() {
       )}
       
       {/* Title Overlay */}
-      <div className="absolute bottom-4 left-4 z-30">
+      <div className="absolute left-4 top-4 z-30 rounded-xl border border-white/10 bg-[#101a2b]/75 px-3 py-2 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-2">
           <img
             src={UI_ICONS.brandMark}
             alt=""
             aria-hidden="true"
-            className="w-9 h-9 object-contain drop-shadow-lg"
+            className="h-8 w-8 object-contain drop-shadow-lg"
             draggable={false}
           />
-          <h1 className="text-white text-3xl font-bold drop-shadow-lg">
+          <h1 className="text-2xl font-bold text-white drop-shadow-lg">
             MyTrainWorld
           </h1>
         </div>
-        <p className="text-gray-300 text-sm mt-1 drop-shadow">
+        <p className="mt-0.5 text-xs text-[#aebbd0] drop-shadow">
           Build your railway empire
         </p>
       </div>

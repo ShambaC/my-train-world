@@ -41,9 +41,18 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
   }, [tools.length, onSelect, onRotate, disabledToolIds]);
 
   return (
-    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-40">
-      <div className="bg-gray-800 bg-opacity-95 rounded-lg p-2 shadow-2xl border border-gray-700">
-        <div className="flex gap-2">
+    <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 pb-2 sm:bottom-3 sm:px-4">
+      <div className="w-full max-w-[780px] rounded-2xl border border-white/10 bg-[#101a2b]/90 p-2 shadow-2xl backdrop-blur-xl sm:p-2.5">
+        <div className="flex items-center justify-between px-1 pb-1.5 sm:px-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#aebbd0]">
+            Build tools
+          </span>
+          <span className="hidden text-[10px] text-[#aebbd0] sm:inline">
+            R rotate · Esc select
+          </span>
+        </div>
+
+        <div className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto pb-0.5 scrollbar-none sm:justify-center sm:overflow-visible">
           {tools.map((tool, index) => {
             const disabled = disabledToolIds.includes(tool.id);
             const icon = TOOL_ICONS[tool.iconKey || tool.id];
@@ -52,14 +61,17 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
                 key={tool.id}
                 onClick={() => !disabled && onSelect(index)}
                 disabled={disabled}
+                aria-label={disabled ? `${tool.name}, unavailable until an engine exists` : tool.name}
+                aria-pressed={selectedIndex === index}
                 className={`
-                  relative w-16 h-16 rounded-lg transition-all duration-200
-                  flex flex-col items-center justify-center
+                  relative h-[4.35rem] w-[4.35rem] flex-none snap-start rounded-xl border transition-colors duration-150
+                   flex flex-col items-center justify-center
+                  touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#63c9dc]
                   ${disabled
-                    ? 'bg-gray-800 opacity-40 cursor-not-allowed'
+                    ? 'border-transparent bg-[#18263b] opacity-40 cursor-not-allowed'
                     : selectedIndex === index
-                      ? 'bg-blue-600 shadow-lg scale-110'
-                      : 'bg-gray-700 hover:bg-gray-600'
+                      ? 'border-[#e5a94f] bg-[#244b67] shadow-[0_0_0_2px_rgba(229,169,79,0.18)]'
+                      : 'border-white/5 bg-[#18263b] hover:border-[#63c9dc]/60 hover:bg-[#22344b]'
                   }
                 `}
                 title={disabled ? `${tool.name} (needs an engine in the world)` : tool.name}
@@ -70,23 +82,23 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
                   alt=""
                   aria-hidden="true"
                   draggable={false}
-                  className="w-7 h-7 mb-1 object-contain pointer-events-none"
+                  className="mb-1 h-7 w-7 object-contain pointer-events-none"
                 />
 
                 {/* Label */}
-                <span className="text-xs text-white font-medium">
+                <span className="text-[11px] font-semibold leading-none text-[#f7f0df]">
                   {tool.label}
                 </span>
 
                 {/* Hotkey indicator */}
-                <span className="absolute top-1 right-1 text-xs text-gray-400 bg-gray-900 rounded px-1">
+                <span className="absolute right-1 top-1 rounded bg-[#101a2b] px-1 text-[10px] font-mono text-[#aebbd0]">
                   {index + 1}
                 </span>
 
                 {/* Selection indicator */}
                 {selectedIndex === index && !disabled && (
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                  <div className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-[#e5a94f]">
+                    <span className="sr-only">Selected</span>
                   </div>
                 )}
               </button>
@@ -95,7 +107,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
         </div>
 
         {/* Instructions */}
-        <div className="mt-2 text-xs text-gray-400 text-center">
+        <div className="mt-1.5 hidden text-center text-[10px] text-[#aebbd0] sm:block">
           Press <kbd className="bg-gray-900 px-1 rounded">1-9</kbd> to select •
           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
           <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
