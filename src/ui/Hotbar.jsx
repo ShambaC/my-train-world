@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { TOOL_ICONS } from './iconRegistry';
 
 const TOOL_KEYS = {
   '1': 0,
@@ -45,6 +46,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
         <div className="flex gap-2">
           {tools.map((tool, index) => {
             const disabled = disabledToolIds.includes(tool.id);
+            const icon = TOOL_ICONS[tool.iconKey || tool.id];
             return (
               <button
                 key={tool.id}
@@ -63,7 +65,13 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
                 title={disabled ? `${tool.name} (needs an engine in the world)` : tool.name}
               >
                 {/* Icon */}
-                <span className="text-2xl mb-1">{tool.icon}</span>
+                <img
+                  src={icon}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="w-7 h-7 mb-1 object-contain pointer-events-none"
+                />
 
                 {/* Label */}
                 <span className="text-xs text-white font-medium">
@@ -88,7 +96,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
 
         {/* Instructions */}
         <div className="mt-2 text-xs text-gray-400 text-center">
-          Press <kbd className="bg-gray-900 px-1 rounded">1-8</kbd> to select •
+          Press <kbd className="bg-gray-900 px-1 rounded">1-9</kbd> to select •
           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate •
           <kbd className="bg-gray-900 px-1 rounded ml-1">Esc</kbd> deselect
         </div>

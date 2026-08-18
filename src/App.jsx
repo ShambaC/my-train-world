@@ -34,14 +34,14 @@ const TOOLS = [
     id: 'hand', 
     name: 'Hand / Deselect', 
     label: 'Hand',
-    icon: '✋', 
+    iconKey: 'hand',
     type: 'hand'
   },
   { 
     id: 'straight', 
     name: 'Straight Track', 
     label: 'Straight',
-    icon: '━', 
+    iconKey: 'straight',
     type: 'track',
     trackType: 'straight'
   },
@@ -49,7 +49,7 @@ const TOOLS = [
     id: 'curved', 
     name: 'Curved Track', 
     label: 'Curved',
-    icon: '╰', 
+    iconKey: 'curved',
     type: 'track',
     trackType: 'curved'
   },
@@ -57,7 +57,7 @@ const TOOLS = [
     id: 'ramp', 
     name: 'Ramp Track (45°)', 
     label: 'Ramp',
-    icon: '⟋', 
+    iconKey: 'ramp',
     type: 'track',
     trackType: 'ramp'
   },
@@ -65,35 +65,35 @@ const TOOLS = [
     id: 'road', 
     name: 'Place Road', 
     label: 'Road',
-    icon: '🛣️', 
+    iconKey: 'road',
     type: 'road'
   },
   { 
     id: 'train', 
     name: 'Place Train', 
     label: 'Train',
-    icon: '🚂', 
+    iconKey: 'train',
     type: 'train'
   },
   { 
     id: 'station', 
     name: 'Place Station', 
     label: 'Station',
-    icon: '🚉', 
+    iconKey: 'station',
     type: 'station'
   },
   { 
     id: 'coach', 
     name: 'Add Coach', 
     label: 'Coach',
-    icon: '🚃', 
+    iconKey: 'coach',
     type: 'coach'
   },
   { 
     id: 'delete', 
     name: 'Delete Tool', 
     label: 'Delete',
-    icon: '🗑️', 
+    iconKey: 'delete',
     type: 'delete'
   },
 ];
