@@ -16,9 +16,9 @@ const TIME_OPTIONS = [
   { value: 'night', label: 'Night', color: '#2c3e50' },
 ];
 const SHADOW_OPTIONS = [
-  { value: 'none', label: 'Off' },
-  { value: 'hard', label: 'Hard' },
-  { value: 'soft', label: 'Soft' },
+  { value: 'none', label: 'Off', icon: 'shadowOff' },
+  { value: 'hard', label: 'Hard', icon: 'shadowHard' },
+  { value: 'soft', label: 'Soft', icon: 'shadowSoft' },
 ];
 
 function formatDate(value) {
@@ -26,7 +26,8 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function WorldCard({ world, featured, onOpen, onRename, onDelete }) {
+function WorldCard({ world, featured, onOpen, onRename, onDuplicate, onExport, onDelete }) {
+  const fallbackArt = UI_ICONS.worldCards[(world.id || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) % UI_ICONS.worldCards.length];
   return (
     <article
       className={`group relative min-w-0 overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 ${featured
@@ -38,7 +39,7 @@ function WorldCard({ world, featured, onOpen, onRename, onDelete }) {
         {world.thumbnail ? (
           <img src={world.thumbnail} alt="" className="h-full w-full object-cover" />
         ) : (
-          <img src={menuArt} alt="" className="h-full w-full object-cover opacity-80 transition group-hover:scale-105" />
+          <img src={fallbackArt || menuArt} alt="" className="h-full w-full object-cover opacity-80 transition group-hover:scale-105" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#101a2b] via-transparent to-transparent" />
         {featured && (
@@ -57,8 +58,10 @@ function WorldCard({ world, featured, onOpen, onRename, onDelete }) {
             <span>{world.counts?.tracks ?? 0} tracks</span>
           </div>
         </button>
-        <div className="mt-3 flex gap-2 border-t border-white/10 pt-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
           <button type="button" onClick={() => onRename(world)} className="rounded-lg px-2 py-1 text-xs font-semibold text-[#aebbd0] hover:bg-[#22344b] hover:text-white">Rename</button>
+          <button type="button" onClick={() => onDuplicate(world.id)} className="rounded-lg px-2 py-1 text-xs font-semibold text-[#aebbd0] hover:bg-[#22344b] hover:text-white">Duplicate</button>
+          <button type="button" onClick={() => onExport(world.id)} className="rounded-lg px-2 py-1 text-xs font-semibold text-[#aebbd0] hover:bg-[#22344b] hover:text-white">Export</button>
           <button type="button" onClick={() => onDelete(world)} className="rounded-lg px-2 py-1 text-xs font-semibold text-[#ef6b68] hover:bg-[#422b3a]">Delete</button>
         </div>
       </div>
@@ -173,6 +176,8 @@ export default function MainMenu({
   onCreateWorld,
   onImportWorld,
   onRenameWorld,
+  onDuplicateWorld,
+  onExportWorld,
   onDeleteWorld,
   frameLimit,
   onFrameLimitChange,
@@ -186,11 +191,21 @@ export default function MainMenu({
   onToggleDebug,
   showAxes,
   onToggleAxes,
+  debugDetail,
+  onDebugDetailChange,
+  debugPosition,
+  onDebugPositionChange,
+  onCopyDiagnostics,
+  showTechnicalInfo,
+  onToggleTechnicalInfo,
+  accessibility,
+  onAccessibilityChange,
 }) {
   const [view, setView] = useState('home');
   const [showNewWorld, setShowNewWorld] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [settingsTab, setSettingsTab] = useState('graphics');
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -211,10 +226,11 @@ export default function MainMenu({
     </label>
   );
   const updateGraphics = (patch) => onGlobalGraphicsChange(patch);
+  const toggleIcons = { tiltShiftEnabled: 'miniature', celShadingEnabled: 'cel', ambientEnabled: 'activity', soundsEnabled: 'audioTrain', trafficEnabled: 'traffic', signalsEnabled: 'signals' };
   const graphicsToggle = (key, label, description) => (
     <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
       <span>
-        <span className="block text-sm font-semibold text-[#c5d0df]">{label}</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-[#c5d0df]"><img src={UI_ICONS.environment[toggleIcons[key]]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{label}</span>
         <span className="mt-0.5 block text-xs text-[#aebbd0]">{description}</span>
       </span>
       <input type="checkbox" checked={globalGraphics[key]} onChange={(event) => updateGraphics({ [key]: event.target.checked })} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
@@ -222,7 +238,7 @@ export default function MainMenu({
   );
 
   return (
-    <main className="relative h-[100dvh] min-h-0 overflow-hidden bg-[#0b1422] text-[#f7f0df]">
+    <main className={`relative h-[100dvh] min-h-0 overflow-hidden bg-[#0b1422] text-[#f7f0df] ${accessibility.highContrast ? 'contrast-125' : ''}`} style={{ fontSize: `${accessibility.uiScale}em` }}>
       <img src={menuArt} alt="" aria-hidden="true" className="fixed inset-0 h-full w-full object-cover opacity-65" />
       <div className="fixed inset-0 bg-[linear-gradient(115deg,rgba(11,20,34,0.46),rgba(11,20,34,0.2)_52%,rgba(11,20,34,0.58))]" />
 
@@ -260,7 +276,7 @@ export default function MainMenu({
             <div className="flex-1 rounded-3xl border border-white/10 bg-[#101a2b]/85 p-4 shadow-2xl backdrop-blur-xl sm:p-5">
               {worlds.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {worlds.map((world) => <WorldCard key={world.id} world={world} featured={world.id === lastWorldId} onOpen={onOpenWorld} onRename={setRenameTarget} onDelete={setDeleteTarget} />)}
+                   {worlds.map((world) => <WorldCard key={world.id} world={world} featured={world.id === lastWorldId} onOpen={onOpenWorld} onRename={setRenameTarget} onDuplicate={onDuplicateWorld} onExport={onExportWorld} onDelete={setDeleteTarget} />)}
                 </div>
               ) : (
                 <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-[#18263b]/55 px-5 text-center">
@@ -295,9 +311,21 @@ export default function MainMenu({
                   <h2 className="mt-1 text-2xl font-bold">Settings</h2>
                 </div>
               </div>
+              <div className="mt-5 grid grid-cols-2 gap-2 border-b border-white/10 pb-3 sm:grid-cols-4">
+                {[
+                  ['graphics', 'Graphics'],
+                  ['audio', 'Audio'],
+                  ['accessibility', 'Accessibility'],
+                  ['developer', 'Developer'],
+                ].map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => setSettingsTab(key)} className={`rounded-xl px-2 py-2 text-xs font-semibold sm:text-sm ${settingsTab === key ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={settingsTab === key}>
+                    {label}
+                  </button>
+                ))}
+              </div>
               <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
 
-              <div className="mt-6 border-t border-white/10 pt-5">
+              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5`}>
                 <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {FRAME_LIMIT_OPTIONS.map((option) => (
@@ -308,25 +336,26 @@ export default function MainMenu({
                 </div>
               </div>
 
-              <label className="mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+              <label className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]`}>
                 Vsync
                 <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
               </label>
 
-              <div className="mt-5 space-y-4 border-t border-white/10 pt-5">
+              <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
                 <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>
                 {volume('master', 'Master volume')}
                 {volume('train', 'Train volume')}
                 {volume('crossing', 'Crossing volume')}
+                {graphicsToggle('soundsEnabled', 'Train sounds', 'Whistles, bells, and crossing audio')}
               </div>
 
-              <div className="mt-6 space-y-4 border-t border-white/10 pt-5">
+              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
                 <div>
                   <div className="text-sm font-semibold text-[#c5d0df]">Default environment</div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {TIME_OPTIONS.map((option) => (
                       <button key={option.value} type="button" onClick={() => updateGraphics({ timeOfDay: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.timeOfDay === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`} style={{ borderLeftColor: option.color, borderLeftWidth: 4 }}>
-                        {option.label}
+                        <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.value]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
                       </button>
                     ))}
                   </div>
@@ -348,7 +377,7 @@ export default function MainMenu({
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {SHADOW_OPTIONS.map((option) => (
                       <button key={option.value} type="button" onClick={() => updateGraphics({ shadowMode: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.shadowMode === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                        {option.label}
+                        <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.icon]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
                       </button>
                     ))}
                   </div>
@@ -357,11 +386,39 @@ export default function MainMenu({
                 {graphicsToggle('tiltShiftEnabled', 'Miniature mode', 'Tilt-shift depth blur')}
                 {graphicsToggle('celShadingEnabled', 'Cel shading', 'Toon-style color bands and edges')}
                 {graphicsToggle('ambientEnabled', 'Ambient activity', 'Grass, pedestrians, and station life')}
-                {graphicsToggle('soundsEnabled', 'Train sounds', 'Whistles, bells, and crossing audio')}
                 {graphicsToggle('trafficEnabled', 'Road traffic', 'Cars, carts, bikes, and walkers')}
                 {graphicsToggle('signalsEnabled', 'Signals and crossings', 'Rail signals and road crossings')}
-
-                <div className="pt-2 text-sm font-semibold text-[#c5d0df]">Developer tools</div>
+              </div>
+              <div className={`${settingsTab === 'accessibility' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Interface scale</div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {[0.9, 1, 1.15].map((value) => (
+                      <button key={value} type="button" onClick={() => onAccessibilityChange({ uiScale: value })} className={`rounded-xl border p-2 text-sm font-semibold ${accessibility.uiScale === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                        {value === 0.9 ? 'Compact' : value === 1 ? 'Default' : 'Large'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                  High contrast
+                  <input type="checkbox" checked={accessibility.highContrast} onChange={(event) => onAccessibilityChange({ highContrast: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
+                </label>
+                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                  Reduced motion
+                  <input type="checkbox" checked={accessibility.reducedMotion} onChange={(event) => onAccessibilityChange({ reducedMotion: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
+                </label>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Text size</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {['normal', 'large'].map((value) => (
+                      <button key={value} type="button" onClick={() => onAccessibilityChange({ textSize: value })} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${accessibility.textSize === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className={`${settingsTab === 'developer' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                <div className="text-sm font-semibold text-[#c5d0df]">Developer tools</div>
                 <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>
                     <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
@@ -376,6 +433,36 @@ export default function MainMenu({
                   </span>
                   <input type="checkbox" checked={showAxes} onChange={(event) => onToggleAxes(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
                 </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                  <span>
+                    <span className="block text-sm font-semibold text-[#c5d0df]">Technical selection details</span>
+                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show IDs, route measurements, and manager-level values when inspecting objects.</span>
+                  </span>
+                  <input type="checkbox" checked={showTechnicalInfo} onChange={(event) => onToggleTechnicalInfo(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
+                </label>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Overlay detail</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {['compact', 'full'].map((value) => (
+                      <button key={value} type="button" onClick={() => onDebugDetailChange(value)} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${debugDetail === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Overlay position</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {[
+                      ['top-left', 'Top left'],
+                      ['top-right', 'Top right'],
+                      ['bottom-left', 'Bottom left'],
+                      ['bottom-right', 'Bottom right'],
+                    ].map(([value, label]) => (
+                      <button key={value} type="button" onClick={() => onDebugPositionChange(value)} className={`rounded-xl border p-2 text-sm font-semibold ${debugPosition === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <button type="button" onClick={onCopyDiagnostics} className="min-h-11 w-full rounded-xl bg-[#22344b] px-4 py-2 text-sm font-semibold text-[#f7f0df] hover:border-[#63c9dc] hover:bg-[#2d4662]">Copy diagnostics</button>
+                <p className="text-xs leading-5 text-[#aebbd0]">Press F9 during gameplay to show or hide the overlay, or use the pause menu. Diagnostics stay local and never enter world saves.</p>
               </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { cameraBus } from '../utils/cameraBus';
 import { clone } from '../utils/editActions';
+import { UI_ICONS } from './iconRegistry';
 
 /**
  * Train Control Panel - Manage individual trains + global speed setting.
@@ -64,7 +65,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
   const speedSlider = (
     <div className="mb-3">
       <label className="block text-sm font-medium text-gray-300 mb-1">
-        🐢 Train Speed: {speed.toFixed(2)} 🐇
+         <span className="inline-flex items-center gap-1"><img src={UI_ICONS.trainControls.speedSlow} alt="" aria-hidden="true" className="h-4 w-4 object-contain" /> Train Speed: {speed.toFixed(2)} <img src={UI_ICONS.trainControls.speedFast} alt="" aria-hidden="true" className="h-4 w-4 object-contain" /></span>
       </label>
       <input
         type="range"
@@ -105,7 +106,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <h3 className="text-sm font-semibold text-green-400">
-          🚂 Trains ({trains.length})
+           Trains ({trains.length})
         </h3>
         <svg
           className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -142,7 +143,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
                     className="px-2 py-1 rounded text-xs font-medium transition-colors bg-gray-600 hover:bg-gray-500 text-white"
                     title="Focus camera on this train"
                   >
-                    🎯
+                     <img src={UI_ICONS.trainControls.focus} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </button>
 
                   {/* Follow Camera Toggle */}
@@ -155,7 +156,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
                     }`}
                     title={followTrainId === train.id ? 'Stop following train' : 'Follow train with camera'}
                   >
-                    {followTrainId === train.id ? '⏹' : '🎥'}
+                     <img src={UI_ICONS.trainControls.follow} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </button>
 
                   {/* Reverse */}
@@ -164,7 +165,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
                     className="px-2 py-1 rounded text-xs font-medium transition-colors bg-gray-600 hover:bg-gray-500 text-white"
                     title="Reverse direction"
                   >
-                    ↩
+                     <img src={UI_ICONS.trainControls.reverse} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </button>
 
                   {/* Toggle Button */}
@@ -177,7 +178,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
                     }`}
                     title={train.active ? 'Stop train' : 'Start train'}
                   >
-                    {train.active ? '⏸' : '▶'}
+                     <img src={train.active ? UI_ICONS.trainControls.stop : UI_ICONS.trainControls.start} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </button>
 
                   {/* Delete Button */}
@@ -186,7 +187,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
                     className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition-colors"
                     title="Delete train"
                   >
-                    🗑️
+                     <img src={UI_ICONS.trainControls.deleteCoach} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
                   </button>
                 </div>
               </div>

@@ -5,6 +5,9 @@ import LoadingScreen from "./LoadingScreen";
 import MainMenu from "./ui/MainMenu";
 import DeviceAccessGate from "./ui/DeviceAccessGate";
 import Hotbar from "./ui/Hotbar";
+import GameHud from "./ui/GameHud";
+import HelpPanel from "./ui/HelpPanel";
+import ToastRegion from "./ui/ToastRegion";
 import SelectionPanel from "./ui/SelectionPanel";
 import { TrackManager } from "./tracks/TrackManager";
 import { TrainManager } from "./trains/TrainManager";
@@ -36,8 +39,11 @@ import {
   importWorldRecord,
   listWorlds,
   renameWorld,
+  duplicateWorld,
   deleteWorld,
+  exportWorldRecord,
   saveWorldRecord,
+  hasRecoverySnapshot,
 } from "./utils/worldSave";
 
 // Define available tools
@@ -132,6 +138,10 @@ function AppRuntime() {
   const [terrainSeed, setTerrainSeed] = useState(1337);
   const [showDebug, setShowDebug] = useState(() => loadSettings().developerDiagnostics ?? false);
   const [showAxes, setShowAxes] = useState(() => loadSettings().showAxes ?? false);
+  const [showTechnicalInfo, setShowTechnicalInfo] = useState(() => loadSettings().showTechnicalInfo ?? false);
+  const [debugOverlayVisible, setDebugOverlayVisible] = useState(() => loadSettings().developerDiagnostics ?? false);
+  const [debugDetail, setDebugDetail] = useState(() => loadSettings().debugDetail ?? 'compact');
+  const [debugPosition, setDebugPosition] = useState(() => loadSettings().debugPosition ?? 'top-left');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
   const [rotation, setRotation] = useState(0);
@@ -172,16 +182,28 @@ function AppRuntime() {
   const [storageStatus, setStorageStatus] = useState(() => getStorageStatus());
   const [isPaused, setIsPaused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [trainControlsOpen, setTrainControlsOpen] = useState(false);
 
   // QoL state: selection, history, world refresh counter, status, audio.
   const [selection, setSelection] = useState(null);
   const [worldVersion, setWorldVersion] = useState(0);
   const [worldStatus, setWorldStatus] = useState('');
+  const canvasRef = useRef(null);
   const [audioVolumes, setAudioVolumes] = useState(() => {
     const v = loadSettings().audioVolumes;
     return { master: 1, train: 1, crossing: 1, ...(v || {}) };
   });
   const [globalGraphics, setGlobalGraphics] = useState(loadGlobalGraphicsDefaults);
+  const [accessibility, setAccessibility] = useState(() => {
+    const value = loadSettings().accessibility || {};
+    return {
+      uiScale: value.uiScale ?? 1,
+      highContrast: value.highContrast ?? false,
+      reducedMotion: value.reducedMotion ?? false,
+      textSize: value.textSize ?? 'normal',
+    };
+  });
 
   const trackManagerRef = useRef(new TrackManager());
   const stationManagerRef = useRef(new StationManager());
@@ -258,11 +280,18 @@ function AppRuntime() {
     saveSettings({ globalGraphics });
   }, [globalGraphics]);
   useEffect(() => {
-    saveSettings({ developerDiagnostics: showDebug });
-  }, [showDebug]);
+    saveSettings({ developerDiagnostics: showDebug, debugDetail, debugPosition, showTechnicalInfo });
+  }, [debugDetail, debugPosition, showDebug, showTechnicalInfo]);
   useEffect(() => {
     saveSettings({ showAxes });
   }, [showAxes]);
+  useEffect(() => {
+    saveSettings({ accessibility });
+    document.documentElement.dataset.highContrast = accessibility.highContrast ? 'true' : 'false';
+    document.documentElement.dataset.reducedMotion = accessibility.reducedMotion ? 'true' : 'false';
+    document.documentElement.style.setProperty('--mtw-ui-scale', String(accessibility.uiScale));
+    document.documentElement.style.setProperty('--mtw-text-scale', accessibility.textSize === 'large' ? '1.12' : '1');
+  }, [accessibility]);
 
   // Track engine count so the coach tool can be gated on it
   useEffect(() => {
@@ -306,6 +335,29 @@ function AppRuntime() {
         setCurrentWorldName('');
       }
       refreshLibrary();
+    }
+  };
+
+  const handleDuplicateWorld = (id) => {
+    const result = duplicateWorld(id);
+    if (result.ok) refreshLibrary();
+  };
+
+  const handleExportWorld = (id) => {
+    const result = exportWorldRecord(id);
+    if (!result.ok) return;
+    try {
+      const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      setWorldStatus('Export failed');
     }
   };
 
@@ -353,14 +405,14 @@ function AppRuntime() {
   const doUndo = useCallback(() => {
     if (historyRef.current.undo()) {
       refreshWorld();
-      setStatus('↩ Undone');
+      setStatus('Undone');
     }
   }, [refreshWorld]);
 
   const doRedo = useCallback(() => {
     if (historyRef.current.redo()) {
       refreshWorld();
-      setStatus('↪ Redone');
+      setStatus('Redone');
     }
   }, [refreshWorld]);
 
@@ -380,7 +432,7 @@ function AppRuntime() {
   // for its seed/size is generated.
   const applySavedData = (data, { defer = false } = {}) => {
     if (!data) {
-      setStatus('⚠ Nothing to load');
+      setStatus('Nothing to load');
       return;
     }
     const t = data.terrain || {};
@@ -423,9 +475,9 @@ function AppRuntime() {
       if (ok) {
         refreshWorld();
         if (data.camera) cameraBus.emit({ type: 'restore', ...data.camera });
-        setStatus('📂 World loaded');
+        setStatus('World loaded');
       } else {
-        setStatus('⚠ Load failed');
+        setStatus('Load failed');
       }
     }
     // else: applied in handleTerrainReady once the terrain is generated.
@@ -473,12 +525,12 @@ function AppRuntime() {
     const res = await loadWorldFromFile();
     if (res?.cancelled) return;
     if (res?.error) {
-      setStatus(`⚠ ${res.error}`);
+      setStatus(`Load error: ${res.error}`);
       return;
     }
     const imported = importWorldRecord(res.data, res.name);
     if (!imported.ok) {
-      setStatus(`⚠ ${imported.error}`);
+      setStatus(`Import error: ${imported.error}`);
       return;
     }
     setCurrentWorldId(imported.world.meta.id);
@@ -492,11 +544,11 @@ function AppRuntime() {
   const handleRecoverWorld = () => {
     const data = loadRecoverySnapshot();
     if (!data) {
-      setStatus('⚠ No recovery snapshot found');
+      setStatus('No recovery snapshot found');
       return;
     }
     applySavedData(data);
-    setStatus('🛟 Recovered autosave');
+    setStatus('Recovered autosave');
   };
 
   // Called by the scene once terrain generation finishes — applies any
@@ -514,9 +566,9 @@ function AppRuntime() {
     if (ok) {
       refreshWorld();
       if (data.camera) cameraBus.emit({ type: 'restore', ...data.camera });
-      setStatus('📂 World loaded');
+      setStatus('World loaded');
     } else {
-      setStatus('⚠ Load failed');
+      setStatus('Load failed');
     }
   }, [refreshWorld]);
 
@@ -573,8 +625,16 @@ function AppRuntime() {
       if (e.key === 'Escape') {
         if (appView !== 'gameplay' || !sceneReady) return;
         e.preventDefault();
-        if (settingsOpen) setSettingsOpen(false);
+        if (helpOpen) { setHelpOpen(false); setIsPaused(false); }
+        else if (trainControlsOpen) setTrainControlsOpen(false);
+        else if (settingsOpen) setSettingsOpen(false);
         else setIsPaused((value) => !value);
+        return;
+      }
+      if (e.key === 'F9') {
+        if (!showDebug || appView !== 'gameplay' || !sceneReady) return;
+        e.preventDefault();
+        setDebugOverlayVisible((value) => !value);
         return;
       }
       if (isPaused) return;
@@ -600,23 +660,58 @@ function AppRuntime() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [appView, doUndo, doRedo, isPaused, sceneReady, settingsOpen]);
+  }, [appView, doUndo, doRedo, helpOpen, isPaused, sceneReady, settingsOpen, showDebug, trainControlsOpen]);
+
+  const copyDiagnostics = useCallback(async () => {
+    const report = [
+      'MyTrainWorld diagnostics',
+      `World: ${currentWorldNameRef.current || 'none'}`,
+      `Terrain: ${terrainSize.length} x ${terrainSize.breadth}, seed ${terrainSeed}`,
+      `Tracks: ${trackManagerRef.current.getAllTracks().length}`,
+      `Trains: ${trainManagerRef.current.getAllTrains().length}`,
+      `Settings: ${debugDetail} diagnostics, ${debugPosition}`,
+      `Viewport: ${window.innerWidth} x ${window.innerHeight} @ ${window.devicePixelRatio || 1}x`,
+      `User agent: ${navigator.userAgent}`,
+    ].join('\n');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
+      await navigator.clipboard.writeText(report);
+      setStatus('Diagnostics copied');
+    } catch {
+      setStatus('Clipboard unavailable');
+    }
+  }, [debugDetail, debugPosition, terrainSeed, terrainSize]);
+
+  const captureWorldThumbnail = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !canvas.width || !canvas.height) return null;
+    try {
+      const target = document.createElement('canvas');
+      target.width = 320;
+      target.height = 180;
+      const context = target.getContext('2d');
+      context.drawImage(canvas, 0, 0, target.width, target.height);
+      return target.toDataURL('image/jpeg', 0.65);
+    } catch {
+      return null;
+    }
+  }, []);
 
   const saveCurrentWorldLocally = useCallback(() => {
     const id = currentWorldIdRef.current;
     if (!id) {
-      setWorldStatus('World is still loading');
+      setStatus('World is still loading');
       return false;
     }
-    const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current });
+    const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current, thumbnail: captureWorldThumbnail() });
     if (!saved.ok) {
-      setWorldStatus('Local save unavailable');
+      setStatus('Local save unavailable');
       return false;
     }
     refreshLibrary();
-    setWorldStatus('Saved locally');
+    setStatus('Saved locally');
     return true;
-  }, [makeWorldPayload, refreshLibrary]);
+  }, [captureWorldThumbnail, makeWorldPayload, refreshLibrary]);
 
   const handleSceneProgress = useCallback((progress) => {
     setLoadProgress(0.8 + progress * 0.2);
@@ -630,6 +725,7 @@ function AppRuntime() {
       const result = createWorldRecord({
         name: pendingNewWorld.name,
         snapshot: captureWorld(makeWorldPayload()),
+        thumbnail: captureWorldThumbnail(),
       });
       if (result.ok) {
         setCurrentWorldId(result.world.meta.id);
@@ -640,7 +736,7 @@ function AppRuntime() {
       }
       pendingNewWorldRef.current = null;
     }
-  }, [makeWorldPayload, refreshLibrary]);
+  }, [captureWorldThumbnail, makeWorldPayload, refreshLibrary]);
 
   if (isLoading) {
     return <LoadingScreen progress={loadProgress} />;
@@ -656,6 +752,8 @@ function AppRuntime() {
         onCreateWorld={createNewWorld}
         onImportWorld={handleLoadWorld}
         onRenameWorld={handleRenameWorld}
+        onDuplicateWorld={handleDuplicateWorld}
+        onExportWorld={handleExportWorld}
         onDeleteWorld={handleDeleteWorld}
         frameLimit={frameLimit}
         onFrameLimitChange={setFrameLimit}
@@ -666,9 +764,18 @@ function AppRuntime() {
         globalGraphics={globalGraphics}
         onGlobalGraphicsChange={(patch) => setGlobalGraphics((value) => ({ ...value, ...patch }))}
         showDebug={showDebug}
-        onToggleDebug={setShowDebug}
+        onToggleDebug={(value) => { setShowDebug(value); setDebugOverlayVisible(value); }}
         showAxes={showAxes}
         onToggleAxes={setShowAxes}
+        debugDetail={debugDetail}
+        onDebugDetailChange={setDebugDetail}
+        debugPosition={debugPosition}
+        onDebugPositionChange={setDebugPosition}
+        onCopyDiagnostics={copyDiagnostics}
+        showTechnicalInfo={showTechnicalInfo}
+        onToggleTechnicalInfo={setShowTechnicalInfo}
+        accessibility={accessibility}
+        onAccessibilityChange={(patch) => setAccessibility((value) => ({ ...value, ...patch }))}
       />
     );
   }
@@ -679,7 +786,9 @@ function AppRuntime() {
       <GameScene 
         terrainSize={terrainSize} 
         terrainSeed={terrainSeed}
-        showDebug={showDebug}
+        showDebug={showDebug && debugOverlayVisible}
+        debugDetail={debugDetail}
+        debugPosition={debugPosition}
         showAxes={showAxes}
         paused={isPaused}
         trackManager={trackManagerRef.current}
@@ -713,15 +822,31 @@ function AppRuntime() {
         selectedTrainId={selection?.kind === 'train' ? selection.id : null}
         roadManager={roadManagerRef.current}
         signalManager={signalManagerRef.current}
+        onCanvasReady={(canvas) => { canvasRef.current = canvas; }}
       />
       
       <PauseMenu
         isPaused={isPaused}
+        helpOpen={helpOpen}
         settingsOpen={settingsOpen}
         onResume={() => { setSettingsOpen(false); setIsPaused(false); }}
         onOpenSettings={() => setSettingsOpen(true)}
         onCloseSettings={() => setSettingsOpen(false)}
         onSave={saveCurrentWorldLocally}
+        recoveryAvailable={hasRecoverySnapshot()}
+        onRecover={handleRecoverWorld}
+        onResetOverview={() => cameraBus.emit({ type: 'reset', terrainSize })}
+        onFrameRailway={() => cameraBus.emit({ type: 'frame', terrainSize })}
+        diagnosticsEnabled={showDebug}
+        diagnosticsVisible={showDebug && debugOverlayVisible}
+        onToggleDiagnostics={() => setDebugOverlayVisible((value) => !value)}
+        trainControlsOpen={trainControlsOpen}
+        onOpenTrainControls={() => setTrainControlsOpen(true)}
+        onCloseTrainControls={() => setTrainControlsOpen(false)}
+        trainManager={trainManagerRef.current}
+        followTrainId={followTrainId}
+        onFollowTrain={setFollowTrainId}
+        history={historyRef.current}
         onExit={() => { saveCurrentWorldLocally(); setSettingsOpen(false); setIsPaused(false); setAppView('menu'); }}
         timeOfDay={timeOfDay}
         onTimeChange={setTimeOfDay}
@@ -751,6 +876,21 @@ function AppRuntime() {
         onAudioVolumeChange={(patch) => setAudioVolumes((v) => ({ ...v, ...patch }))}
         worldStatus={worldStatus}
       />
+
+      <GameHud
+        worldName={currentWorldName}
+        worldStatus={worldStatus}
+        sceneReady={sceneReady}
+        selectedTool={selectedTool}
+        rotation={rotation}
+        heightOffset={heightOffset}
+        onUndo={doUndo}
+        onRedo={doRedo}
+        onHelp={() => { setHelpOpen(true); setIsPaused(true); }}
+        onPause={() => setIsPaused(true)}
+      />
+      {helpOpen && <HelpPanel onClose={() => { setHelpOpen(false); setIsPaused(false); }} />}
+      <ToastRegion message={worldStatus} onDismiss={() => setWorldStatus('')} />
       
       {/* Hotbar */}
       <Hotbar
@@ -775,6 +915,7 @@ function AppRuntime() {
         onFollowTrain={setFollowTrainId}
         onSelect={setSelection}
         onRefreshWorld={refreshWorld}
+        showTechnicalInfo={showTechnicalInfo}
       />
       
       {/* Height Control Indicator - Moved to bottom-left */}

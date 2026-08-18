@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import EnvironmentSettings from './EnvironmentSettings';
 import PerformanceSettings from './PerformanceSettings';
 
@@ -32,6 +33,7 @@ export default function WorldSettingsModal({
   onAudioVolumeChange,
   worldStatus,
 }) {
+  const [tab, setTab] = useState('environment');
   if (!isOpen) return null;
 
   return (
@@ -47,7 +49,12 @@ export default function WorldSettingsModal({
         </div>
 
         <div className="space-y-5">
-          <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => setTab('environment')} className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold ${tab === 'environment' ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={tab === 'environment'}>Environment and audio</button>
+            <button type="button" onClick={() => setTab('performance')} className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold ${tab === 'performance' ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={tab === 'performance'}>Performance</button>
+          </div>
+
+          {tab === 'environment' && <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
             <EnvironmentSettings
               timeOfDay={timeOfDay}
               onTimeChange={onTimeChange}
@@ -72,16 +79,16 @@ export default function WorldSettingsModal({
               audioVolumes={audioVolumes}
               onAudioVolumeChange={onAudioVolumeChange}
             />
-          </section>
+          </section>}
 
-          <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
+          {tab === 'performance' && <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
             <PerformanceSettings
               frameLimit={frameLimit}
               vsync={vsync}
               onFrameLimitChange={onFrameLimitChange}
               onVsyncChange={onVsyncChange}
             />
-          </section>
+          </section>}
         </div>
 
         {worldStatus && <p className="mt-4 rounded-xl bg-[#244b67] px-3 py-2 text-sm text-[#f7f0df]" role="status">{worldStatus}</p>}

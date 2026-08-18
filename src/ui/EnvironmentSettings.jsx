@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
+import { UI_ICONS } from './iconRegistry';
 
 const TIME_OPTIONS = [
-  { value: 'dawn', label: '🌅 Dawn', color: '#ff9966' },
-  { value: 'day', label: '☀️ Day', color: '#87ceeb' },
-  { value: 'dusk', label: '🌆 Dusk', color: '#ff6b6b' },
-  { value: 'night', label: '🌙 Night', color: '#2c3e50' }
+  { value: 'dawn', label: 'Dawn', icon: 'dawn', color: '#ff9966' },
+  { value: 'day', label: 'Day', icon: 'day', color: '#87ceeb' },
+  { value: 'dusk', label: 'Dusk', icon: 'dusk', color: '#ff6b6b' },
+  { value: 'night', label: 'Night', icon: 'night', color: '#2c3e50' }
 ];
 
 const SHADOW_OPTIONS = [
-  { value: 'none', label: '🚫 Off' },
-  { value: 'hard', label: '🔦 Hard' },
-  { value: 'soft', label: '☁️ Soft' },
+  { value: 'none', label: 'Off', icon: 'shadowOff' },
+  { value: 'hard', label: 'Hard', icon: 'shadowHard' },
+  { value: 'soft', label: 'Soft', icon: 'shadowSoft' },
 ];
 
 function EnvironmentSettings({ 
@@ -55,6 +56,7 @@ function EnvironmentSettings({
       />
     </div>
   );
+  const icon = (key) => <img src={UI_ICONS.environment[key]} alt="" aria-hidden="true" className="inline-block h-5 w-5 object-contain align-middle" />;
 
   return (
     <div className="mb-4">
@@ -62,7 +64,7 @@ function EnvironmentSettings({
         className="w-full flex justify-between items-center p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className="font-bold">🌍 Environment</span>
+        <span className="font-bold">Environment</span>
         <span className="text-sm">{isOpen ? '▼' : '▶'}</span>
       </button>
       
@@ -87,7 +89,7 @@ function EnvironmentSettings({
                     borderLeft: `4px solid ${option.color}`
                   }}
                 >
-                  {option.label}
+                  {icon(option.icon)} <span className="ml-1">{option.label}</span>
                 </button>
               ))}
             </div>
@@ -96,7 +98,7 @@ function EnvironmentSettings({
           {/* Fog Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🌫️ Fog
+              {icon('fog')} Fog
             </label>
             <button
               onClick={() => onFogEnabledChange(!fogEnabled)}
@@ -150,7 +152,7 @@ function EnvironmentSettings({
                       : 'bg-gray-700 hover:bg-gray-600'
                   }`}
                 >
-                  {option.label}
+                  {icon(option.icon)} <span className="ml-1">{option.label}</span>
                 </button>
               ))}
             </div>
@@ -159,7 +161,7 @@ function EnvironmentSettings({
           {/* Miniature Tilt-Shift Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🔍 Miniature Mode (Tilt-Shift)
+              {icon('miniature')} Miniature Mode (Tilt-Shift)
             </label>
             <button
               onClick={() => onTiltShiftChange && onTiltShiftChange(!tiltShiftEnabled)}
@@ -178,7 +180,7 @@ function EnvironmentSettings({
           {/* Cel Shading Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🎨 Cel Shading (Toon)
+              {icon('cel')} Cel Shading (Toon)
             </label>
             <button
               onClick={() => onCelShadingChange && onCelShadingChange(!celShadingEnabled)}
@@ -197,7 +199,7 @@ function EnvironmentSettings({
           {/* Ambient Activity Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🌾 Ambient Activity
+              {icon('activity')} Ambient Activity
             </label>
             <button
               onClick={() => onAmbientChange && onAmbientChange(!ambientEnabled)}
@@ -216,7 +218,7 @@ function EnvironmentSettings({
           {/* Train Sounds Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🔔 Train Sounds
+              {icon('audioTrain')} Train Sounds
             </label>
             <button
               onClick={() => onSoundsChange && onSoundsChange(!soundsEnabled)}
@@ -235,16 +237,16 @@ function EnvironmentSettings({
           {/* Audio volumes */}
           {audioVolumes && onAudioVolumeChange && (
             <div className="space-y-2 pt-1 border-t border-gray-700">
-              {volumeSlider('🔊 Master Volume', 'master')}
-              {volumeSlider('🚂 Train Volume (whistle/bell)', 'train')}
-              {volumeSlider('🚧 Crossing Volume (bell/motor)', 'crossing')}
+              {volumeSlider('Master Volume', 'master')}
+              {volumeSlider('Train Volume (whistle/bell)', 'train')}
+              {volumeSlider('Crossing Volume (bell/motor)', 'crossing')}
             </div>
           )}
 
           {/* Roads & Traffic Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🛣️ Roads & Traffic
+              {icon('traffic')} Roads & Traffic
             </label>
             <button
               onClick={() => onTrafficChange && onTrafficChange(!trafficEnabled)}
@@ -263,7 +265,7 @@ function EnvironmentSettings({
           {/* Signals & Crossings Toggle */}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
-              🚦 Signals & Crossings
+              {icon('signals')} Signals & Crossings
             </label>
             <button
               onClick={() => onSignalsChange && onSignalsChange(!signalsEnabled)}

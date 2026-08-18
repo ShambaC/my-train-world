@@ -526,7 +526,10 @@ export default function GameScene({
   selectedTrainId = null,
   roadManager,
   signalManager,
+  onCanvasReady,
   paused = false,
+  debugDetail = 'compact',
+  debugPosition = 'top-left',
 }) {
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
@@ -732,6 +735,7 @@ export default function GameScene({
         shadows
         frameloop="never"
         gl={{ antialias: true }}
+        onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
       >
         <RenderScheduler frameLimit={frameLimit} vsync={vsync} paused={paused} />
         <Scene 
@@ -823,42 +827,27 @@ export default function GameScene({
       
       {/* Debug Overlay */}
       {showDebug && (
-        <div className="absolute top-4 left-4 bg-black bg-opacity-70 text-white px-4 py-3 rounded-lg font-mono text-sm space-y-1">
+        <div className={`absolute z-30 max-w-[min(32rem,calc(100vw-2rem))] rounded-lg bg-black/70 px-4 py-3 font-mono text-sm text-white ${
+          debugPosition === 'top-right' ? 'right-4 top-4' :
+          debugPosition === 'bottom-left' ? 'bottom-4 left-4' :
+          debugPosition === 'bottom-right' ? 'bottom-4 right-4' : 'left-4 top-4'
+        }`}>
           <div className="font-bold text-green-400 mb-2">Debug Info</div>
           <div>FPS: {fps}</div>
-          <div>Voxels: {sceneStats.voxelCount.toLocaleString()}</div>
           <div>Tracks: {trackCount}</div>
           <div>Trains: {trainCount}</div>
-          <div>Stations: {stationCount}</div>
           <div>Terrain: {terrainSize.length} × {terrainSize.breadth}</div>
-          {sceneStats.genTimeMs > 0 && <div>Terrain gen: {sceneStats.genTimeMs} ms</div>}
-          {sceneStats.diagnostics && (
-            <div className="text-xs text-gray-400">
-              <div>Flat regions: {sceneStats.diagnostics.regionCount} • Build spots: {sceneStats.diagnostics.candidates}</div>
-              <div>Largest flat: {sceneStats.diagnostics.largestArea} cells • Corridor: {sceneStats.diagnostics.longestCorridor} cells</div>
-            </div>
-          )}
-          {memStats.jsHeapMB >= 0 && <div>Memory: {memStats.jsHeapMB} MB</div>}
-          <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
-          <div>Draw calls: {memStats.drawCalls} • Tris: {memStats.triangles.toLocaleString()}</div>
-          <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
-          {selectedTool && (
-            <div className="pt-2 border-t border-gray-600">
-              <div>Tool: {selectedTool.name}</div>
-              {selectedTool.type === 'station' ? (
-                <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div>
-              ) : (
-                <div>Rotation: {rotation}°</div>
-              )}
-              {heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}
-            </div>
-          )}
-          <div className="pt-2 text-xs text-gray-400">
-            <div>Controls:</div>
-            <div>• Left Mouse: Rotate</div>
-            <div>• Right Mouse: Pan</div>
-            <div>• Scroll: Zoom</div>
-          </div>
+          {debugDetail === 'full' && <>
+            <div>Stations: {stationCount}</div>
+            <div>Voxels: {sceneStats.voxelCount.toLocaleString()}</div>
+            {sceneStats.genTimeMs > 0 && <div>Terrain gen: {sceneStats.genTimeMs} ms</div>}
+            {sceneStats.diagnostics && <div className="text-xs text-gray-400"><div>Flat regions: {sceneStats.diagnostics.regionCount} • Build spots: {sceneStats.diagnostics.candidates}</div><div>Largest flat: {sceneStats.diagnostics.largestArea} cells • Corridor: {sceneStats.diagnostics.longestCorridor} cells</div></div>}
+            {memStats.jsHeapMB >= 0 && <div>Memory: {memStats.jsHeapMB} MB</div>}
+            <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
+            <div>Draw calls: {memStats.drawCalls} • Tris: {memStats.triangles.toLocaleString()}</div>
+            <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
+            {selectedTool && <div className="border-t border-gray-600 pt-2"><div>Tool: {selectedTool.name}</div>{selectedTool.type === 'station' ? <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div> : <div>Rotation: {rotation}°</div>}{heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}</div>}
+          </>}
         </div>
       )}
     </div>
