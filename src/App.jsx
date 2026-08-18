@@ -15,7 +15,6 @@ import { loadSettings, saveSettings } from "./utils/settings";
 import { HistoryManager } from "./utils/history";
 import { cameraBus } from "./utils/cameraBus";
 import { trainAudio } from "./audio/trainAudio";
-import { UI_ICONS } from "./ui/iconRegistry";
 import { RoadManager } from "./environment/roadNetwork";
 import { SignalManager } from "./signals/SignalManager";
 import { ATLAS_TEXTURE_COUNT, preloadAtlases } from "./utils/atlasTextures";
@@ -132,6 +131,7 @@ function AppRuntime() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [terrainSeed, setTerrainSeed] = useState(1337);
   const [showDebug, setShowDebug] = useState(() => loadSettings().developerDiagnostics ?? false);
+  const [showAxes, setShowAxes] = useState(() => loadSettings().showAxes ?? false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);
   const [rotation, setRotation] = useState(0);
@@ -260,6 +260,9 @@ function AppRuntime() {
   useEffect(() => {
     saveSettings({ developerDiagnostics: showDebug });
   }, [showDebug]);
+  useEffect(() => {
+    saveSettings({ showAxes });
+  }, [showAxes]);
 
   // Track engine count so the coach tool can be gated on it
   useEffect(() => {
@@ -568,6 +571,7 @@ function AppRuntime() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
+        if (appView !== 'gameplay' || !sceneReady) return;
         e.preventDefault();
         if (settingsOpen) setSettingsOpen(false);
         else setIsPaused((value) => !value);
@@ -596,7 +600,7 @@ function AppRuntime() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [doUndo, doRedo, isPaused, settingsOpen]);
+  }, [appView, doUndo, doRedo, isPaused, sceneReady, settingsOpen]);
 
   const saveCurrentWorldLocally = useCallback(() => {
     const id = currentWorldIdRef.current;
@@ -663,6 +667,8 @@ function AppRuntime() {
         onGlobalGraphicsChange={(patch) => setGlobalGraphics((value) => ({ ...value, ...patch }))}
         showDebug={showDebug}
         onToggleDebug={setShowDebug}
+        showAxes={showAxes}
+        onToggleAxes={setShowAxes}
       />
     );
   }
@@ -674,7 +680,7 @@ function AppRuntime() {
         terrainSize={terrainSize} 
         terrainSeed={terrainSeed}
         showDebug={showDebug}
-        showAxes={false}
+        showAxes={showAxes}
         paused={isPaused}
         trackManager={trackManagerRef.current}
         stationManager={stationManagerRef.current}
@@ -782,25 +788,6 @@ function AppRuntime() {
         </div>
       )}
       
-      {/* Title Overlay */}
-      <div className="absolute left-4 top-4 z-30 rounded-xl border border-white/10 bg-[#101a2b]/75 px-3 py-2 shadow-lg backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <img
-            src={UI_ICONS.brandMark}
-            alt=""
-            aria-hidden="true"
-            className="h-8 w-8 object-contain drop-shadow-lg"
-            draggable={false}
-          />
-          <h1 className="text-2xl font-bold text-white drop-shadow-lg">
-            MyTrainWorld
-          </h1>
-        </div>
-        <p className="mt-0.5 text-xs text-[#aebbd0] drop-shadow">
-          Build your railway empire
-        </p>
-      </div>
-
       {!sceneReady && <LoadingScreen progress={loadProgress} />}
     </div>
   );

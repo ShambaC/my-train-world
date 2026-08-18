@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import menuArt from '../assets/ui/ui-menu-key-art.png';
 import { UI_ICONS } from './iconRegistry';
 
@@ -29,11 +29,10 @@ function formatDate(value) {
 function WorldCard({ world, featured, onOpen, onRename, onDelete }) {
   return (
     <article
-      className={`group relative min-w-0 overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 ${
-        featured
-          ? 'border-[#e5a94f]/70 bg-[#22344b] shadow-[0_0_0_1px_rgba(229,169,79,0.14)]'
-          : 'border-white/10 bg-[#18263b]/90 hover:border-[#63c9dc]/60'
-      }`}
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border text-left transition hover:-translate-y-0.5 ${featured
+        ? 'border-[#e5a94f]/70 bg-[#22344b] shadow-[0_0_0_1px_rgba(229,169,79,0.14)]'
+        : 'border-white/10 bg-[#18263b]/90 hover:border-[#63c9dc]/60'
+        }`}
     >
       <div className="relative h-24 overflow-hidden bg-[#101a2b]">
         {world.thumbnail ? (
@@ -185,11 +184,25 @@ export default function MainMenu({
   onGlobalGraphicsChange,
   showDebug,
   onToggleDebug,
+  showAxes,
+  onToggleAxes,
 }) {
   const [view, setView] = useState('home');
   const [showNewWorld, setShowNewWorld] = useState(false);
   const [renameTarget, setRenameTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      if (showNewWorld) setShowNewWorld(false);
+      else if (renameTarget) setRenameTarget(null);
+      else if (deleteTarget) setDeleteTarget(null);
+      else if (view !== 'home') setView('home');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteTarget, renameTarget, showNewWorld, view]);
 
   const volume = (key, label) => (
     <label className="block text-sm font-semibold text-[#c5d0df]">
@@ -214,10 +227,10 @@ export default function MainMenu({
       <div className="fixed inset-0 bg-[linear-gradient(115deg,rgba(11,20,34,0.46),rgba(11,20,34,0.2)_52%,rgba(11,20,34,0.58))]" />
 
       <div className="relative mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col px-5 py-8 sm:px-8 lg:px-12">
-        <header className="flex shrink-0 justify-center">
+        <header className="flex shrink-0 justify-center pt-5 sm:pt-8">
           <div className="flex items-center gap-3">
-            <img src={UI_ICONS.brandMark} alt="" aria-hidden="true" className="h-12 w-12 object-contain" draggable={false} />
-            <h1 className="font-game text-4xl tracking-tight sm:text-5xl">MyTrainWorld</h1>
+            <img src={UI_ICONS.brandMark} alt="" aria-hidden="true" className="h-20 w-20 object-contain sm:h-20 sm:w-20" draggable={false} />
+            <h1 className="font-game text-9xl tracking-tight sm:text-9xl">MyTrainWorld</h1>
           </div>
         </header>
 
@@ -270,14 +283,17 @@ export default function MainMenu({
         )}
 
         {view === 'settings' && (
-          <section className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain py-6 sm:py-8">
-            <div className="mx-auto w-full max-w-xl rounded-3xl border border-white/10 bg-[#101a2b]/90 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
+          <section className="flex min-h-0 flex-1 flex-col py-6 sm:py-8">
+            <div className="mx-auto flex w-full max-w-xl shrink-0 justify-start pb-3">
+              <button type="button" onClick={() => setView('home')} className="rounded-xl border border-white/15 bg-[#101a2b]/90 px-4 py-2 text-sm font-semibold text-[#c5d0df] hover:border-[#63c9dc]">Back</button>
+            </div>
+            <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
+              <div className="mx-auto w-full max-w-xl rounded-3xl border border-white/10 bg-[#101a2b]/90 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#63c9dc]">Global defaults</div>
                   <h2 className="mt-1 text-2xl font-bold">Settings</h2>
                 </div>
-                <button type="button" onClick={() => setView('home')} className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-[#c5d0df] hover:border-[#63c9dc]">Back</button>
               </div>
               <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
 
@@ -345,13 +361,22 @@ export default function MainMenu({
                 {graphicsToggle('trafficEnabled', 'Road traffic', 'Cars, carts, bikes, and walkers')}
                 {graphicsToggle('signalsEnabled', 'Signals and crossings', 'Rail signals and road crossings')}
 
-                <label className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-[#e5a94f]/30 bg-[#244b67]/35 p-3">
+                <div className="pt-2 text-sm font-semibold text-[#c5d0df]">Developer tools</div>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>
-                    <span className="block text-sm font-semibold text-[#f7f0df]">Developer diagnostics</span>
+                    <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
                     <span className="mt-0.5 block text-xs text-[#aebbd0]">Show FPS, WebGL, world, and interaction values in gameplay.</span>
                   </span>
                   <input type="checkbox" checked={showDebug} onChange={(event) => onToggleDebug(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#e5a94f]" />
                 </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                  <span>
+                    <span className="block text-sm font-semibold text-[#c5d0df]">Axis gizmo</span>
+                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the world orientation helper during gameplay.</span>
+                  </span>
+                  <input type="checkbox" checked={showAxes} onChange={(event) => onToggleAxes(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
+                </label>
+              </div>
               </div>
             </div>
           </section>
