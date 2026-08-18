@@ -46,7 +46,7 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
             Build tools
           </span>
           <span className="hidden text-[10px] text-[#aebbd0] sm:inline">
-             R rotate
+            R rotate · Q/E bridge height
           </span>
         </div>
 
@@ -107,7 +107,8 @@ export default function Hotbar({ tools, selectedIndex, onSelect, onRotate, disab
         {/* Instructions */}
         <div className="mt-1.5 hidden text-center text-[10px] text-[#aebbd0] sm:block">
           Press <kbd className="bg-gray-900 px-1 rounded">1-9</kbd> to select •
-           <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> to rotate
+          <kbd className="bg-gray-900 px-1 rounded ml-1">R</kbd> rotate •
+          <kbd className="bg-gray-900 px-1 rounded ml-1">Q/E</kbd> bridge height
         </div>
       </div>
     </div>

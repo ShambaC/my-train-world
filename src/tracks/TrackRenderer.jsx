@@ -126,7 +126,7 @@ export default function TrackRenderer({
       if (st) target = { kind: 'station', id: st.id };
     }
     if (!target && roadManagerRef.current) {
-      const rd = roadManagerRef.current.getRoadAtPosition(point);
+      const rd = roadManagerRef.current.findRoadAtPosition(point);
       if (rd) target = { kind: 'road', id: rd.id };
     }
     return target;

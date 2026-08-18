@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { cameraBus } from '../utils/cameraBus';
 import {
   connectedComponent,
@@ -31,6 +31,7 @@ export default function SelectionPanel({
   showTechnicalInfo = false,
 }) {
   const [now, setNow] = useState(Date.now());
+  const panelRef = useRef(null);
 
   // Refresh inspection numbers periodically (trains move, counts change).
   useEffect(() => {
@@ -47,6 +48,15 @@ export default function SelectionPanel({
     if (selection.kind === 'track') alive = !!trackManager.getTrack(selection.id);
     if (!alive) onSelect?.(null);
   }, [selection, now, trainManager, stationManager, trackManager, onSelect]);
+
+  useEffect(() => {
+    if (!selection) return undefined;
+    const handleOutsidePointerDown = (event) => {
+      if (!panelRef.current?.contains(event.target)) onSelect?.(null);
+    };
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [selection, onSelect]);
 
   if (!selection) return null;
 
@@ -163,7 +173,7 @@ export default function SelectionPanel({
   }
 
   return (
-    <div className="absolute bottom-24 left-4 z-50 w-80 max-w-[90vw] bg-black bg-opacity-75 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-sm space-y-2">
+    <div ref={panelRef} role="dialog" aria-label={`${title} inspection`} className="absolute bottom-24 left-4 z-50 w-80 max-w-[90vw] bg-black bg-opacity-75 backdrop-blur-sm text-white px-4 py-3 rounded-lg text-sm space-y-2">
       <div className="flex items-center justify-between">
         <div className="font-bold text-green-400">{title}</div>
         <button type="button" className="text-gray-400 hover:text-white text-xs px-1" onClick={() => onSelect?.(null)} title="Close details">×</button>
