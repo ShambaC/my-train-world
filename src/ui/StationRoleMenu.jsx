@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { STATION_ROLES, DEFAULT_ROLE } from '../stations/stationRoles';
+import { UI_ICONS } from './iconRegistry';
 
 /**
  * Radial station role picker — opens after placing a station.
@@ -34,7 +35,13 @@ export default function StationRoleMenu({ x, y, onSelect, onClose }) {
       <div className="absolute" style={{ left: -hub, top: -hub }}>
         {/* Hub */}
         <div className="w-[80px] h-[80px] rounded-full bg-gray-800 border-2 border-green-500 flex flex-col items-center justify-center shadow-2xl pointer-events-none">
-          <span className="text-lg">🚉</span>
+          <img
+            src={UI_ICONS.hubs.stationRole}
+            alt=""
+            aria-hidden="true"
+            className="w-7 h-7 object-contain"
+            draggable={false}
+          />
           <span className="text-[9px] text-gray-300">Role</span>
           <span className="text-[8px] text-gray-500">(village = default)</span>
         </div>

@@ -6,6 +6,7 @@ import gasImg from '../assets/Images/gas_coach.png';
 import goodsImg from '../assets/Images/goods_coach.png';
 import containerCoachImg from '../assets/Images/container_coach.png';
 import viewdeckImg from '../assets/Images/viewdeck_coach.png';
+import { UI_ICONS } from './iconRegistry';
 
 const COACH_IMAGES = {
   'passenger-coach': passengerImg,
@@ -52,7 +53,13 @@ export default function CoachMenu({ x, y, onSelect, onClose }) {
       <div className="absolute" style={{ left: -hub, top: -hub }}>
         {/* Hub */}
         <div className="w-[68px] h-[68px] rounded-full bg-gray-800 border-2 border-blue-500 flex flex-col items-center justify-center shadow-2xl pointer-events-none">
-          <span className="text-lg">🚃</span>
+          <img
+            src={UI_ICONS.hubs.coach}
+            alt=""
+            aria-hidden="true"
+            className="w-7 h-7 object-contain"
+            draggable={false}
+          />
           <span className="text-[9px] text-gray-300">Coach</span>
         </div>
 

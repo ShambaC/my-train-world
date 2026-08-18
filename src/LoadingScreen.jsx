@@ -1,3 +1,5 @@
+import { UI_ICONS } from './ui/iconRegistry';
+
 export default function LoadingScreen({ progress }) {
   const display = Math.round(Math.max(0, Math.min(1, progress || 0)) * 100);
 
@@ -6,8 +8,15 @@ export default function LoadingScreen({ progress }) {
       <div className="text-center">
         {/* Logo/Title */}
         <div className="mb-8">
+          <img
+            src={UI_ICONS.brandMark}
+            alt=""
+            aria-hidden="true"
+            className="w-24 h-24 object-contain mx-auto mb-3 animate-pulse"
+            draggable={false}
+          />
           <h1 className="text-6xl font-bold text-white mb-4 animate-pulse">
-            🚂 MyTrainWorld
+            MyTrainWorld
           </h1>
           <p className="text-xl text-gray-300">
             Building your railway empire...

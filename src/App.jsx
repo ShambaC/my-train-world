@@ -13,6 +13,7 @@ import { loadSettings, saveSettings } from "./utils/settings";
 import { HistoryManager } from "./utils/history";
 import { cameraBus } from "./utils/cameraBus";
 import { trainAudio } from "./audio/trainAudio";
+import { UI_ICONS } from "./ui/iconRegistry";
 import { RoadManager } from "./environment/roadNetwork";
 import { SignalManager } from "./signals/SignalManager";
 import { ATLAS_TEXTURE_COUNT, preloadAtlases } from "./utils/atlasTextures";
@@ -618,9 +619,18 @@ function App() {
       
       {/* Title Overlay */}
       <div className="absolute bottom-4 left-4 z-30">
-        <h1 className="text-white text-3xl font-bold drop-shadow-lg">
-          🚂 MyTrainWorld
-        </h1>
+        <div className="flex items-center gap-2">
+          <img
+            src={UI_ICONS.brandMark}
+            alt=""
+            aria-hidden="true"
+            className="w-9 h-9 object-contain drop-shadow-lg"
+            draggable={false}
+          />
+          <h1 className="text-white text-3xl font-bold drop-shadow-lg">
+            MyTrainWorld
+          </h1>
+        </div>
         <p className="text-gray-300 text-sm mt-1 drop-shadow">
           Build your railway empire
         </p>

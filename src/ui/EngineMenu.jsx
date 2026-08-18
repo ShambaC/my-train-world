@@ -4,6 +4,7 @@ import steamImg from '../assets/Images/steam_engine.png';
 import dieselImg from '../assets/Images/diesel_engine.png';
 import electricImg from '../assets/Images/electric_engine.png';
 import checkerImg from '../assets/Images/checker_engine.png';
+import { UI_ICONS } from './iconRegistry';
 
 const ENGINE_IMAGES = {
   'steam-engine': steamImg,
@@ -46,7 +47,13 @@ export default function EngineMenu({ x, y, currentEngine = 'steam-engine', onSel
       <div className="absolute" style={{ left: -hub, top: -hub }}>
         {/* Center Hub */}
         <div className="w-[72px] h-[72px] rounded-full bg-gray-800 border-2 border-amber-500 flex flex-col items-center justify-center shadow-2xl pointer-events-none">
-          <span className="text-lg">🚂</span>
+          <img
+            src={UI_ICONS.hubs.engine}
+            alt=""
+            aria-hidden="true"
+            className="w-7 h-7 object-contain"
+            draggable={false}
+          />
           <span className="text-[9px] text-gray-300 font-semibold">Engine</span>
         </div>
 
