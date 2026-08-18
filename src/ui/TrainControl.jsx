@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { cameraBus } from '../utils/cameraBus';
 import { clone } from '../utils/editActions';
 import { UI_ICONS } from './iconRegistry';
+import { trainAudio } from '../audio/trainAudio';
 
 /**
  * Train Control Panel - Manage individual trains + global speed setting.
@@ -43,6 +44,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
       });
     }
     trainManager.removeTrain(trainId);
+    trainAudio.deleted('train');
     setTrains([...trainManager.getAllTrains()]);
   };
 
@@ -59,6 +61,7 @@ export default function TrainControl({ trainManager, followTrainId = null, onFol
       });
     }
     trainManager.removeCoach(trainId, coachId);
+    trainAudio.coachRemoved();
     setTrains([...trainManager.getAllTrains()]);
   };
 

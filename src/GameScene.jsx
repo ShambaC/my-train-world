@@ -165,6 +165,7 @@ function Scene({
 
     lighting.update(delta);
     advanceWind(delta);
+    trainAudio.updateAmbient(camera, terrain?.userData, timeOfDay);
 
     // Train follow camera
     const controls = orbitRef.current;
@@ -569,10 +570,22 @@ export default function GameScene({
       : (setStationsScatterVersion(v => v + 1), null);
   };
 
-  // Ambient sound master switch
+  // Train/tool/station/crossing sound switch.
   useEffect(() => {
-    trainAudio.setEnabled(soundsEnabled);
+    trainAudio.setTrainEnabled(soundsEnabled);
   }, [soundsEnabled]);
+
+  useEffect(() => {
+    trainAudio.setAmbientEnabled(ambientEnabled);
+  }, [ambientEnabled]);
+
+  useEffect(() => {
+    trainAudio.startMusic();
+    return () => {
+      trainAudio.stopAmbient();
+      trainAudio.stopMusic();
+    };
+  }, []);
 
   // Cleanup scatter timeout on unmount
   useEffect(() => {
@@ -633,6 +646,7 @@ export default function GameScene({
           redo: () => trainManager.restoreCoach(trainId, coach, idx),
         });
       }
+      if (coach) trainAudio.coachAttached();
       setTrainsVersion(v => v + 1);
     }
     setCoachMenu(null);
@@ -669,6 +683,7 @@ export default function GameScene({
             redo: () => trainManager.restoreTrain(clone(snap)),
           });
         }
+        if (train) trainAudio.trainPlaced();
         setTrainsVersion(v => v + 1);
       } else if (engineMenu.trainId) {
         // Switch engine of existing train

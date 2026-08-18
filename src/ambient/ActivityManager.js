@@ -199,12 +199,12 @@ export class ActivityManager {
       const prev = this.dwellState.get(train.id);
       if (dwelling && prev !== dwelling) {
         this.dwellState.set(train.id, dwelling);
-        trainAudio.whistle();
+        trainAudio.stationArrival(train.engineType, train.position);
         this.unloadRiding(train, dwelling);
         this.boardAtStation(train, dwelling);
       } else if (!dwelling && prev) {
         this.dwellState.delete(train.id);
-        trainAudio.bell();
+        trainAudio.bell(train.position);
       }
     }
 
@@ -316,6 +316,8 @@ export class ActivityManager {
       waiting.coachId = coach.id;
       waiting.trainId = train.id;
       waiting.rideStationId = stationId;
+      if (waiting.type === 'passenger') trainAudio.passengerBoarded(train.position);
+      else trainAudio.cargoLoaded(train.position);
     }
   }
 
@@ -329,6 +331,8 @@ export class ActivityManager {
         item.state = 'arriving';
         item.fadeT = 0;
         item.coachId = null;
+        if (item.type === 'passenger') trainAudio.passengerUnloaded(train.position);
+        else trainAudio.cargoUnloaded(train.position);
         item.axial = 0.6 + Math.random() * (station.lengthCells * 0.5 - 1.2);
         item.side = (Math.random() < 0.5 ? -1 : 1) * (STATION_WIDTH_WORLD / 2 - 0.2);
       }

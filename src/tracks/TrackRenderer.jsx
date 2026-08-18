@@ -14,6 +14,7 @@ import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/edit
 import ModelLibrary from '../models/ModelLibrary';
 import { DEFAULT_COACH } from '../trains/coachTypes';
 import * as THREE from 'three';
+import { trainAudio } from '../audio/trainAudio';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
 const ROAD_GHOST_GEO = new THREE.BoxGeometry(0.75, 0.02, 0.5);
@@ -187,13 +188,14 @@ export default function TrackRenderer({
             { x: ghostPosition.x, y: ghostPosition.y, z: ghostPosition.z },
             ghostPosition.rotation || 0
           );
-          if (road && historyRef.current) {
+           if (road && historyRef.current) {
             const snap = clone(road);
             historyRef.current.push({
               undo: () => roadManagerRef.current.removeRoad(road.id),
               redo: () => roadManagerRef.current.restoreUserRoad(clone(snap)),
-            });
-          }
+              });
+            }
+            if (road) trainAudio.roadPlaced();
         }
       } else if (tool?.type === 'coach') {
         const target = ghostPosition?.target;
@@ -203,15 +205,16 @@ export default function TrackRenderer({
       } else if (tool?.type === 'delete') {
         const target = ghostPosition?.target;
         if (target) {
-          deleteEntity({
+           deleteEntity({
             target,
             trackManager: trackManagerRef.current,
             stationManager: stationManagerRef.current,
             trainManager: trainManagerRef.current,
             signalManager: signalManagerRef.current,
             roadManager: roadManagerRef.current,
-            history: historyRef.current,
-          });
+             history: historyRef.current,
+           });
+           trainAudio.deleted(target.kind);
           if (target.kind === 'track') {
             setTracks(trackManagerRef.current.getAllTracks());
             onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
@@ -232,9 +235,12 @@ export default function TrackRenderer({
             });
           }
           setTracks(trackManagerRef.current.getAllTracks());
-          onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
+           onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
+           trainAudio.trackPlaced(track.type);
+         }
+        } else if (tool && ghostPosition && !isValidPosition) {
+          trainAudio.invalid();
         }
-      }
       mouseDownPosRef.current = null;
     };
 

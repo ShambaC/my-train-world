@@ -9,6 +9,7 @@ import {
   stationsAlongComponent,
 } from '../utils/inspect';
 import { deleteEntity } from '../utils/editActions';
+import { trainAudio } from '../audio/trainAudio';
 
 /**
  * Selection panel — read-only inspection + permissive controls for the
@@ -75,6 +76,7 @@ export default function SelectionPanel({
         roadManager,
         history,
       });
+      trainAudio.deleted(target.kind);
       onSelect?.(null);
       onRefreshWorld?.();
     }

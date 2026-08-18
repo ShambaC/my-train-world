@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
 import { buildStation, STATION_WIDTH_WORLD, easeOutBack } from './StationBuilder';
 import { stripStation, rebuildStation } from '../utils/editActions';
+import { trainAudio } from '../audio/trainAudio';
 
 const GHOST_GREEN = 0x00ff00;
 const GHOST_RED = 0xff0000;
@@ -113,9 +114,10 @@ export default function StationRenderer({
             redo: () => stationManagerRef.current.removeStation(station.id),
           });
         }
-        onStationsChangeRef.current?.();
-        onStationPlacedRef.current?.(station, e.clientX, e.clientY);
-      }
+         onStationsChangeRef.current?.();
+         onStationPlacedRef.current?.(station, e.clientX, e.clientY);
+         trainAudio.stationPlaced();
+       }
     };
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);

@@ -237,10 +237,11 @@ function EnvironmentSettings({
           {/* Audio volumes */}
           {audioVolumes && onAudioVolumeChange && (
             <div className="space-y-2 pt-1 border-t border-gray-700">
-              {volumeSlider('Master Volume', 'master')}
-              {volumeSlider('Train Volume (whistle/bell)', 'train')}
-              {volumeSlider('Crossing Volume (bell/motor)', 'crossing')}
-            </div>
+               {volumeSlider('Master Volume', 'master')}
+               {volumeSlider('Train Volume (whistle/bell)', 'train')}
+               {volumeSlider('Ambient Noise Volume', 'ambient')}
+               {volumeSlider('Background Music Volume', 'music')}
+             </div>
           )}
 
           {/* Roads & Traffic Toggle */}

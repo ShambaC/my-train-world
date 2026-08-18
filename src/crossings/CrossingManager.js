@@ -339,23 +339,25 @@ export class CrossingManager {
         }
       }
 
-      // Audio: whistle once on approach, bell with state cadence, gate motor.
+      // Audio: approach horn, warning bell loop, gate movement.
       if (s !== 'warning' && crossing.state === 'warning' && !crossing.whistlePlayed) {
         crossing.whistlePlayed = true;
-        trainAudio.whistle();
+        trainAudio.crossingWarning(crossing.position);
       }
       const active = crossing.state === 'warning' || crossing.state === 'closing' || crossing.state === 'closed';
       if (active) {
-        const cadence = crossing.state === 'warning' ? 0.9 : 0.5;
-        if (this.time - crossing.lastBell > cadence) {
-          crossing.lastBell = this.time;
-          trainAudio.crossingBell();
-        }
+        trainAudio.startCrossing(crossing.id, crossing.position);
+      } else {
+        trainAudio.stopCrossing(crossing.id);
       }
       if ((s === 'open' && crossing.state === 'closing') ||
           (s === 'warning' && crossing.state === 'closing') ||
           (s === 'closed' && crossing.state === 'opening')) {
-        trainAudio.gateMotor();
+        trainAudio.gateMotor(crossing.state === 'opening' ? 'raise' : 'lower', crossing.position);
+      }
+      if ((s === 'closing' && crossing.state === 'closed') ||
+          (s === 'opening' && crossing.state === 'open')) {
+        trainAudio.gateStop(crossing.position);
       }
     }
   }
@@ -365,6 +367,7 @@ export class CrossingManager {
   }
 
   clear() {
+    for (const crossing of this.crossings.values()) trainAudio.stopCrossing(crossing.id);
     this.crossings.clear();
     this.nextId = 0;
   }

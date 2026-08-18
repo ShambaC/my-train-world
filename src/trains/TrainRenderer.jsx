@@ -11,6 +11,7 @@ import { createViewdeckCoach } from './ViewdeckCoachModel';
 import ModelLibrary from '../models/ModelLibrary';
 import SmokeParticles from './SmokeParticles';
 import { createContactPatch } from '../utils/contactPatch';
+import { trainAudio } from '../audio/trainAudio';
 
 // Coach model factories, keyed by coach type.
 function createCoachMesh(type) {
@@ -108,8 +109,11 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
   useFrame((state, delta) => {
     trainManager.update(delta);
     const t = state.clock.elapsedTime;
+    const liveTrainIds = new Set();
 
     for (const train of trainManager.getAllTrains()) {
+      liveTrainIds.add(train.id);
+      trainAudio.updateTrain(train, state.camera);
       const node = trainNodesRef.current.get(train.id);
       if (node) {
         // Small idle motion while parked (stopped at a station or inactive)
@@ -130,6 +134,10 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
           cnode.rotation.x = coach.pitch || 0;
         }
       }
+    }
+
+    for (const trainId of trainAudio.trainStates.keys()) {
+      if (!liveTrainIds.has(trainId)) trainAudio.removeTrain(trainId);
     }
 
     // Night-scaled headlight glow. Emissive meshes avoid dynamic-light shader

@@ -345,8 +345,9 @@ export default function MainMenu({
                 <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>
                 {volume('master', 'Master volume')}
                 {volume('train', 'Train volume')}
-                {volume('crossing', 'Crossing volume')}
-                {graphicsToggle('soundsEnabled', 'Train sounds', 'Whistles, bells, and crossing audio')}
+                {volume('ambient', 'Ambient noise volume')}
+                {volume('music', 'Background music volume')}
+                {graphicsToggle('soundsEnabled', 'Train sounds', 'Train, station, tool, and crossing audio')}
               </div>
 
               <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>

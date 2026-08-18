@@ -192,7 +192,12 @@ function AppRuntime() {
   const canvasRef = useRef(null);
   const [audioVolumes, setAudioVolumes] = useState(() => {
     const v = loadSettings().audioVolumes;
-    return { master: 1, train: 1, crossing: 1, ...(v || {}) };
+    return {
+      master: v?.master ?? 1,
+      train: v?.train ?? 1,
+      ambient: v?.ambient ?? 1,
+      music: v?.music ?? 0.6,
+    };
   });
   const [globalGraphics, setGlobalGraphics] = useState(loadGlobalGraphicsDefaults);
   const [accessibility, setAccessibility] = useState(() => {
@@ -404,6 +409,7 @@ function AppRuntime() {
 
   const doUndo = useCallback(() => {
     if (historyRef.current.undo()) {
+      trainAudio.undo();
       refreshWorld();
       setStatus('Undone');
     }
@@ -411,6 +417,7 @@ function AppRuntime() {
 
   const doRedo = useCallback(() => {
     if (historyRef.current.redo()) {
+      trainAudio.redo();
       refreshWorld();
       setStatus('Redone');
     }
