@@ -59,6 +59,8 @@ export class StationManager {
         dir: s.dir,
         lengthCells: s.lengthCells,
         startHeight: s.startHeight,
+        trackSide: s.trackSide,
+        buildingRotation: s.buildingRotation,
         terrainLength: s.terrainLength,
         terrainBreadth: s.terrainBreadth,
       })),

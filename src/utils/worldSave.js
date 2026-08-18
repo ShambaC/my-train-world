@@ -99,6 +99,8 @@ export function applyWorld(data, { trackManager, stationManager, trainManager, r
         dir: s.dir,
         lengthCells: s.lengthCells,
         startHeight: s.startHeight,
+        trackSide: s.trackSide,
+        buildingRotation: s.buildingRotation,
         terrainLength: s.terrainLength,
         terrainBreadth: s.terrainBreadth,
       });

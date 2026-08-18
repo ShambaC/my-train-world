@@ -102,6 +102,14 @@ const makeSignalLamp = (color) => {
   return group;
 };
 
+function alignBuildingRotation(rotation) {
+  const delta = Math.atan2(
+    Math.sin(rotation + Math.PI / 2),
+    Math.cos(rotation + Math.PI / 2),
+  );
+  return Math.abs(delta) <= Math.PI / 2 ? -Math.PI / 2 : Math.PI / 2;
+}
+
 // Glow quads stuck to the four vertical sides of a building — reads as
 // lit windows at night, stays subtle during the day.
 const addWindowGlows = (building, modelKey = 'station-building') => {
@@ -166,9 +174,11 @@ const easeOutBack = (t) => {
  * @param {number} p.startHeight voxel height of the flat ground
  * @param {number} p.terrainLength
  * @param {number} p.terrainBreadth
+ * @param {number} [p.trackSide=1] side of station strip containing adjacent track
+ * @param {number} [p.buildingRotation] local building yaw, relative to station group
  * @returns {{station: object, group: THREE.Group}}
  */
-export function buildStation({ startCell, endCell, dir, lengthCells, startHeight, terrainLength, terrainBreadth }) {
+export function buildStation({ startCell, endCell, dir, lengthCells, startHeight, terrainLength, terrainBreadth, trackSide = 1, buildingRotation }) {
   const perp = { x: -dir.z, z: dir.x };
 
   // --- cells + rects ---
@@ -202,7 +212,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   const station = {
     startCell, endCell, dir, lengthCells, startHeight,
     terrainLength, terrainBreadth, voxelRect, worldRect,
-    startWorld, groundY,
+    startWorld, groundY, trackSide, buildingRotation,
     centerWorld: {
       x: (startWorld.x + endWorld.x) / 2,
       y: groundY + PLATFORM_HEIGHT,
@@ -248,7 +258,11 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   const building = ModelLibrary.getMesh('station-building');
   const buildingAxial = ((lengthCells - 1) * 0.5) * VOXEL + 0.25;
   addPiece(building, buildingAxial, 0, platformTop, 0.1);
-  building.rotation.y = -Math.PI / 2; // face the track side
+  const alignedBuildingRotation = alignBuildingRotation(
+    buildingRotation ?? (trackSide < 0 ? Math.PI / 2 : -Math.PI / 2),
+  );
+  station.buildingRotation = alignedBuildingRotation;
+  building.rotation.y = alignedBuildingRotation;
   addWindowGlows(building);
 
   // Chimney smoke puffs above the station building. Local coords: x = width

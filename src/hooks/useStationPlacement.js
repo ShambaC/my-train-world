@@ -76,9 +76,23 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       }
     }
 
-    // Reject if any track cell falls inside the station rectangle
+    // Reject only tracks whose sampled cells are inside station footprint.
+    // Adjacent track cells are valid platform-side placement.
     if (trackManager) {
       for (const track of trackManager.getAllTracks()) {
+        const trackDx = track.position.x - start.world.x;
+        const trackDz = track.position.z - start.world.z;
+        const axialWorld = trackDx * dir.x + trackDz * dir.z;
+        const lateralWorld = Math.abs(trackDx * dir.z - trackDz * dir.x);
+        const sameHeight = Math.abs(track.position.y - start.height * 0.5 - 0.25) < 0.6;
+        const besideStation =
+          sameHeight &&
+          axialWorld >= -0.75 &&
+          axialWorld <= lengthCells * 0.5 + 0.75 &&
+          lateralWorld >= 0.75 &&
+          lateralWorld <= 2.5;
+        if (besideStation) continue;
+
         const samples = [0, 0.25, 0.5, 0.75, 1];
         for (const t of samples) {
           const local = pointOnTrack(track.type, t);
@@ -88,11 +102,12 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
           const wz = track.position.z + -local.x * sin + local.z * cos;
           const cx = Math.round(wx / 0.5 + length / 2 - 0.5);
           const cz = Math.round(wz / 0.5 + breadth / 2 - 0.5);
-          // Check against expanded rect (+1 cell margin for track width)
+          // Track beside platform is valid and must remain bindable. Reject
+          // only track cells inside station footprint, not adjacent track cells.
           if (
-            cx >= minX - 1 && cx <= maxX + 1 &&
-            cz >= minZ - 1 && cz <= maxZ + 1 &&
-            Math.abs(track.position.y - start.height * 0.5 - 0.25) < 0.6
+            cx >= minX && cx <= maxX &&
+            cz >= minZ && cz <= maxZ &&
+            sameHeight
           ) {
             return { ok: false, reason: 'track in the way' };
           }
@@ -321,6 +336,15 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       return null;
     }
 
+    const endWorld = cellToWorld(endCell, stationStart.height);
+    const centerX = (stationStart.world.x + endWorld.x) / 2;
+    const centerZ = (stationStart.world.z + endWorld.z) / 2;
+    const cameraDx = camera.position.x - centerX;
+    const cameraDz = camera.position.z - centerZ;
+    // Choose camera-facing side, but keep building aligned to station axis.
+    const cameraSide = cameraDx * (-dir.z) + cameraDz * dir.x;
+    const buildingRotation = cameraSide >= 0 ? -Math.PI / 2 : Math.PI / 2;
+
     const { station, group } = buildStation({
       startCell: stationStart.cell,
       endCell,
@@ -329,6 +353,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       startHeight: stationStart.height,
       terrainLength: length,
       terrainBreadth: breadth,
+      buildingRotation,
     });
 
     const saved = stationManager.addStation(station);

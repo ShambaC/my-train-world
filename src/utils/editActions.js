@@ -17,6 +17,8 @@ export const stripStation = (s) => ({
   dir: s.dir,
   lengthCells: s.lengthCells,
   startHeight: s.startHeight,
+  trackSide: s.trackSide,
+  buildingRotation: s.buildingRotation,
   terrainLength: s.terrainLength,
   terrainBreadth: s.terrainBreadth,
 });
@@ -29,6 +31,8 @@ export function rebuildStation(marker, stationManager) {
     dir: marker.dir,
     lengthCells: marker.lengthCells,
     startHeight: marker.startHeight,
+    trackSide: marker.trackSide,
+    buildingRotation: marker.buildingRotation,
     terrainLength: marker.terrainLength,
     terrainBreadth: marker.terrainBreadth,
   });
