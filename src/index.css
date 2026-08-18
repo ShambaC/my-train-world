@@ -22,6 +22,12 @@ body {
   height: 100vh;
 }
 
+.font-game {
+  font-family: 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
 .scrollbar-none {
   scrollbar-width: none;
 }

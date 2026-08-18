@@ -16,6 +16,11 @@ import { buildStation } from '../stations/StationBuilder';
 const RECENT_KEY = 'mytrainworld.world.recent';
 const FALLBACK_KEY = 'mytrainworld.world.fallback';
 const SAVE_VERSION = 1;
+const LIBRARY_KEY = 'mytrainworld.library.v1';
+const LAST_WORLD_KEY = 'mytrainworld.world.last';
+const WORLD_KEY_PREFIX = 'mytrainworld.world.';
+const LIBRARY_VERSION = 1;
+const WORLD_RECORD_VERSION = 1;
 
 function readJSON(key) {
   try {
@@ -34,6 +39,289 @@ function writeJSON(key, data) {
   } catch {
     return false; // storage full/unavailable — autosave just skips quietly
   }
+}
+
+function removeKey(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Storage unavailable — caller already handles the failed operation.
+  }
+}
+
+function worldKey(id) {
+  return `${WORLD_KEY_PREFIX}${id}.v${WORLD_RECORD_VERSION}`;
+}
+
+function cloneJSON(data) {
+  return data == null ? data : JSON.parse(JSON.stringify(data));
+}
+
+function makeWorldId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `world-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cleanWorldName(name) {
+  const value = String(name ?? '').trim().replace(/\s+/g, ' ').slice(0, 64);
+  return value || 'New Railway';
+}
+
+function emptyLibrary() {
+  return { version: LIBRARY_VERSION, worlds: [] };
+}
+
+function readLibrary() {
+  const library = readJSON(LIBRARY_KEY);
+  if (!library || library.version !== LIBRARY_VERSION || !Array.isArray(library.worlds)) {
+    return emptyLibrary();
+  }
+  return {
+    version: LIBRARY_VERSION,
+    worlds: library.worlds.filter((world) => world && typeof world.id === 'string'),
+  };
+}
+
+function snapshotCounts(snapshot) {
+  return {
+    tracks: Array.isArray(snapshot?.tracks?.tracks) ? snapshot.tracks.tracks.length : 0,
+    stations: Array.isArray(snapshot?.stations?.stations) ? snapshot.stations.stations.length : 0,
+    trains: Array.isArray(snapshot?.trains?.trains) ? snapshot.trains.trains.length : 0,
+    roads: Array.isArray(snapshot?.roads?.userRoads) ? snapshot.roads.userRoads.length : 0,
+  };
+}
+
+function recordMeta({ id, name, snapshot, thumbnail, source, createdAt, updatedAt, lastPlayedAt }) {
+  return {
+    id,
+    name: cleanWorldName(name),
+    createdAt,
+    updatedAt,
+    lastPlayedAt: lastPlayedAt ?? updatedAt,
+    terrain: {
+      length: snapshot?.terrain?.length ?? 0,
+      breadth: snapshot?.terrain?.breadth ?? 0,
+      seed: snapshot?.terrain?.seed ?? 0,
+    },
+    counts: snapshotCounts(snapshot),
+    thumbnail: typeof thumbnail === 'string' ? thumbnail : null,
+    source: source || 'local',
+  };
+}
+
+function recordFromStorage(id) {
+  const raw = readJSON(worldKey(id));
+  return migrateWorldRecord(raw);
+}
+
+function writeRecord(record) {
+  return writeJSON(worldKey(record.meta.id), record);
+}
+
+function updateLibraryMeta(library, record) {
+  const summary = { ...record.meta };
+  const index = library.worlds.findIndex((world) => world.id === record.meta.id);
+  if (index < 0) library.worlds.push(summary);
+  else library.worlds[index] = summary;
+  return library;
+}
+
+function snapshotForRecord(worldPayload) {
+  if (worldPayload?.version === SAVE_VERSION && worldPayload.terrain) {
+    return cloneJSON(worldPayload);
+  }
+  return captureWorld(worldPayload);
+}
+
+/**
+ * Normalize and validate one library record. Returns null for unsupported or
+ * corrupt data so callers never expose malformed storage to UI code.
+ */
+export function migrateWorldRecord(record) {
+  if (!record || record.version !== WORLD_RECORD_VERSION || !record.snapshot) return null;
+  if (record.snapshot.version !== SAVE_VERSION) return null;
+  if (!record.meta || typeof record.meta.id !== 'string') return null;
+
+  const now = Date.now();
+  const snapshot = cloneJSON(record.snapshot);
+  const meta = recordMeta({
+    ...record.meta,
+    snapshot,
+    name: record.meta.name,
+    thumbnail: record.meta.thumbnail,
+    source: record.meta.source,
+    createdAt: record.meta.createdAt || now,
+    updatedAt: record.meta.updatedAt || now,
+    lastPlayedAt: record.meta.lastPlayedAt || record.meta.updatedAt || now,
+  });
+  return { version: WORLD_RECORD_VERSION, meta, snapshot };
+}
+
+export function getStorageStatus() {
+  const probeKey = `${LIBRARY_KEY}.probe`;
+  try {
+    localStorage.setItem(probeKey, '1');
+    localStorage.removeItem(probeKey);
+    return { available: true, reason: null };
+  } catch (error) {
+    return { available: false, reason: error?.name || 'storage-unavailable' };
+  }
+}
+
+export function listWorlds() {
+  const library = readLibrary();
+  const worlds = library.worlds
+    .map((summary) => recordFromStorage(summary.id)?.meta ?? null)
+    .filter(Boolean)
+    .sort((a, b) => (b.lastPlayedAt || 0) - (a.lastPlayedAt || 0));
+  return worlds;
+}
+
+export function getWorldMeta(id) {
+  return recordFromStorage(id)?.meta ?? null;
+}
+
+export function getWorld(id) {
+  return recordFromStorage(id);
+}
+
+export function getLastWorldId() {
+  try {
+    return localStorage.getItem(LAST_WORLD_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setLastWorldId(id) {
+  if (!id) {
+    removeKey(LAST_WORLD_KEY);
+    return true;
+  }
+  try {
+    localStorage.setItem(LAST_WORLD_KEY, id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createWorldRecord({ name = 'New Railway', snapshot, thumbnail = null, source = 'local' }) {
+  if (!snapshot || snapshot.version !== SAVE_VERSION) {
+    return { ok: false, error: 'invalid-world-snapshot' };
+  }
+
+  const now = Date.now();
+  const id = makeWorldId();
+  const record = {
+    version: WORLD_RECORD_VERSION,
+    meta: recordMeta({ id, name, snapshot, thumbnail, source, createdAt: now, updatedAt: now }),
+    snapshot: cloneJSON(snapshot),
+  };
+  const library = readLibrary();
+
+  if (!writeRecord(record) || !writeJSON(LIBRARY_KEY, updateLibraryMeta(library, record))) {
+    removeKey(worldKey(id));
+    return { ok: false, error: 'storage-write-failed' };
+  }
+  setLastWorldId(id);
+  return { ok: true, world: record };
+}
+
+export function saveWorldRecord(id, worldPayload, metaPatch = {}) {
+  const current = recordFromStorage(id);
+  if (!current) return { ok: false, error: 'world-not-found' };
+
+  const snapshot = snapshotForRecord(worldPayload);
+  const now = Date.now();
+  const record = {
+    version: WORLD_RECORD_VERSION,
+    meta: recordMeta({
+      ...current.meta,
+      ...metaPatch,
+      id,
+      name: metaPatch.name ?? current.meta.name,
+      thumbnail: metaPatch.thumbnail ?? current.meta.thumbnail,
+      source: metaPatch.source ?? current.meta.source,
+      snapshot,
+      createdAt: current.meta.createdAt,
+      updatedAt: now,
+      lastPlayedAt: metaPatch.lastPlayedAt ?? now,
+    }),
+    snapshot,
+  };
+  const library = readLibrary();
+  if (!writeRecord(record) || !writeJSON(LIBRARY_KEY, updateLibraryMeta(library, record))) {
+    return { ok: false, error: 'storage-write-failed' };
+  }
+  setLastWorldId(id);
+  return { ok: true, world: record };
+}
+
+export function updateWorldRecord(id, patch = {}) {
+  const current = recordFromStorage(id);
+  if (!current) return { ok: false, error: 'world-not-found' };
+  const record = {
+    ...current,
+    meta: recordMeta({
+      ...current.meta,
+      ...patch,
+      id,
+      snapshot: current.snapshot,
+      name: patch.name ?? current.meta.name,
+      thumbnail: patch.thumbnail ?? current.meta.thumbnail,
+      source: patch.source ?? current.meta.source,
+      createdAt: current.meta.createdAt,
+      updatedAt: Date.now(),
+      lastPlayedAt: patch.lastPlayedAt ?? current.meta.lastPlayedAt,
+    }),
+  };
+  const library = readLibrary();
+  if (!writeRecord(record) || !writeJSON(LIBRARY_KEY, updateLibraryMeta(library, record))) {
+    return { ok: false, error: 'storage-write-failed' };
+  }
+  return { ok: true, world: record };
+}
+
+export function renameWorld(id, name) {
+  return updateWorldRecord(id, { name: cleanWorldName(name) });
+}
+
+export function duplicateWorld(id, name) {
+  const source = recordFromStorage(id);
+  if (!source) return { ok: false, error: 'world-not-found' };
+  return createWorldRecord({
+    name: name || `${source.meta.name} Copy`,
+    snapshot: source.snapshot,
+    thumbnail: source.meta.thumbnail,
+    source: 'local',
+  });
+}
+
+export function deleteWorld(id) {
+  const current = recordFromStorage(id);
+  if (!current) return { ok: false, error: 'world-not-found' };
+  const library = readLibrary();
+  library.worlds = library.worlds.filter((world) => world.id !== id);
+  if (!writeJSON(LIBRARY_KEY, library)) return { ok: false, error: 'storage-write-failed' };
+  removeKey(worldKey(id));
+  if (getLastWorldId() === id) setLastWorldId(listWorlds()[0]?.id ?? null);
+  return { ok: true };
+}
+
+export function importWorldRecord(data, name, thumbnail = null) {
+  if (!data || data.version !== SAVE_VERSION) {
+    return { ok: false, error: 'unsupported-world-version' };
+  }
+  return createWorldRecord({ name: name || 'Imported Railway', snapshot: data, thumbnail, source: 'imported' });
+}
+
+export function exportWorldRecord(id) {
+  const record = recordFromStorage(id);
+  if (!record) return { ok: false, error: 'world-not-found' };
+  return { ok: true, name: `${record.meta.name}.world`, data: cloneJSON(record.snapshot) };
 }
 
 export function hasRecoverySnapshot() {

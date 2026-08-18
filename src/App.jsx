@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import GameScene from "./GameScene";
 import ControlPanel from "./ControlPanel";
 import LoadingScreen from "./LoadingScreen";
+import MainMenu from "./ui/MainMenu";
+import DeviceAccessGate from "./ui/DeviceAccessGate";
 import Hotbar from "./ui/Hotbar";
 import SelectionPanel from "./ui/SelectionPanel";
 import { TrackManager } from "./tracks/TrackManager";
@@ -27,6 +29,16 @@ import {
   autosaveWorld,
   saveSnapshot,
   applyWorld,
+  captureWorld,
+  createWorldRecord,
+  getLastWorldId,
+  getStorageStatus,
+  getWorld,
+  importWorldRecord,
+  listWorlds,
+  renameWorld,
+  deleteWorld,
+  saveWorldRecord,
 } from "./utils/worldSave";
 
 // Define available tools
@@ -99,10 +111,27 @@ const TOOLS = [
   },
 ];
 
-function App() {
+function loadGlobalGraphicsDefaults() {
+  const settings = loadSettings();
+  const defaults = settings.globalGraphics || {};
+  return {
+    timeOfDay: defaults.timeOfDay ?? 'day',
+    fogEnabled: defaults.fogEnabled ?? true,
+    fogDensity: defaults.fogDensity ?? null,
+    shadowMode: defaults.shadowMode ?? 'soft',
+    tiltShiftEnabled: defaults.tiltShiftEnabled ?? false,
+    celShadingEnabled: defaults.celShadingEnabled ?? false,
+    ambientEnabled: defaults.ambientEnabled ?? true,
+    soundsEnabled: defaults.soundsEnabled ?? true,
+    trafficEnabled: defaults.trafficEnabled ?? true,
+    signalsEnabled: defaults.signalsEnabled ?? true,
+  };
+}
+
+function AppRuntime() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [terrainSeed, setTerrainSeed] = useState(1337);
-  const [showDebug, setShowDebug] = useState(false);
+  const [showDebug, setShowDebug] = useState(() => loadSettings().developerDiagnostics ?? false);
   const [showAxes, setShowAxes] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,6 +166,12 @@ function App() {
   const [loadProgress, setLoadProgress] = useState(0);
   const [sceneReady, setSceneReady] = useState(false);
   const [trainCount, setTrainCount] = useState(0);
+  const [appView, setAppView] = useState('menu');
+  const [worlds, setWorlds] = useState(() => listWorlds());
+  const [lastWorldId, setLastWorldIdState] = useState(() => getLastWorldId());
+  const [currentWorldId, setCurrentWorldId] = useState(null);
+  const [currentWorldName, setCurrentWorldName] = useState('');
+  const [storageStatus, setStorageStatus] = useState(() => getStorageStatus());
 
   // QoL state: selection, history, world refresh counter, status, audio.
   const [selection, setSelection] = useState(null);
@@ -146,6 +181,7 @@ function App() {
     const v = loadSettings().audioVolumes;
     return { master: 1, train: 1, crossing: 1, ...(v || {}) };
   });
+  const [globalGraphics, setGlobalGraphics] = useState(loadGlobalGraphicsDefaults);
 
   const trackManagerRef = useRef(new TrackManager());
   const stationManagerRef = useRef(new StationManager());
@@ -154,9 +190,15 @@ function App() {
   const signalManagerRef = useRef(new SignalManager(trackManagerRef.current));
   const historyRef = useRef(new HistoryManager(50));
   const pendingLoadRef = useRef(null);
+  const pendingNewWorldRef = useRef(null);
+  const currentWorldIdRef = useRef(null);
+  const currentWorldNameRef = useRef('');
   const autosaveTimerRef = useRef(null);
   const statusTimerRef = useRef(null);
   const selectedTool = TOOLS[selectedToolIndex];
+
+  currentWorldIdRef.current = currentWorldId;
+  currentWorldNameRef.current = currentWorldName;
 
   // Latest environment state for world capture (plain object, no deps churn).
   const envRef = useRef({});
@@ -212,6 +254,12 @@ function App() {
   useEffect(() => {
     saveSettings({ audioVolumes });
   }, [audioVolumes]);
+  useEffect(() => {
+    saveSettings({ globalGraphics });
+  }, [globalGraphics]);
+  useEffect(() => {
+    saveSettings({ developerDiagnostics: showDebug });
+  }, [showDebug]);
 
   // Track engine count so the coach tool can be gated on it
   useEffect(() => {
@@ -233,6 +281,31 @@ function App() {
     statusTimerRef.current = setTimeout(() => setWorldStatus(''), 3000);
   };
 
+  const refreshLibrary = useCallback(() => {
+    setWorlds(listWorlds());
+    setLastWorldIdState(getLastWorldId());
+    setStorageStatus(getStorageStatus());
+  }, []);
+
+  const handleRenameWorld = (id, name) => {
+    const result = renameWorld(id, name);
+    if (result.ok) {
+      if (currentWorldIdRef.current === id) setCurrentWorldName(result.world.meta.name);
+      refreshLibrary();
+    }
+  };
+
+  const handleDeleteWorld = (id) => {
+    const result = deleteWorld(id);
+    if (result.ok) {
+      if (currentWorldIdRef.current === id) {
+        setCurrentWorldId(null);
+        setCurrentWorldName('');
+      }
+      refreshLibrary();
+    }
+  };
+
   // ── World capture / save / load / recover ──────────────────────────────
 
   const makeWorldPayload = useCallback(() => ({
@@ -250,9 +323,15 @@ function App() {
   const scheduleAutosave = useCallback(() => {
     clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
-      autosaveWorld(makeWorldPayload());
+      const payload = makeWorldPayload();
+      autosaveWorld(payload);
+      const id = currentWorldIdRef.current;
+      if (id) {
+        saveWorldRecord(id, payload, { name: currentWorldNameRef.current });
+        refreshLibrary();
+      }
     }, 2500);
-  }, [makeWorldPayload]);
+  }, [makeWorldPayload, refreshLibrary]);
 
   useEffect(() => {
     historyRef.current.onChange = scheduleAutosave;
@@ -283,14 +362,20 @@ function App() {
   }, [refreshWorld]);
 
   const handleSaveWorld = async () => {
+    const id = currentWorldIdRef.current;
+    if (id) {
+      const saved = saveWorldRecord(id, makeWorldPayload(), { name: currentWorldNameRef.current });
+      if (!saved.ok) setStatus('Local save unavailable');
+      else refreshLibrary();
+    }
     const res = await saveWorldToFile(makeWorldPayload());
     if (res?.cancelled) return;
-    setStatus(res?.ok ? `💾 World saved (${res.name})` : '⚠ Save failed');
+    setStatus(res?.ok ? `World exported (${res.name})` : 'Export failed');
   };
 
   // Apply a saved snapshot: env immediately, world content once the terrain
   // for its seed/size is generated.
-  const applySavedData = (data) => {
+  const applySavedData = (data, { defer = false } = {}) => {
     if (!data) {
       setStatus('⚠ Nothing to load');
       return;
@@ -323,7 +408,7 @@ function App() {
     setFollowTrainId(null);
     setSelection(null);
 
-    if (sameTerrain) {
+    if (sameTerrain && !defer) {
       // Terrain won't regenerate — apply world content right away.
       pendingLoadRef.current = null;
       const ok = applyWorld(data, {
@@ -343,6 +428,46 @@ function App() {
     // else: applied in handleTerrainReady once the terrain is generated.
   };
 
+  const openWorld = (id) => {
+    const record = getWorld(id);
+    if (!record) {
+      setStatus('World could not be opened');
+      refreshLibrary();
+      return;
+    }
+    setCurrentWorldId(record.meta.id);
+    setCurrentWorldName(record.meta.name);
+    setAppView('gameplay');
+    setSceneReady(false);
+    applySavedData(record.snapshot, { defer: true });
+    refreshLibrary();
+  };
+
+  const createNewWorld = ({ name, size, seed }) => {
+    pendingLoadRef.current = null;
+    pendingNewWorldRef.current = { name };
+    currentWorldIdRef.current = null;
+    setCurrentWorldId(null);
+    setCurrentWorldName(name);
+    clearWorld();
+    setSceneReady(false);
+    setIsGenerating(true);
+    setTerrainSize(size);
+    setTerrainSeed(seed);
+    setTimeOfDay(globalGraphics.timeOfDay);
+    setFogEnabled(globalGraphics.fogEnabled);
+    setFogDensity(globalGraphics.fogDensity);
+    setShadowMode(globalGraphics.shadowMode);
+    setTiltShiftEnabled(globalGraphics.tiltShiftEnabled);
+    setCelShadingEnabled(globalGraphics.celShadingEnabled);
+    setAmbientEnabled(globalGraphics.ambientEnabled);
+    setSoundsEnabled(globalGraphics.soundsEnabled);
+    setTrafficEnabled(globalGraphics.trafficEnabled);
+    setSignalsEnabled(globalGraphics.signalsEnabled);
+    setAppView('gameplay');
+    window.setTimeout(() => setIsGenerating(false), 500);
+  };
+
   const handleLoadWorld = async () => {
     const res = await loadWorldFromFile();
     if (res?.cancelled) return;
@@ -350,8 +475,18 @@ function App() {
       setStatus(`⚠ ${res.error}`);
       return;
     }
-    applySavedData(res.data);
-    setStatus(`📂 Loaded ${res.name}`);
+    const imported = importWorldRecord(res.data, res.name);
+    if (!imported.ok) {
+      setStatus(`⚠ ${imported.error}`);
+      return;
+    }
+    setCurrentWorldId(imported.world.meta.id);
+    setCurrentWorldName(imported.world.meta.name);
+    setAppView('gameplay');
+    setSceneReady(false);
+    applySavedData(imported.world.snapshot, { defer: true });
+    refreshLibrary();
+    setStatus(`Loaded ${imported.world.meta.name}`);
   };
   const handleRecoverWorld = () => {
     const data = loadRecoverySnapshot();
@@ -486,10 +621,50 @@ function App() {
   const handleSceneReady = useCallback(() => {
     setLoadProgress(1);
     setSceneReady(true);
-  }, []);
+    const pendingNewWorld = pendingNewWorldRef.current;
+    if (pendingNewWorld && !currentWorldIdRef.current) {
+      const result = createWorldRecord({
+        name: pendingNewWorld.name,
+        snapshot: captureWorld(makeWorldPayload()),
+      });
+      if (result.ok) {
+        setCurrentWorldId(result.world.meta.id);
+        setCurrentWorldName(result.world.meta.name);
+        refreshLibrary();
+      } else {
+        setWorldStatus('Local save unavailable');
+      }
+      pendingNewWorldRef.current = null;
+    }
+  }, [makeWorldPayload, refreshLibrary]);
 
   if (isLoading) {
     return <LoadingScreen progress={loadProgress} />;
+  }
+
+  if (appView === 'menu') {
+    return (
+      <MainMenu
+        worlds={worlds}
+        lastWorldId={lastWorldId}
+        storageStatus={storageStatus}
+        onOpenWorld={openWorld}
+        onCreateWorld={createNewWorld}
+        onImportWorld={handleLoadWorld}
+        onRenameWorld={handleRenameWorld}
+        onDeleteWorld={handleDeleteWorld}
+        frameLimit={frameLimit}
+        onFrameLimitChange={setFrameLimit}
+        vsync={vsync}
+        onVsyncChange={setVsync}
+        audioVolumes={audioVolumes}
+        onAudioVolumeChange={(patch) => setAudioVolumes((value) => ({ ...value, ...patch }))}
+        globalGraphics={globalGraphics}
+        onGlobalGraphicsChange={(patch) => setGlobalGraphics((value) => ({ ...value, ...patch }))}
+        showDebug={showDebug}
+        onToggleDebug={setShowDebug}
+      />
+    );
   }
 
   return (
@@ -638,6 +813,14 @@ function App() {
 
       {!sceneReady && <LoadingScreen progress={loadProgress} />}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <DeviceAccessGate>
+      <AppRuntime />
+    </DeviceAccessGate>
   );
 }
 
