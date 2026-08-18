@@ -79,23 +79,31 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - Instanced rendering (`InstancedMesh`) for performance across terrain voxels and procedural trees/bushes.
   - `WaterSurface.jsx`: Custom Gerstner wave shader with depth-based foam, fresnel, caustics, and terrain heightmap masking.
   - `ForestBorder.js` & `FogWall.jsx`: Instanced border tree ring and animated cylindrical cloud wall hiding map edges.
-  - `Skybox.jsx`: Time-of-day lighting and skybox presets (dawn, day, dusk, night) via `getLightingForTime`.
-  - `ScatterProps.jsx`: Probability-based scattering of instanced GLB props (trees, rocks, buildings, fences), excluding water, slopes, tracks, and station zones.
+  - `Skybox.jsx`: Time-of-day lighting and skybox presets (dawn, day, dusk, night) via `getLightingForTime`. Exports `preloadSkyboxes()` + `SKYBOX_COUNT` for loading progress.
+  - `ScatterProps.jsx`: Probability-based scattering of instanced GLB props (trees, rocks, buildings, fences), excluding water, slopes, tracks, station zones, and road cells.
   - `GrassField.jsx` (+ `grassShaders.js`, `grassMaterials.js`): Stylized instanced grass field (ported from cortiz2894/stylized-components) — wind-swayed shader blades (gradient + patch color, fake +Y normal, soft ring-sampled shadows, backlit translucency) and alpha-mask flower cross-billboards (`src/assets/Textures/flower{,3}/`, custom depth materials). Scattered deterministically per terrain seed as DENSE IRREGULAR patches (16-sample radial blob outlines, outward-spraying blades): one patch compulsory at every tree base (`scatterRegistry.trees`, any dry biome), others on meadow/forest cells kept `PATCH_SPACING` apart; hidden (zero-scale) under tracks/stations/roads/scattered buildings via the same exclusion pass + road version poll as ScatterProps; sway syncs with the shared wind clock, sun dir/color + night dim from `lighting`.
-  - `CameraController.jsx`: WASD camera-relative movement (Shift sprint, Space rise, C lower) that moves the `OrbitControls` target with the camera.
+  - `CameraController.jsx`: WASD camera-relative movement (Shift sprint, Space rise, C lower) that moves the `OrbitControls` target with the camera. `followActive` prop disables controls during follow-cam.
+  - `cameraCollision.js`: Camera-to-terrain/track/train collision constraint. `constrainCamera()` + `CameraCollision` component. Multi-sample ray along look direction.
+  - `PracticalLights.jsx`: Deferred-light station/train lamp sources (replaces per-lamp PointLight).
+  - `instanceExclusion.js`: Shared cell-set exclusion logic: `collectExclusionSets()` gathers track/station/road/building exclusion sets. `addSetDiff()` for incremental updates.
+  - `vehicleModels.js`: 7 procedural vehicle archetypes (car, truck, bus, pickup, flatbed, scooter, bike) with color variants, headlamp glow meshes (`userData.headlamp = true`), material caching.
+  - `AxisGizmo.jsx`: Axis indicator gizmo (toggleable via settings).
 
 - **Track System (`src/tracks/`)**:
-  - `trackGeometry.js`: Central geometric math for straight/curved tracks (0.5 voxel grid, 0.25 arc radius, tangent calculations, Three.js world transforms).
-  - `TrackManager.js`: Graph management, closest-pair endpoint auto-connection (`front`/`back`), grid snapping, and placement validation.
-  - `TrackModels.js`: Procedural track geometry (rails via `TubeGeometry`, ballast boxes, sleepers, bridge trestle supports).
-  - `TrackRenderer.jsx`: Track mesh rendering and exact-model translucent placement/delete ghost previews (`src/utils/ghost.js`).
+  - `trackGeometry.js`: Central geometric math for straight/curved/ramp tracks (0.5 voxel grid, 0.25 arc radius, tangent calculations, Three.js world transforms). Ramp type adds `y = t × 0.5` offset and tangent y=1.
+  - `TrackManager.js`: Graph management, closest-pair endpoint auto-connection (`front`/`back`), grid snapping, placement validation. Endpoint-proximity height check (not global). `getTrackAtPosition()` accepts optional `raycaster`/`camera` for elevated track ray-plane intersection; water placement allowed when elevated. New `getTrack()`, `restoreTrack()` methods.
+  - `TrackModels.js`: Procedural track geometry (rails via `TubeGeometry`, ballast boxes, sleepers, bridge trestle supports, ramp beams). New `createRampTrack()` + `createRampBeams()`. Materials use `makeAtlasMaterial()` (rail, ballast, planks, beam, wood_deck). `SLEEPER_MESH` separate from `TRACK_MESH` (sleepers don't cast shadows). Bridge cap/brace meshes get `BRIDGE_MESH` shadow props.
+  - `TrackRenderer.jsx`: Track mesh rendering, exact-model translucent placement/delete ghost previews (`src/utils/ghost.js`), ramp ghost/beams rendering. `terrainData` prop for support beam ground clearance. `resolveTarget()` for hand-tool selection. `latestRef` mirror for synchronous click handling. Undo/redo history integration for track/road placement + deletion. `OverheadLine` rendered alongside tracks.
   - `OverheadLine.jsx`: Procedural electrification gantries (gate-shaped poles + sagging contact wires + messenger wire) every 5 tracks per connected chain, at both ends for chains < 5 tracks; derived from the track layout, rebuilt on track changes, never stores user state.
 
 - **Train Simulation (`src/trains/`)**:
-  - `TrainModel.js`: Low-poly procedural voxel locomotive (boiler, cab, smokestack, cowcatcher, headlight).
-  - `TrainManager.js`: Physics-free path traversal across connected track graphs, progress interpolation, fallback reverse handling on dead ends, and speed control.
+  - `TrainModel.js`: Factory that clones cached engine templates by type. Exports `createTrainEngine(type)`, `preloadTrainEngines()`, `getTrainHeadlightConfig(type)`. `getTrainDimensions(type)` delegates per-engine. Engine meshes marked `sharedTrainResource` for safe disposal. Template caching via `engineTemplates` Map.
+  - `engineTypes.js`: Data registry for 4 engine types (`steam-engine`, `diesel-engine`, `electric-engine`, `checker-engine`). Exports `ENGINE_TYPES`, `DEFAULT_ENGINE`, `ENGINE_DIMENSIONS`.
+  - Procedural engine models: `SteamEngineModel.js` (red cab, brass domes, smokestack flare, connecting side rods), `DieselEngineModel.js` (dark blue/cream boxcab), `ElectricEngineModel.js` (royal blue boxcab, articulated scissor pantograph), `CheckerEngineModel.js`.
+  - `TrainManager.js`: Physics-free path traversal across connected track graphs, progress interpolation, fallback reverse handling on dead ends, and speed control. `addTrain()` accepts `engineType` param. New methods: `setEngineType()`, `restoreTrain()`, `reverseTrain()`, `removeCoach()`, `restoreCoach()`. Train position includes `pitch` (from ramp tangent y).
   - Coach system: `addCoach` attaches coaches behind engines (`coachTypes.js` defines `COACH_TYPES`/`COACH_LENGTH`); trains with coaches never reverse at dead ends. Procedural per-type coach models (`PassengerCoachModel.js`, `GoodsCoachModel.js`, `GasCoachModel.js`, `ContainerCoachModel.js`, `ViewdeckCoachModel.js`, `CoalCartModel.js`).
-  - `TrainRenderer.jsx` & `SmokeParticles.jsx`: Train rendering and instanced particle system (wobble, spin, cubic ease scale, color fade).
+  - `TrainRenderer.jsx`: Engine nodes recreated when `engineType` changes. `rotation.order = 'YXZ'` for pitch support. Selection highlight rings (torus geometry under engine + coaches). Point lights replaced by emissive glow meshes. `disposeTrainNode()` respects `sharedTrainResource`. Event-driven sync via `trainsVersion` bump.
+  - `SmokeParticles.jsx`: New `dieselSmoke` kind (lighter, smaller). Electric engines return null (no smoke), diesel/checker use `dieselSmoke`.
 
 - **Station System (`src/stations/`)**:
   - `StationManager.js`: Station storage and track binding (tracks running beside a station become stops; lateral 0.75..2.5 units, same ground height, axially overlapping).
@@ -115,7 +123,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Signals (`src/signals/`)**:
   - `SignalManager.js`: Deterministic auto-scattered signals beside long track runs (`rebuildAuto`, seeded, runs >= 5 tracks, every 15th track, dead-end signals). States (clear/approaching/occupied/departing) derive from along-track train distance — visual only, never stop trains. Aspect mapping per type (two/platform, three, junction).
   - `SignalsRenderer.jsx` & `signalModels.js`: Renders the `colour-light-signal` GLB with additive aspect lamps; React reconciles only on topology changes. Auto-regenerated on every track layout change (no user tool).
-  - `src/tracks/pathDistance.js`: `distanceAlongTrack` — Dijkstra over the track graph for track-relative approach detection.
 
 - **Road-Rail Crossings (`src/crossings/`)**:
   - `CrossingManager.js`: Detects track×road intersections (per-type tolerance ≈ half road width), groups hits, merges crossings of the same connected track line over one road. State machine open → warning → closing → closed → opening (gates stay closed while ANY consist part is on/within exit margin; stopped/reversed trains never cause unsafe opening). Optional bell/gate-motor/whistle audio via `trainAudio`.
