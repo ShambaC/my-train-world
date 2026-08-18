@@ -270,7 +270,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   // roof, not at the platform end.
   const buildingBounds = ModelLibrary.getEntry('station-building').bounds;
   const chimney = new PuffSystem({
-    position: [0, platformTop + buildingBounds.max.y * 0.9, buildingAxial],
+    position: [0, platformTop + buildingBounds.max.y * 0.9, buildingAxial + 0.69],
     count: 12,
     size: 0.07,
     rise: 0.3,
