@@ -11,20 +11,14 @@ import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
+export const STATION_GHOST_WIDTH = STATION_WIDTH_WORLD - 0.2; // visual clearance beside tracks
 export const PLATFORM_HEIGHT = 0.15; // very low base (was 0.5, then 0.25)
 export const MIN_STATION_LENGTH = 8; // voxels
 export const MAX_STATION_LENGTH = 40; // voxels
 
 const VOXEL = 0.5;
-const DECK_COLOR = 0x9a9a9a;
-const EDGE_COLOR = 0x929292; // brighter platform edges for readability
-const PLATFORM_EDGE_WIDTH = 0.1;
-const PLATFORM_DECK_WIDTH = STATION_WIDTH_WORLD - PLATFORM_EDGE_WIDTH;
-
 const STATION_DECK_MAT = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
-const STATION_EDGE_MAT = makeAtlasMaterial('edge', { repeat: [0.5, 0.5] });
-const STATION_DECK_GEO = new THREE.BoxGeometry(PLATFORM_DECK_WIDTH, PLATFORM_HEIGHT, VOXEL);
-const STATION_EDGE_GEO = new THREE.BoxGeometry(PLATFORM_EDGE_WIDTH, 0.15, VOXEL);
+const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
 
 // Shared practical-light materials (additive, toneMapped off — cheap glow
 // that reads as a lit lamp/window without dynamic lights). Tagged nightGlow
@@ -308,16 +302,6 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     section.castShadow = true;
     section.receiveShadow = true;
     addPiece(section, i * VOXEL + 0.25, 0, groundY + PLATFORM_HEIGHT / 2);
-  }
-
-  for (let i = 0; i < lengthCells; i++) {
-    for (const ex of [
-      -STATION_WIDTH_WORLD / 2 + PLATFORM_EDGE_WIDTH / 2,
-      STATION_WIDTH_WORLD / 2 - PLATFORM_EDGE_WIDTH / 2,
-    ]) {
-      const edge = new THREE.Mesh(STATION_EDGE_GEO, STATION_EDGE_MAT);
-      addPiece(edge, i * VOXEL + 0.25, ex, platformTop + 0.03);
-    }
   }
 
   // --- station building near the middle ---

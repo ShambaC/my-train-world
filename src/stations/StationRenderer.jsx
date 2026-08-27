@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
-import { buildStation, STATION_WIDTH_WORLD, PLATFORM_HEIGHT, easeOutBack } from './StationBuilder';
+import { buildStation, STATION_GHOST_WIDTH, PLATFORM_HEIGHT, easeOutBack } from './StationBuilder';
 import { stripStation, rebuildStation } from '../utils/editActions';
 import { trainAudio } from '../audio/trainAudio';
 
@@ -141,10 +141,10 @@ export default function StationRenderer({
 
     // Marker = narrow platform lying ALONG the station axis (long side =
     // extension direction). Start phase shows the orientation — aligned to
-    // the screen-horizontal world axis so the label always matches what
-    // the user sees. End phase snaps to the actual extension.
+    // the screen-horizontal world axis so the label always matches what the
+    // user sees. End phase snaps to the actual extension.
     const makeAxisMarker = (color) => {
-      const marker = makeGhostBox(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, 0.5, color);
+      const marker = makeGhostBox(STATION_GHOST_WIDTH, PLATFORM_HEIGHT, 0.5, color);
       if (ghost.phase === 'end') {
         marker.rotation.y = Math.atan2(ghost.dir.x, ghost.dir.z);
       } else {
@@ -165,7 +165,7 @@ export default function StationRenderer({
 
     const color = ghost.valid ? GHOST_GREEN : GHOST_RED;
     const len = Math.max(0.5, ghost.lengthCells * 0.5);
-    const slab = makeGhostBox(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, len, color);
+    const slab = makeGhostBox(STATION_GHOST_WIDTH, PLATFORM_HEIGHT, len, color);
     const midX = (ghost.startWorld.x + ghost.endWorld.x) / 2;
     const midZ = (ghost.startWorld.z + ghost.endWorld.z) / 2;
     const ghostY = ghost.height * 0.5 + 0.25 + PLATFORM_HEIGHT / 2;
@@ -174,16 +174,12 @@ export default function StationRenderer({
     ghostMeshesRef.current.push(slab);
 
     const startMarker = makeAxisMarker(color);
-    startMarker.position.set(
-      ghost.startWorld.x + ghost.dir.x * 0.25,
-      ghostY,
-      ghost.startWorld.z + ghost.dir.z * 0.25,
-    );
+    startMarker.position.set(ghost.startWorld.x, ghostY, ghost.startWorld.z);
 
-    // End marker follows the cursor cell exactly
+    // End marker follows cursor cell exactly.
     const endMarker = makeGhostBox(0.5, 0.5, 0.5, color);
     endMarker.position.set(ghost.endWorld.x, ghost.endWorld.y + 0.25, ghost.endWorld.z);
-    ghostMeshesRef.current.push(endMarker);
+    ghostMeshesRef.current.push(startMarker, endMarker);
 
     return ghostMeshesRef.current;
   }, [ghost, terrainData, orientation, camera]);
