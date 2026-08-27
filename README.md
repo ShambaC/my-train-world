@@ -104,8 +104,8 @@ I made this game because I wanted to play it. I was looking for a train game whe
 In any case, I made this game after that and had very fun. This game is in no way complete at the moment but fully playable none the less. I hope you have fun playing it too. Made with <3
 
 ## Plans
-[ ] More biomes and terrain types
-[ ] Change all textures and icons to hand drawn ones. (I recently got a drawing tab as a gift. I'd like to draw the textures and give this game a hand drawn aesthetic)
-[ ] Controller support
-[ ] Mobile support
-[ ] Multiplayer ?
+- [ ] More biomes and terrain types
+- [ ] Change all textures and icons to hand drawn ones. (I recently got a drawing tab as a gift. I'd like to draw the textures and give this game a hand drawn aesthetic)
+- [ ] Controller support
+- [ ] Mobile support
+- [ ] Multiplayer ?
