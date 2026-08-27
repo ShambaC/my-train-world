@@ -18,11 +18,13 @@ export const MAX_STATION_LENGTH = 40; // voxels
 const VOXEL = 0.5;
 const DECK_COLOR = 0x9a9a9a;
 const EDGE_COLOR = 0x929292; // brighter platform edges for readability
+const PLATFORM_EDGE_WIDTH = 0.1;
+const PLATFORM_DECK_WIDTH = STATION_WIDTH_WORLD - PLATFORM_EDGE_WIDTH;
 
 const STATION_DECK_MAT = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
 const STATION_EDGE_MAT = makeAtlasMaterial('edge', { repeat: [0.5, 0.5] });
-const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
-const STATION_EDGE_GEO = new THREE.BoxGeometry(0.1, 0.15, VOXEL);
+const STATION_DECK_GEO = new THREE.BoxGeometry(PLATFORM_DECK_WIDTH, PLATFORM_HEIGHT, VOXEL);
+const STATION_EDGE_GEO = new THREE.BoxGeometry(PLATFORM_EDGE_WIDTH, 0.15, VOXEL);
 
 // Shared practical-light materials (additive, toneMapped off — cheap glow
 // that reads as a lit lamp/window without dynamic lights). Tagged nightGlow
@@ -109,6 +111,47 @@ function alignBuildingRotation(rotation) {
   );
   return Math.abs(delta) <= Math.PI / 2 ? -Math.PI / 2 : Math.PI / 2;
 }
+function getRotatedPlanarBounds(bounds, rotation) {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const result = {
+    minX: Infinity,
+    minZ: Infinity,
+    maxX: -Infinity,
+    maxZ: -Infinity,
+  };
+  for (const x of [bounds.min.x, bounds.max.x]) {
+    for (const z of [bounds.min.z, bounds.max.z]) {
+      const rx = x * cos + z * sin;
+      const rz = -x * sin + z * cos;
+      result.minX = Math.min(result.minX, rx);
+      result.minZ = Math.min(result.minZ, rz);
+      result.maxX = Math.max(result.maxX, rx);
+      result.maxZ = Math.max(result.maxZ, rz);
+    }
+  }
+  return result;
+}
+function fitModelToFootprint(object, modelKey, x, axial, rotation, lengthCells) {
+  const bounds = getRotatedPlanarBounds(ModelLibrary.getEntry(modelKey).bounds, rotation);
+  const inset = 0.12;
+  const minX = -STATION_WIDTH_WORLD / 2 + inset;
+  const maxX = STATION_WIDTH_WORLD / 2 - inset;
+  const minZ = inset;
+  const maxZ = lengthCells * VOXEL - inset;
+  const spanX = Math.max(bounds.maxX - bounds.minX, 0.001);
+  const spanZ = Math.max(bounds.maxZ - bounds.minZ, 0.001);
+  const scale = Math.min(1, (maxX - minX) / spanX, (maxZ - minZ) / spanZ);
+  object.scale.setScalar(scale);
+
+  const scaledMinX = bounds.minX * scale;
+  const scaledMaxX = bounds.maxX * scale;
+  const scaledMinZ = bounds.minZ * scale;
+  const scaledMaxZ = bounds.maxZ * scale;
+  object.position.x = THREE.MathUtils.clamp(x, minX - scaledMinX, maxX - scaledMaxX);
+  object.position.z = THREE.MathUtils.clamp(axial, minZ - scaledMinZ, maxZ - scaledMaxZ);
+  return scale;
+}
 
 // Glow quads stuck to the four vertical sides of a building — reads as
 // lit windows at night, stays subtle during the day.
@@ -184,7 +227,7 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   // --- cells + rects ---
   const cells = [];
   for (let i = 0; i < lengthCells; i++) {
-    for (let j = 0; j < STATION_WIDTH; j++) {
+    for (let j = -1; j <= 1; j++) {
       cells.push({ x: startCell.x + dir.x * i + perp.x * j, z: startCell.z + dir.z * i + perp.z * j });
     }
   }
@@ -202,11 +245,24 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   const startWorld = cellToWorld(startCell.x, startCell.z);
   const endWorld = cellToWorld(endCell.x, endCell.z);
   const groundY = startHeight * VOXEL + 0.25;
+  const stationLengthWorld = lengthCells * VOXEL;
+  const stationYaw = Math.atan2(dir.x, dir.z);
+  const stationCos = Math.cos(stationYaw);
+  const stationSin = Math.sin(stationYaw);
+  const footprintCorners = [
+    [-STATION_WIDTH_WORLD / 2, 0],
+    [STATION_WIDTH_WORLD / 2, 0],
+    [-STATION_WIDTH_WORLD / 2, stationLengthWorld],
+    [STATION_WIDTH_WORLD / 2, stationLengthWorld],
+  ].map(([x, z]) => ({
+    x: startWorld.x + x * stationCos + z * stationSin,
+    z: startWorld.z - x * stationSin + z * stationCos,
+  }));
   const worldRect = {
-    minX: (voxelRect.minX - 2 - terrainLength / 2 + 0.5) * VOXEL,
-    maxX: (voxelRect.maxX + 2 - terrainLength / 2 + 0.5) * VOXEL,
-    minZ: (voxelRect.minZ - 2 - terrainBreadth / 2 + 0.5) * VOXEL,
-    maxZ: (voxelRect.maxZ + 2 - terrainBreadth / 2 + 0.5) * VOXEL,
+    minX: Math.min(...footprintCorners.map((corner) => corner.x)),
+    maxX: Math.max(...footprintCorners.map((corner) => corner.x)),
+    minZ: Math.min(...footprintCorners.map((corner) => corner.z)),
+    maxZ: Math.max(...footprintCorners.map((corner) => corner.z)),
   };
 
   const station = {
@@ -234,8 +290,16 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     obj.position.set(x, y, axial);
     const delay = (Math.max(0, axial) + 0.25) * waveSpeed + extraDelay;
     obj.userData.pop = { fromY: y - 0.7, toY: y, delay };
-    station.pieces.push({ obj, fromY: y - 0.7, toY: y, delay });
+    const piece = { obj, fromY: y - 0.7, toY: y, delay, baseScale: obj.scale.x || 1 };
+    station.pieces.push(piece);
     group.add(obj);
+    return piece;
+  };
+
+  const addModelPiece = (modelKey, obj, axial, x, y, rotation, extraDelay = 0) => {
+    const piece = addPiece(obj, axial, x, y, extraDelay);
+    obj.rotation.y = rotation;
+    piece.baseScale = fitModelToFootprint(obj, modelKey, x, axial, rotation, lengthCells);
   };
 
   // --- platform deck (split into 1-voxel sections for the wave) ---
@@ -246,9 +310,11 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     addPiece(section, i * VOXEL + 0.25, 0, groundY + PLATFORM_HEIGHT / 2);
   }
 
-  // --- edge trim along the platform sides ---
   for (let i = 0; i < lengthCells; i++) {
-    for (const ex of [-STATION_WIDTH_WORLD / 2, STATION_WIDTH_WORLD / 2]) {
+    for (const ex of [
+      -STATION_WIDTH_WORLD / 2 + PLATFORM_EDGE_WIDTH / 2,
+      STATION_WIDTH_WORLD / 2 - PLATFORM_EDGE_WIDTH / 2,
+    ]) {
       const edge = new THREE.Mesh(STATION_EDGE_GEO, STATION_EDGE_MAT);
       addPiece(edge, i * VOXEL + 0.25, ex, platformTop + 0.03);
     }
@@ -257,12 +323,11 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   // --- station building near the middle ---
   const building = ModelLibrary.getMesh('station-building');
   const buildingAxial = ((lengthCells - 1) * 0.5) * VOXEL + 0.25;
-  addPiece(building, buildingAxial, 0, platformTop, 0.1);
   const alignedBuildingRotation = alignBuildingRotation(
     buildingRotation ?? (trackSide < 0 ? Math.PI / 2 : -Math.PI / 2),
   );
+  addModelPiece('station-building', building, buildingAxial, 0, platformTop, alignedBuildingRotation, 0.1);
   station.buildingRotation = alignedBuildingRotation;
-  building.rotation.y = alignedBuildingRotation;
   addWindowGlows(building);
 
   // Chimney smoke puffs above the station building. Local coords: x = width
@@ -282,10 +347,16 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   // --- clocks flanking the building ---
   for (const side of [-1, 1]) {
     const clock = ModelLibrary.getMesh('station-clock');
-    addPiece(clock, buildingAxial + side * 0.9, STATION_WIDTH_WORLD / 2 - 0.3, platformTop, 0.15);
-    clock.rotation.y = Math.PI / 2;
+    addModelPiece(
+      'station-clock',
+      clock,
+      buildingAxial + side * 0.9,
+      STATION_WIDTH_WORLD / 2 - 0.3,
+      platformTop,
+      Math.PI / 2,
+      0.15,
+    );
   }
-
   // --- canopies at the far ends, clear of the building and the signals.
   // The model's own base is sunk 0.35 into the platform deck. ---
   const canopyCells = [];
@@ -293,10 +364,16 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   else if (lengthCells >= 14) canopyCells.push(lengthCells - 4);
   for (const i of canopyCells) {
     const canopy = ModelLibrary.getMesh('platform-canopy');
-    addPiece(canopy, i * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.4, platformTop - 0.35, 0.05);
-    canopy.rotation.y = Math.PI / 2;
+    addModelPiece(
+      'platform-canopy',
+      canopy,
+      i * VOXEL + 0.25,
+      STATION_WIDTH_WORLD / 2 - 0.4,
+      platformTop - 0.35,
+      Math.PI / 2,
+      0.05,
+    );
   }
-
   // --- prop row (bench / lamp / bin cycle) — one block forward from the
   // building, and never directly under a canopy so support beams stay clear.
   // Every bench gets a lamp post with a warm point light on the far edge.
@@ -309,9 +386,8 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
     const prop = ModelLibrary.getMesh(type);
     const rng = mulberry32(((startCell.x * 73856093) ^ (startCell.z * 19349663) ^ (i * 83492791)) >>> 0);
     const jitter = (rng() - 0.5) * 0.2;
-    addPiece(prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, 0.05);
-    prop.rotation.y = Math.PI / 2 + (rng() - 0.5) * 0.3;
-
+    const propRotation = Math.PI / 2 + (rng() - 0.5) * 0.3;
+    addModelPiece(type, prop, i * VOXEL + 0.25 + jitter, STATION_WIDTH_WORLD / 2 - 0.25, platformTop, propRotation, 0.05);
     // Warm glow at the head of each gas lamp
     if (type === 'platform-gas-lamp') {
       const lampBounds = ModelLibrary.getEntry('platform-gas-lamp').bounds;
@@ -322,15 +398,22 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
 
     // Lamp post with spotlight opposite every bench
     if (type === 'platform-bench') {
-      addLampPost(addPiece, i * VOXEL + 0.25 + jitter, -STATION_WIDTH_WORLD / 2 + 0.1, groundY);
+      addLampPost(addPiece, i * VOXEL + 0.25 + jitter, -STATION_WIDTH_WORLD / 2 + 0.2, groundY);
     }
   }
 
   // --- goods shed on long stations ---
   if (lengthCells >= 20) {
     const shed = ModelLibrary.getMesh('goods-shed');
-    addPiece(shed, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.2);
-    shed.rotation.y = Math.PI / 2;
+    addModelPiece(
+      'goods-shed',
+      shed,
+      (lengthCells - 1) * VOXEL + 0.25,
+      STATION_WIDTH_WORLD / 2 - 0.35,
+      platformTop,
+      Math.PI / 2,
+      0.2,
+    );
     addWindowGlows(shed, 'goods-shed');
   }
 
@@ -347,17 +430,30 @@ export function buildStation({ startCell, endCell, dir, lengthCells, startHeight
   };
 
   const signalStart = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalStart, 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0);
-  signalStart.rotation.y = 0;
+  addModelPiece(
+    'colour-light-signal',
+    signalStart,
+    0.25,
+    0,
+    platformTop,
+    0,
+  );
   addSignalLamps(signalStart);
 
   const signalEnd = ModelLibrary.getMesh('colour-light-signal');
-  addPiece(signalEnd, (lengthCells - 1) * VOXEL + 0.25, STATION_WIDTH_WORLD / 2 - 0.35, platformTop, 0.05);
-  signalEnd.rotation.y = Math.PI;
+  addModelPiece(
+    'colour-light-signal',
+    signalEnd,
+    (lengthCells - 1) * VOXEL + 0.25,
+    0,
+    platformTop,
+    Math.PI,
+    0.05,
+  );
   addSignalLamps(signalEnd);
 
   // Fake contact shadow slab under the whole platform
-  const patchGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD + 0.18, 0.02, lengthCells * VOXEL + 0.18);
+  const patchGeo = new THREE.BoxGeometry(STATION_WIDTH_WORLD, 0.02, lengthCells * VOXEL);
   const patchMat = new THREE.MeshBasicMaterial({
     color: 0x000000,
     transparent: true,

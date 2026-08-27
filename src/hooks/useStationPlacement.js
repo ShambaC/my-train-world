@@ -1,7 +1,7 @@
 ﻿import { useRef, useState, useCallback, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { buildStation, STATION_WIDTH, MIN_STATION_LENGTH, MAX_STATION_LENGTH } from '../stations/StationBuilder';
+import { buildStation, STATION_WIDTH, STATION_WIDTH_WORLD, MIN_STATION_LENGTH, MAX_STATION_LENGTH } from '../stations/StationBuilder';
 import { pointOnTrack } from '../tracks/trackGeometry.js';
 
 /**
@@ -40,7 +40,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
 
     const perp = { x: -dir.z, z: dir.x };
     for (let i = 0; i < lengthCells; i++) {
-      for (let j = 0; j < STATION_WIDTH; j++) {
+      for (let j = -1; j <= 1; j++) {
         const cx = start.cell.x + dir.x * i + perp.x * j;
         const cz = start.cell.z + dir.z * i + perp.z * j;
         if (cx < 1 || cx >= length - 1 || cz < 1 || cz >= breadth - 1) {
@@ -76,38 +76,29 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
       }
     }
 
-    // Reject only tracks whose sampled cells are inside station footprint.
-    // Adjacent track cells are valid platform-side placement.
+    // Reject tracks whose swept ballast enters station footprint. Sampling
+    // the actual path also catches curved tracks that turn into the platform.
     if (trackManager) {
+      const platformHalfWidth = STATION_WIDTH_WORLD / 2;
+      const trackHalfWidth = 0.25;
       for (const track of trackManager.getAllTracks()) {
-        const trackDx = track.position.x - start.world.x;
-        const trackDz = track.position.z - start.world.z;
-        const axialWorld = trackDx * dir.x + trackDz * dir.z;
-        const lateralWorld = Math.abs(trackDx * dir.z - trackDz * dir.x);
         const sameHeight = Math.abs(track.position.y - start.height * 0.5 - 0.25) < 0.6;
-        const besideStation =
-          sameHeight &&
-          axialWorld >= -0.75 &&
-          axialWorld <= lengthCells * 0.5 + 0.75 &&
-          lateralWorld >= 0.75 &&
-          lateralWorld <= 2.5;
-        if (besideStation) continue;
-
-        const samples = [0, 0.25, 0.5, 0.75, 1];
+        if (!sameHeight) continue;
+        const samples = Array.from({ length: 9 }, (_, index) => index / 8);
         for (const t of samples) {
           const local = pointOnTrack(track.type, t);
           const cos = Math.cos(track.rotation);
           const sin = Math.sin(track.rotation);
           const wx = track.position.x + local.x * cos + local.z * sin;
           const wz = track.position.z + -local.x * sin + local.z * cos;
-          const cx = Math.round(wx / 0.5 + length / 2 - 0.5);
-          const cz = Math.round(wz / 0.5 + breadth / 2 - 0.5);
-          // Track beside platform is valid and must remain bindable. Reject
-          // only track cells inside station footprint, not adjacent track cells.
+          const trackDx = wx - start.world.x;
+          const trackDz = wz - start.world.z;
+          const axial = trackDx * dir.x + trackDz * dir.z;
+          const lateral = Math.abs(trackDx * dir.z - trackDz * dir.x);
           if (
-            cx >= minX && cx <= maxX &&
-            cz >= minZ && cz <= maxZ &&
-            sameHeight
+            axial >= -trackHalfWidth &&
+            axial <= lengthCells * 0.5 + trackHalfWidth &&
+            lateral < platformHalfWidth + trackHalfWidth
           ) {
             return { ok: false, reason: 'track in the way' };
           }
@@ -119,7 +110,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
     if (roadManager) {
       const roadCells = roadManager.getRoadCells();
       for (let i = 0; i < lengthCells; i++) {
-        for (let j = 0; j < STATION_WIDTH; j++) {
+        for (let j = -1; j <= 1; j++) {
           const cx = start.cell.x + dir.x * i + perp.x * j;
           const cz = start.cell.z + dir.z * i + perp.z * j;
           // Check this cell and adjacent cells (road width spans ~1 cell)

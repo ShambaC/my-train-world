@@ -209,7 +209,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
             }
           }
           if (!target) {
-            const station = stationManager?.getStationAtPosition(point, 0.9);
+            const station = stationManager?.getStationAtPosition(point, 0.05);
             if (station) {
               target = { kind: 'station', id: station.id, position: station.centerWorld, rect: station.worldRect };
             }

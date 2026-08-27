@@ -191,16 +191,20 @@ export class TrainManager {
       let speedTarget = train.speedMax;
       let station = this.stationManager?.getStationForTrack(currentTrack.id);
       if (station) {
-        const r = station.worldRect;
+        const axial =
+          (train.position.x - station.startWorld.x) * station.dir.x +
+          (train.position.z - station.startWorld.z) * station.dir.z;
+        const platformLen = station.lengthCells * 0.5;
+        const lateral = Math.abs(
+          (train.position.x - station.startWorld.x) * station.dir.z -
+          (train.position.z - station.startWorld.z) * station.dir.x
+        );
         const inside =
-          train.position.x >= r.minX && train.position.x <= r.maxX &&
-          train.position.z >= r.minZ && train.position.z <= r.maxZ &&
+          axial >= -0.75 &&
+          axial <= platformLen + 0.75 &&
+          lateral <= 1.0 &&
           Math.abs(train.position.y - station.groundY) <= 0.5;
         if (inside) {
-          const axial =
-            (train.position.x - station.startWorld.x) * station.dir.x +
-            (train.position.z - station.startWorld.z) * station.dir.z;
-          const platformLen = station.lengthCells * 0.5;
           const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
           const distToStop = towardEnd > 0 ? platformLen - 0.4 - axial : axial - 0.4;
           if (distToStop > 0 && distToStop < 1.0) {
@@ -265,10 +269,18 @@ export class TrainManager {
       // enters from — never at the building/center.
       if (!station) continue;
 
-      const r = station.worldRect;
+      const axial =
+        (train.position.x - station.startWorld.x) * station.dir.x +
+        (train.position.z - station.startWorld.z) * station.dir.z;
+      const platformLen = station.lengthCells * 0.5;
+      const lateral = Math.abs(
+        (train.position.x - station.startWorld.x) * station.dir.z -
+        (train.position.z - station.startWorld.z) * station.dir.x
+      );
       const inside =
-        train.position.x >= r.minX && train.position.x <= r.maxX &&
-        train.position.z >= r.minZ && train.position.z <= r.maxZ &&
+        axial >= -0.75 &&
+        axial <= platformLen + 0.75 &&
+        lateral <= 1.0 &&
         Math.abs(train.position.y - station.groundY) <= 0.5;
 
       if (inside) {
@@ -278,10 +290,6 @@ export class TrainManager {
         const lastDepart = train.cooldowns.get(station.id);
         const ready = lastDepart === undefined || (this.time - lastDepart) > this.STOP_COOLDOWN;
         if (ready) {
-          const axial =
-            (train.position.x - station.startWorld.x) * station.dir.x +
-            (train.position.z - station.startWorld.z) * station.dir.z;
-          const platformLen = station.lengthCells * 0.5;
           const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
           const atFarEnd = towardEnd > 0 ? axial >= platformLen - 0.4 : axial <= 0.4;
           if (atFarEnd) {

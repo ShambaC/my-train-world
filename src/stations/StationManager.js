@@ -26,7 +26,9 @@ export class StationManager {
 
   removeStation(id) {
     this.stations.delete(id);
-    this.rebuildBindings();
+    for (const [trackId, stationId] of this.trackBindings) {
+      if (stationId === id) this.trackBindings.delete(trackId);
+    }
   }
 
   getStation(id) {
@@ -78,9 +80,9 @@ export class StationManager {
   }
 
   /**
-   * Find station whose expanded rect contains a world position.
+   * Find station whose rendered footprint contains a world position.
    */
-  getStationAtPosition(worldPos, tolerance = 1.0) {
+  getStationAtPosition(worldPos, tolerance = 0.05) {
     for (const s of this.stations.values()) {
       const r = s.worldRect;
       if (
@@ -94,9 +96,9 @@ export class StationManager {
   }
 
   /**
-   * Recompute which tracks run right beside a station (a stop happens there).
-   * Track must be laterally 0.75..2.5 units from the strip, axially overlapping,
-   * and at the station ground height (bridges excluded).
+   * Recompute which tracks run beside a station (a stop happens there).
+   * Detect tracks one or two blocks from the station marker, axially
+   * overlapping, and at the station ground height (bridges excluded).
    */
   rebuildBindings(trackManager) {
     this.trackBindings.clear();
@@ -109,7 +111,7 @@ export class StationManager {
         const lateral = Math.abs(dx * station.dir.z - dz * station.dir.x);
         if (Math.abs(track.position.y - station.groundY) > 0.3) continue;
         if (Math.abs(t) > along + 0.75) continue;
-        if (lateral < 0.75 || lateral > 2.5) continue;
+        if (lateral < 0.5 || lateral > 1.0) continue;
         this.trackBindings.set(track.id, station.id);
       }
     }

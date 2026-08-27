@@ -52,8 +52,10 @@ const PAGES = [
     title: 'Worlds, camera, and settings',
     sections: [
       ['Camera and pause', [
-        <>Left drag rotates the view</>,
-        <>Right drag pans the view</>,
+        <><strong>W / A / S / D</strong> move the camera relative to its view</>,
+        <><strong>Arrow keys</strong> rotate the camera in place</>,
+        <>LMB drag orbits around the focus point</>,
+        <>RMB drag pans the view</>,
         <>Wheel zooms in and out</>,
         <><strong>Esc</strong> opens pause, then resumes</>,
         <>Reset overview restores the map view</>,

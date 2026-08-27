@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
-import { buildStation, STATION_WIDTH_WORLD, easeOutBack } from './StationBuilder';
+import { buildStation, STATION_WIDTH_WORLD, PLATFORM_HEIGHT, easeOutBack } from './StationBuilder';
 import { stripStation, rebuildStation } from '../utils/editActions';
 import { trainAudio } from '../audio/trainAudio';
 
@@ -110,8 +110,8 @@ export default function StationRenderer({
         if (historyRef.current) {
           const marker = stripStation(station);
           historyRef.current.push({
-            undo: () => rebuildStation(marker, stationManagerRef.current),
-            redo: () => stationManagerRef.current.removeStation(station.id),
+            undo: () => stationManagerRef.current.removeStation(station.id),
+            redo: () => rebuildStation(marker, stationManagerRef.current),
           });
         }
          onStationsChangeRef.current?.();
@@ -144,41 +144,45 @@ export default function StationRenderer({
     // the screen-horizontal world axis so the label always matches what
     // the user sees. End phase snaps to the actual extension.
     const makeAxisMarker = (color) => {
-      const marker = makeGhostBox(0.5, 0.15, 1.0, color);
+      const marker = makeGhostBox(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, 0.5, color);
       if (ghost.phase === 'end') {
         marker.rotation.y = Math.atan2(ghost.dir.x, ghost.dir.z);
       } else {
         const m = camera.matrixWorld.elements;
         const screenIsX = Math.abs(m[0]) >= Math.abs(m[8]);
         const longSideX = (orientation === 'horizontal') === screenIsX;
-        marker.rotation.y = (longSideX ? Math.PI / 2 : 0) + Math.PI / 2;
+        marker.rotation.y = longSideX ? Math.PI / 2 : 0;
       }
       return marker;
     };
 
     if (ghost.phase === 'start') {
       const marker = makeAxisMarker(GHOST_GREEN);
-      marker.position.set(ghost.world.x, ghost.world.y + 0.3, ghost.world.z);
+      marker.position.set(ghost.world.x, ghost.world.y + PLATFORM_HEIGHT / 2, ghost.world.z);
       ghostMeshesRef.current.push(marker);
       return ghostMeshesRef.current;
     }
 
     const color = ghost.valid ? GHOST_GREEN : GHOST_RED;
     const len = Math.max(0.5, ghost.lengthCells * 0.5);
-    const slab = makeGhostBox(STATION_WIDTH_WORLD, 0.12, len, color);
+    const slab = makeGhostBox(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, len, color);
     const midX = (ghost.startWorld.x + ghost.endWorld.x) / 2;
     const midZ = (ghost.startWorld.z + ghost.endWorld.z) / 2;
-    slab.position.set(midX, ghost.height * 0.5 + 0.25 + 0.3, midZ);
+    const ghostY = ghost.height * 0.5 + 0.25 + PLATFORM_HEIGHT / 2;
+    slab.position.set(midX, ghostY, midZ);
     slab.rotation.y = Math.atan2(ghost.dir.x, ghost.dir.z);
     ghostMeshesRef.current.push(slab);
 
     const startMarker = makeAxisMarker(color);
-    startMarker.position.set(ghost.startWorld.x, ghost.height * 0.5 + 0.25 + 0.3, ghost.startWorld.z);
-    ghostMeshesRef.current.push(startMarker);
+    startMarker.position.set(
+      ghost.startWorld.x + ghost.dir.x * 0.25,
+      ghostY,
+      ghost.startWorld.z + ghost.dir.z * 0.25,
+    );
 
     // End marker follows the cursor cell exactly
     const endMarker = makeGhostBox(0.5, 0.5, 0.5, color);
-    endMarker.position.set(ghost.endWorld.x, ghost.endWorld.y + 0.35, ghost.endWorld.z);
+    endMarker.position.set(ghost.endWorld.x, ghost.endWorld.y + 0.25, ghost.endWorld.z);
     ghostMeshesRef.current.push(endMarker);
 
     return ghostMeshesRef.current;
@@ -201,7 +205,7 @@ export default function StationRenderer({
         piece.obj.visible = true;
         const e = easeOutBack(t);
         piece.obj.position.y = piece.fromY + (piece.toY - piece.fromY) * e;
-        piece.obj.scale.setScalar(Math.max(e, 0.001));
+        piece.obj.scale.setScalar((piece.baseScale ?? 1) * Math.max(e, 0.001));
       }
       // All station lamps/glows fade to near-zero during the day
       station.group.traverse((child) => {
@@ -217,7 +221,7 @@ export default function StationRenderer({
     <group>
       {stations.map((station) =>
         station.group ? (
-          <primitive key={station.id} object={station.group} />
+          <primitive key={`${station.id}-${station.group.uuid}`} object={station.group} />
         ) : null
       )}
       {ghostMeshes?.map((m, i) => (

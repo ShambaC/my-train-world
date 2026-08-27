@@ -13,11 +13,12 @@ import OverheadLine from './OverheadLine';
 import { deleteEntity, clone, stripStation, rebuildStation } from '../utils/editActions';
 import ModelLibrary from '../models/ModelLibrary';
 import { DEFAULT_COACH } from '../trains/coachTypes';
+import { ROAD_TILE_LENGTH, ROAD_SHOULDER, ROAD_WIDTH } from '../environment/roadNetwork.js';
 import * as THREE from 'three';
 import { trainAudio } from '../audio/trainAudio';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
-const ROAD_GHOST_GEO = new THREE.BoxGeometry(0.75, 0.02, 0.5);
+const ROAD_GHOST_GEO = new THREE.BoxGeometry(ROAD_WIDTH.branch + ROAD_SHOULDER, 0.02, ROAD_TILE_LENGTH);
 
 export default function TrackRenderer({
   trackManager,

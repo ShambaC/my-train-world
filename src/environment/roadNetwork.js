@@ -17,6 +17,8 @@ import { scatterRegistry } from './scatterRegistry.js';
 import { makeAtlasMaterial } from '../utils/atlasTextures.js';
 
 const VOXEL = 0.5;
+export const ROAD_TILE_LENGTH = VOXEL;
+export const ROAD_SHOULDER = 0.22;
 const LIFT = 0.015; // keep road quads clear of the voxel tops
 
 export const ROAD_WIDTH = {
@@ -453,7 +455,7 @@ export function createRoadMeshes(layout) {
         dirtQuads.push({ x: midX, y: a.y, z: midZ, yaw, len, w });
       } else {
         if (!crossing) {
-          shoulderQuads.push({ x: midX, y: a.y, z: midZ, yaw, len, w: w + 0.22 });
+          shoulderQuads.push({ x: midX, y: a.y, z: midZ, yaw, len, w: w + ROAD_SHOULDER });
         }
         asphaltQuads.push({ x: midX, y: a.y + 0.004 + (lifted ? 0.01 : 0), z: midZ, yaw, len, w });
       }
@@ -685,8 +687,8 @@ export class RoadManager {
     const y = position.y - 0.005; // snapToGrid lifts +0.02; roads use +0.015
     const cells = [[cx, cz]];
     const waypoints = [
-      { x: centerX - worldDir.x * VOXEL / 2, y, z: centerZ - worldDir.z * VOXEL / 2 },
-      { x: centerX + worldDir.x * VOXEL / 2, y, z: centerZ + worldDir.z * VOXEL / 2 },
+      { x: centerX - worldDir.x * ROAD_TILE_LENGTH / 2, y, z: centerZ - worldDir.z * ROAD_TILE_LENGTH / 2 },
+      { x: centerX + worldDir.x * ROAD_TILE_LENGTH / 2, y, z: centerZ + worldDir.z * ROAD_TILE_LENGTH / 2 },
     ];
     const road = {
       id: `user_road_${this.userNextId++}`,

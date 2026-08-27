@@ -44,13 +44,18 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
     for (const item of activityManager.getAllItems()) {
       let node = nodesRef.current.get(item.id);
       if (!node) {
+        const mesh = item.type === 'passenger' ? createPerson() : createCargo(item.type);
+        if (item.type === 'passenger') {
+          mesh.userData.bobPhase = item.phase;
+          mesh.scale.setScalar(1.15);
+        }
         node = {
           group: new THREE.Group(),
           type: item.type,
-          mesh: item.type === 'passenger' ? createPerson() : createCargo(item.type),
+          mesh,
+          animNodes: mesh.userData.animNodes || null,
         };
-        if (item.type === 'passenger') node.mesh.scale.setScalar(1.15);
-        node.group.add(node.mesh);
+        node.group.add(mesh);
         nodesRef.current.set(item.id, node);
       }
       const g = node.group;
@@ -85,6 +90,33 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
           station.startWorld.z + station.dir.z * item.axial + perp.z * item.side
         );
         g.rotation.y = item.yaw;
+
+        const anim = node.animNodes;
+        const dx = g.position.x - state.camera.position.x;
+        const dz = g.position.z - state.camera.position.z;
+        const walking = item.type === 'passenger'
+          && item.state === 'idle'
+          && item.walkTarget
+          && item.walkSpeed > 0
+          && dx * dx + dz * dz < 784;
+        if (anim) {
+          if (walking) {
+            const walkPhase = state.clock.elapsedTime * 13 * (item.walkSpeed / 0.12) + item.phase;
+            const stride = Math.sin(walkPhase) * 0.42;
+            const armStride = Math.sin(walkPhase) * 0.32;
+            if (anim.legL) anim.legL.rotation.x = stride;
+            if (anim.legR) anim.legR.rotation.x = -stride;
+            if (anim.armL) anim.armL.rotation.x = -armStride;
+            if (anim.armR) anim.armR.rotation.x = armStride;
+            if (anim.body) anim.body.position.y = 0.165 + Math.abs(Math.sin(walkPhase * 2)) * 0.004;
+          } else {
+            if (anim.legL) anim.legL.rotation.x = 0;
+            if (anim.legR) anim.legR.rotation.x = 0;
+            if (anim.armL) anim.armL.rotation.x = 0;
+            if (anim.armR) anim.armR.rotation.x = 0;
+            if (anim.body) anim.body.position.y = 0.165;
+          }
+        }
       }
 
       g.visible = (item.state === 'riding' && !RIDE_VISIBLE[item.type])
