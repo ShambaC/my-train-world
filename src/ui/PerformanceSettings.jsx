@@ -15,6 +15,7 @@ const QUALITY_OPTIONS = [
   { value: 'low', label: 'Low', desc: 'Analytic shadows, sky reflection, optimized foliage' },
   { value: 'medium', label: 'Medium', desc: 'PCF soft shadows, GTAO, scene refraction, bloom' },
   { value: 'high', label: 'High', desc: 'Tight 4K shadows, planar reflection, max grass density' },
+  { value: 'custom', label: 'Custom', desc: 'User configured settings overrides' },
 ];
 
 function PerformanceSettings({
@@ -47,7 +48,7 @@ function PerformanceSettings({
             <label className="block text-sm font-medium mb-2">
               Graphics Quality
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {QUALITY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}

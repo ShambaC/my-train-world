@@ -118,21 +118,120 @@ const CelShader = {
   `,
 };
 
-export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnabled = true }) {
+// ─── Depth-Aware Miniature Tilt-Shift (Macro DoF) ─────────────────────────
+const DepthTiltShiftShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    tDepth: { value: null },
+    cameraNear: { value: 0.1 },
+    cameraFar: { value: 1000.0 },
+    focusDistance: { value: 20.0 },
+    focalRange: { value: 10.0 },
+    maxBlur: { value: 4.0 },
+    resolution: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    #include <packing>
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform float cameraNear;
+    uniform float cameraFar;
+    uniform float focusDistance;
+    uniform float focalRange;
+    uniform float maxBlur;
+    uniform vec2 resolution;
+    varying vec2 vUv;
+
+    float getLinearDepth(vec2 coord) {
+      float fragCoordZ = texture2D(tDepth, coord).x;
+      float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
+      return -viewZ;
+    }
+
+    void main() {
+      vec2 texel = 1.0 / resolution;
+      float centerDepth = getLinearDepth(vUv);
+      
+      // Compute Circle of Confusion based on real 3D distance from focal plane
+      float depthDelta = abs(centerDepth - focusDistance);
+      float coc = clamp((depthDelta - focalRange * 0.2) / max(focalRange, 0.001), 0.0, 1.0);
+      coc = smoothstep(0.04, 1.0, coc);
+      float blurRadius = coc * maxBlur;
+
+      if (blurRadius < 0.2) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
+
+      vec4 col = vec4(0.0);
+      float totalWeight = 0.0;
+
+      const int SAMPLES = 12;
+      vec2 disk[12];
+      disk[0] = vec2( 0.000,  1.000);
+      disk[1] = vec2( 0.500,  0.866);
+      disk[2] = vec2( 0.866,  0.500);
+      disk[3] = vec2( 1.000,  0.000);
+      disk[4] = vec2( 0.866, -0.500);
+      disk[5] = vec2( 0.500, -0.866);
+      disk[6] = vec2( 0.000, -1.000);
+      disk[7] = vec2(-0.500, -0.866);
+      disk[8] = vec2(-0.866, -0.500);
+      disk[9] = vec2(-1.000,  0.000);
+      disk[10] = vec2(-0.866, 0.500);
+      disk[11] = vec2(-0.500, 0.866);
+
+      col += texture2D(tDiffuse, vUv) * 2.0;
+      totalWeight += 2.0;
+
+      for (int i = 0; i < SAMPLES; i++) {
+        vec2 offset1 = disk[i] * texel * blurRadius * 0.5;
+        vec2 offset2 = disk[i] * texel * blurRadius * 1.0;
+
+        col += texture2D(tDiffuse, vUv + offset1);
+        col += texture2D(tDiffuse, vUv + offset2) * 0.75;
+        totalWeight += 1.75;
+      }
+
+      gl_FragColor = col / totalWeight;
+    }
+  `,
+};
+
+export default function Effects({
+  tiltShiftEnabled,
+  celShadingEnabled,
+  bloomEnabled = true,
+  graphicsQuality = 'medium',
+  focusTarget = null,
+}) {
   const { gl, scene, camera, size } = useThree();
   const composerRef = useRef();
+  const depthTextureRef = useRef();
   const tiltPassRef = useRef();
   const celPassRef = useRef();
   const bloomPassRef = useRef();
   const finalPassRef = useRef();
 
   useEffect(() => {
-    // Half-float render target for HDR luminance bloom
+    // Half-float render target with attached depth texture
+    const depthTexture = new THREE.DepthTexture();
+    depthTexture.type = THREE.UnsignedShortType;
+    depthTextureRef.current = depthTexture;
+
     const renderTarget = new THREE.WebGLRenderTarget(size.width, size.height, {
       type: THREE.HalfFloatType,
       format: THREE.RGBAFormat,
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
+      depthTexture,
     });
 
     const composer = new EffectComposer(gl, renderTarget);
@@ -147,7 +246,7 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
     celPassRef.current = celPass;
     composer.addPass(celPass);
 
-    // Selective HDR Bloom (threshold 1.2 so only emissive windows/lamps glow)
+    // Selective HDR Bloom (threshold 1.15 so only emissive windows/lamps glow)
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.width * 0.5, size.height * 0.5),
       0.45, // strength
@@ -158,14 +257,12 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
     bloomPassRef.current = bloomPass;
     composer.addPass(bloomPass);
 
-    // Miniature Mode Tilt-Shift passes
-    const tiltHPass = new ShaderPass(HorizontalTiltShiftShader);
-    const tiltVPass = new ShaderPass(VerticalTiltShiftShader);
-    tiltHPass.enabled = tiltShiftEnabled;
-    tiltVPass.enabled = tiltShiftEnabled;
-    tiltPassRef.current = [tiltHPass, tiltVPass];
-    composer.addPass(tiltHPass);
-    composer.addPass(tiltVPass);
+    // Depth-Aware Miniature Mode DoF Pass
+    const depthDofPass = new ShaderPass(DepthTiltShiftShader);
+    depthDofPass.uniforms.tDepth.value = depthTexture;
+    depthDofPass.enabled = tiltShiftEnabled;
+    tiltPassRef.current = depthDofPass;
+    composer.addPass(depthDofPass);
 
     // Final color formation pass
     const finalPass = new ShaderPass(FinalShader);
@@ -178,6 +275,7 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
     return () => {
       composer.dispose();
       renderTarget.dispose();
+      depthTexture.dispose();
       composerRef.current = null;
     };
   }, [gl, scene, camera]);
@@ -194,11 +292,7 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
   }, [gl]);
 
   useEffect(() => {
-    const passes = tiltPassRef.current;
-    if (passes) {
-      passes[0].enabled = tiltShiftEnabled;
-      passes[1].enabled = tiltShiftEnabled;
-    }
+    if (tiltPassRef.current) tiltPassRef.current.enabled = tiltShiftEnabled;
     if (celPassRef.current) celPassRef.current.enabled = celShadingEnabled;
     if (bloomPassRef.current) bloomPassRef.current.enabled = bloomEnabled;
   }, [tiltShiftEnabled, celShadingEnabled, bloomEnabled]);
@@ -210,12 +304,8 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
     if (celPassRef.current) {
       celPassRef.current.uniforms.resolution.value.set(size.width, size.height);
     }
-    const passes = tiltPassRef.current;
-    if (passes) {
-      passes[0].uniforms.h.value = BLUR_STRENGTH / renderW;
-      passes[0].uniforms.r.value = FOCUS_Y;
-      passes[1].uniforms.v.value = BLUR_STRENGTH / renderH;
-      passes[1].uniforms.r.value = FOCUS_Y;
+    if (tiltPassRef.current) {
+      tiltPassRef.current.uniforms.resolution.value.set(renderW, renderH);
     }
     if (composerRef.current) {
       composerRef.current.setSize(size.width, size.height);
@@ -226,16 +316,20 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, bloomEnab
     if (composerRef.current) {
       composerRef.current.render();
     }
-    const passes = tiltPassRef.current;
-    if (passes && passes[0].enabled && composerRef.current) {
+    const tiltPass = tiltPassRef.current;
+    if (tiltPass && tiltPass.enabled && camera) {
       const pixelRatio = gl.getPixelRatio();
       const renderW = size.width * pixelRatio;
       const renderH = size.height * pixelRatio;
-      const dist = THREE.MathUtils.clamp(camera.position.length() / 25, 0.5, 1.6);
-      passes[0].uniforms.h.value = (BLUR_STRENGTH * dist) / renderW;
-      passes[0].uniforms.r.value = FOCUS_Y;
-      passes[1].uniforms.v.value = (BLUR_STRENGTH * dist) / renderH;
-      passes[1].uniforms.r.value = FOCUS_Y;
+
+      tiltPass.uniforms.cameraNear.value = camera.near || 0.1;
+      tiltPass.uniforms.cameraFar.value = camera.far || 1000.0;
+      tiltPass.uniforms.resolution.value.set(renderW, renderH);
+
+      const targetPos = focusTarget ? (focusTarget.position || focusTarget) : new THREE.Vector3(0, 1.5, 0);
+      const dist = camera.position.distanceTo(targetPos);
+      tiltPass.uniforms.focusDistance.value = dist;
+      tiltPass.uniforms.focalRange.value = THREE.MathUtils.clamp(dist * 0.45, 4.0, 18.0);
     }
   }, 1);
 

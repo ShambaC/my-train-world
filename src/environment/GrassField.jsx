@@ -140,7 +140,7 @@ FLOWER_GEO.translate(0, 0.5, 0);
  * hidden (zero-scaled) under tracks, stations, roads and scattered buildings,
  * exactly like ScatterProps. Deterministic per terrain seed.
  */
-export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting }) {
+export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting, quality }) {
   const groupRef = useRef(new THREE.Group());
   const layoutRef = useRef([]);
   const layoutByCellRef = useRef(new Map());
@@ -243,9 +243,11 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
       }
     }
 
+    const grassMul = quality?.grassDensityMultiplier ?? 1.0;
     let total = 0;
     for (const p of patches) {
-      p.count = p.loose ? 180 + Math.floor(rng() * 140) : 160 + Math.floor(rng() * 120);
+      const baseCount = p.loose ? 180 + Math.floor(rng() * 140) : 160 + Math.floor(rng() * 120);
+      p.count = Math.max(1, Math.floor(baseCount * grassMul));
       p.shape = new Array(SHAPE_SAMPLES);
       for (let i = 0; i < SHAPE_SAMPLES; i++) {
         p.shape[i] = p.r * (0.45 + rng() * 0.55);

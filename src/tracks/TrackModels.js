@@ -24,7 +24,7 @@ const COLORS = {
 // Moonlit rail highlight: a faint blue emissive keeps rails distinguishable
 // from terrain at night without dynamic lights.
 function createRailMaterial() {
-  return makeAtlasMaterial('rail', {
+  return makeAtlasMaterial('rail_steel', {
     emissive: 0x24365c,
     emissiveIntensity: 0.55,
   });
@@ -44,7 +44,7 @@ function getStraightAssets() {
     gravelGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH),
     gravelMat: makeAtlasMaterial('ballast', { repeat: [0.33, 0.33] }),
     sleeperGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
-    sleeperMat: makeAtlasMaterial('planks', { repeat: [1, 1] }),
+    sleeperMat: makeAtlasMaterial('sleeper_planks', { repeat: [1, 1] }),
     railGeo: new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH),
   };
   return straightAssets;
@@ -61,7 +61,7 @@ function getCurvedAssets() {
     gravelGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.5, CURVE.r * angleStep * 1.1),
     gravelMat: makeAtlasMaterial('ballast', { repeat: [0.33, 0.33] }),
     sleeperGeo: new THREE.BoxGeometry(CURVED_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
-    sleeperMat: makeAtlasMaterial('planks', { repeat: [1, 1] }),
+    sleeperMat: makeAtlasMaterial('sleeper_planks', { repeat: [1, 1] }),
     railGeos: (() => {
       const innerRadius = CURVE.r - RAIL_OFFSET;
       const outerRadius = CURVE.r + RAIL_OFFSET;
@@ -101,10 +101,10 @@ let bridgeAssets = null;
 function getBridgeAssets() {
   if (bridgeAssets) return bridgeAssets;
   bridgeAssets = {
-    pillarMat: makeAtlasMaterial('beam', { repeat: [1, 0.5] }),
-    deckMat: makeAtlasMaterial('wood_deck', { repeat: [1, 0.5] }),
-    braceMat: makeAtlasMaterial('beam', { repeat: [1, 1] }),
-    capMat: makeAtlasMaterial('beam', { repeat: [1, 1] }),
+    pillarMat: makeAtlasMaterial('structural_beam', { repeat: [1, 0.5] }),
+    deckMat: makeAtlasMaterial('bridge_deck', { repeat: [1, 0.5] }),
+    braceMat: makeAtlasMaterial('structural_beam', { repeat: [1, 1] }),
+    capMat: makeAtlasMaterial('structural_beam', { repeat: [1, 1] }),
     deckGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 1.1, 0.08, TRACK_LENGTH),
     capGeo: new THREE.BoxGeometry(0.12, 0.04, 0.12),
     braceGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.7, 0.04, 0.04),
@@ -212,7 +212,7 @@ function getRampAssets() {
     gravelGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH, RAIL_HEIGHT * 0.5, TRACK_LENGTH),
     gravelMat: makeAtlasMaterial('ballast', { repeat: [0.33, 0.33] }),
     sleeperGeo: new THREE.BoxGeometry(STRAIGHT_TRACK_WIDTH * 0.9, RAIL_HEIGHT * 0.6, RAIL_HEIGHT * 1.5),
-    sleeperMat: makeAtlasMaterial('planks', { repeat: [1, 1] }),
+    sleeperMat: makeAtlasMaterial('sleeper_planks', { repeat: [1, 1] }),
     railGeo: new THREE.BoxGeometry(RAIL_HEIGHT * 0.8, RAIL_HEIGHT * 0.8, TRACK_LENGTH),
   };
   return rampAssets;

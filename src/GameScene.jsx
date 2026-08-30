@@ -38,6 +38,7 @@ import CameraCollision, { constrainCamera } from './environment/cameraCollision'
 import PracticalLights from './environment/PracticalLights';
 import ShoreDressing from './environment/ShoreDressing.jsx';
 import VisualReviewHarness from './render/VisualReviewHarness.jsx';
+import { getQualityPreset } from './render/graphicsQuality.js';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -88,7 +89,9 @@ function Scene({
   trainsVersion,
   stationsScatterVersion,
   showAxes,
+  graphicsQuality = 'medium',
 }) {
+  const qualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const terrainRef = useRef();
   const waterRef = useRef();
   const orbitRef = useRef(null);
@@ -281,8 +284,8 @@ function Scene({
         position={[50, 60, 30]}
         intensity={1.15}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={qualityPreset.shadowMapSize || 2048}
+        shadow-mapSize-height={qualityPreset.shadowMapSize || 2048}
         shadow-camera-far={200}
         shadow-camera-left={-shadowHalf}
         shadow-camera-right={shadowHalf}
@@ -306,6 +309,7 @@ function Scene({
          lighting={lighting}
          trackManager={trackManager}
          trainManager={trainManager}
+         quality={qualityPreset}
        />
 
       {/* Shoreline Dressing */}
@@ -412,6 +416,7 @@ function Scene({
           stationsVersion={stationsScatterVersion}
           roadManager={roadManager}
           lighting={lighting}
+          quality={qualityPreset}
         />
       )}
 
@@ -545,7 +550,9 @@ export default function GameScene({
   paused = false,
   debugDetail = 'compact',
   debugPosition = 'top-left',
+  graphicsQuality = 'medium',
 }) {
+  const rootQualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
     genTimeMs: 0,
@@ -762,6 +769,7 @@ export default function GameScene({
       <Canvas
         camera={{ position: [20, 15, 20], fov: 60 }}
         shadows
+        dpr={[1, rootQualityPreset.dprCap || 2]}
         frameloop="never"
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
@@ -815,11 +823,16 @@ export default function GameScene({
           trainsVersion={trainsVersion}
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
+           graphicsQuality={graphicsQuality}
          />
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt
             blur and cel passes stay opt-in toggles. */}
-        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
+        <Effects 
+          tiltShiftEnabled={tiltShiftEnabled} 
+          celShadingEnabled={celShadingEnabled}
+          graphicsQuality={graphicsQuality}
+        />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
 

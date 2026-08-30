@@ -67,10 +67,40 @@ export const QUALITY_TIERS = {
     flowerDensityMultiplier: 1.0,
     anisotropyCap: 8,
   },
+  custom: {
+    id: 'custom',
+    name: 'Custom',
+    dprCap: 1.5,
+    terrainShell: 'chamfered',
+    shadowMapSize: 2048,
+    shadowFiltering: 'pcfsoft',
+    shadowRadius: 4,
+    contactAO: 'gtao_half',
+    aoResolution: 0.5,
+    waterReflection: 'sky_refract',
+    waterRefraction: true,
+    waterNormalLayers: 2,
+    bloom: true,
+    bloomResolution: 0.25,
+    miniatureDof: { resolution: 0.5, sampleCount: 8 },
+    cloudLayers: 2,
+    grassDensityMultiplier: 0.8,
+    flowerDensityMultiplier: 0.8,
+    anisotropyCap: 4,
+  },
 };
 
 export const DEFAULT_QUALITY = 'medium';
 
+let customOverrides = {};
+
+export function setCustomQualityOverrides(overrides) {
+  customOverrides = { ...customOverrides, ...overrides };
+}
+
 export function getQualityPreset(tierName) {
+  if (tierName === 'custom') {
+    return { ...QUALITY_TIERS.custom, ...customOverrides };
+  }
   return QUALITY_TIERS[tierName] || QUALITY_TIERS[DEFAULT_QUALITY];
 }

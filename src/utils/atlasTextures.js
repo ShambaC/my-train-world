@@ -37,20 +37,50 @@ function configureTexture(tex, isColor = true, anisotropy = 4) {
   tex.anisotropy = Math.min(anisotropy, 8);
 }
 
+const STYLE_ALIASES = {
+  // Stations & Platforms
+  'deck': 'platform_deck',
+  'platform_deck': 'platform_deck',
+  'platform_edge': 'platform_edge_stone',
+  // Roads & Curbs
+  'shoulder': 'road_shoulder',
+  'road_shoulder': 'road_shoulder',
+  'road_dirt': 'dirt_road',
+  'dirt_road': 'dirt_road',
+  'lamp_post': 'lamp_metal',
+  'green_sign': 'sign_green_paint',
+  // Tracks & Infrastructure
+  'rail': 'rail_steel',
+  'rail_steel': 'rail_steel',
+  'planks': 'sleeper_planks',
+  'sleeper_planks': 'sleeper_planks',
+  'beam': 'structural_beam',
+  'structural_beam': 'structural_beam',
+  'wood_deck': 'bridge_deck',
+  'bridge_deck': 'bridge_deck',
+  'steel_beam': 'structural_beam',
+  'insulator': 'ceramic_insulator',
+  'red_paint': 'crossing_red_metal',
+  // Props & Cargo
+  'crate': 'woven_cargo',
+  'sack': 'fabric_variation',
+  'coal': 'boiler_chassis_metal',
+  'container': 'cargo_variation',
+  'tanker': 'galvanized_steel',
+  'crate_lid': 'warm_timber',
+};
+
 /**
  * Get or load a style texture by semantic name.
  */
 export function getStyleTexture(name, opts = {}) {
-  let tex = textureCache.get(name);
+  const resolvedName = STYLE_ALIASES[name] || STYLE_ALIASES[name?.replace(/-/g, '_')] || name;
+  let tex = textureCache.get(resolvedName);
   if (tex) return tex;
 
-  const def = STYLE_TEXTURES[name];
+  const def = STYLE_TEXTURES[resolvedName] || STYLE_TEXTURES[resolvedName.replace(/-/g, '_')];
   if (!def) {
-    const sanitized = name.replace(/-/g, '_');
-    if (STYLE_TEXTURES[sanitized]) {
-      return getStyleTexture(sanitized, opts);
-    }
-    console.warn(`[atlasTextures] Unknown style texture: ${name}`);
+    console.warn(`[atlasTextures] Unknown style texture: ${name} (resolved: ${resolvedName})`);
     return null;
   }
 

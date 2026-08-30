@@ -223,3 +223,142 @@ export function createShrubGroup(scale = 1.0, seed = 0) {
 
   return group;
 }
+
+/**
+ * Creates instanced mesh parts for high performance batch rendering in ScatterProps.
+ */
+export function createInstancedTreeDef(key, count, seed = 1337) {
+  initMaterials();
+
+  const themeIdx = Math.floor(Math.abs(seed * 7)) % canopyMaterials.length;
+  const { matTop, matMid } = canopyMaterials[themeIdx];
+
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const quaternion = new THREE.Quaternion();
+  const scaleVec = new THREE.Vector3();
+
+  if (key === 'lineside-oak') {
+    // Deciduous: 1 trunk + 4 canopy lobes
+    const trunkGeo = new THREE.CylinderGeometry(0.065, 0.11, 1.4, 6);
+    trunkGeo.translate(0, 0.7, 0);
+    const lobe1Geo = createPuffyLobeGeometry(0.55);
+    const lobe2Geo = createPuffyLobeGeometry(0.44);
+    const lobe3Geo = createPuffyLobeGeometry(0.40);
+    const lobe4Geo = createPuffyLobeGeometry(0.36);
+
+    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+    const lobe1Mesh = new THREE.InstancedMesh(lobe1Geo, matTop, count);
+    const lobe2Mesh = new THREE.InstancedMesh(lobe2Geo, matMid, count);
+    const lobe3Mesh = new THREE.InstancedMesh(lobe3Geo, matTop, count);
+    const lobe4Mesh = new THREE.InstancedMesh(lobe4Geo, matMid, count);
+
+    const meshes = [trunkMesh, lobe1Mesh, lobe2Mesh, lobe3Mesh, lobe4Mesh];
+    meshes.forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
+
+    const setInstance = (idx, x, y, z, rotY, scale) => {
+      quaternion.setFromEuler(new THREE.Euler(0, rotY, 0));
+      scaleVec.set(scale, scale, scale);
+
+      // Trunk
+      position.set(x, y, z);
+      matrix.compose(position, quaternion, scaleVec);
+      trunkMesh.setMatrixAt(idx, matrix);
+
+      // Lobes
+      const setLobe = (mesh, lx, ly, lz) => {
+        const cos = Math.cos(rotY);
+        const sin = Math.sin(rotY);
+        const wx = x + (lx * cos + lz * sin) * scale;
+        const wz = z + (-lx * sin + lz * cos) * scale;
+        const wy = y + ly * scale;
+        position.set(wx, wy, wz);
+        matrix.compose(position, quaternion, scaleVec);
+        mesh.setMatrixAt(idx, matrix);
+      };
+
+      setLobe(lobe1Mesh, 0.0, 1.45, 0.0);
+      setLobe(lobe2Mesh, 0.22, 1.25, 0.16);
+      setLobe(lobe3Mesh, -0.20, 1.22, -0.14);
+      setLobe(lobe4Mesh, 0.04, 1.65, 0.04);
+    };
+
+    return { meshes, setInstance };
+  } else if (key === 'lineside-pine') {
+    // Soft Pine: 1 trunk + 4 stacked rounded tiers
+    const pineTheme = canopyMaterials[3];
+    const trunkGeo = new THREE.CylinderGeometry(0.045, 0.09, 1.3, 6);
+    trunkGeo.translate(0, 0.65, 0);
+    const tier1Geo = createPuffyLobeGeometry(0.55);
+    const tier2Geo = createPuffyLobeGeometry(0.44);
+    const tier3Geo = createPuffyLobeGeometry(0.34);
+    const tier4Geo = createPuffyLobeGeometry(0.24);
+
+    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+    const tier1Mesh = new THREE.InstancedMesh(tier1Geo, pineTheme.matMid, count);
+    const tier2Mesh = new THREE.InstancedMesh(tier2Geo, pineTheme.matMid, count);
+    const tier3Mesh = new THREE.InstancedMesh(tier3Geo, pineTheme.matTop, count);
+    const tier4Mesh = new THREE.InstancedMesh(tier4Geo, pineTheme.matTop, count);
+
+    const meshes = [trunkMesh, tier1Mesh, tier2Mesh, tier3Mesh, tier4Mesh];
+    meshes.forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
+
+    const setInstance = (idx, x, y, z, rotY, scale) => {
+      quaternion.setFromEuler(new THREE.Euler(0, rotY, 0));
+      scaleVec.set(scale, scale, scale);
+
+      position.set(x, y, z);
+      matrix.compose(position, quaternion, scaleVec);
+      trunkMesh.setMatrixAt(idx, matrix);
+
+      const setTier = (mesh, ty) => {
+        position.set(x, y + ty * scale, z);
+        scaleVec.set(scale, scale * 0.75, scale);
+        matrix.compose(position, quaternion, scaleVec);
+        mesh.setMatrixAt(idx, matrix);
+      };
+
+      setTier(tier1Mesh, 0.95);
+      setTier(tier2Mesh, 1.32);
+      setTier(tier3Mesh, 1.65);
+      setTier(tier4Mesh, 1.92);
+    };
+
+    return { meshes, setInstance };
+  } else {
+    // Shrub: 3 puffy clusters
+    const shrub1Geo = createPuffyLobeGeometry(0.28);
+    const shrub2Geo = createPuffyLobeGeometry(0.22);
+    const shrub3Geo = createPuffyLobeGeometry(0.20);
+
+    const shrub1Mesh = new THREE.InstancedMesh(shrub1Geo, matTop, count);
+    const shrub2Mesh = new THREE.InstancedMesh(shrub2Geo, matMid, count);
+    const shrub3Mesh = new THREE.InstancedMesh(shrub3Geo, matMid, count);
+
+    const meshes = [shrub1Mesh, shrub2Mesh, shrub3Mesh];
+    meshes.forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
+
+    const setInstance = (idx, x, y, z, rotY, scale) => {
+      quaternion.setFromEuler(new THREE.Euler(0, rotY, 0));
+      scaleVec.set(scale, scale, scale);
+
+      const setLobe = (mesh, lx, ly, lz) => {
+        const cos = Math.cos(rotY);
+        const sin = Math.sin(rotY);
+        const wx = x + (lx * cos + lz * sin) * scale;
+        const wz = z + (-lx * sin + lz * cos) * scale;
+        const wy = y + ly * scale;
+        position.set(wx, wy, wz);
+        matrix.compose(position, quaternion, scaleVec);
+        mesh.setMatrixAt(idx, matrix);
+      };
+
+      setLobe(shrub1Mesh, 0.0, 0.22, 0.0);
+      setLobe(shrub2Mesh, 0.14, 0.16, 0.08);
+      setLobe(shrub3Mesh, -0.12, 0.18, -0.08);
+    };
+
+    return { meshes, setInstance };
+  }
+}
+

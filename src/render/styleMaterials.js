@@ -24,13 +24,10 @@ function patchPainterlyShader(material, options = {}) {
     shader.uniforms.uNightness = { value: 0 };
     shader.uniforms.uTopLightTint = { value: new THREE.Color(0xfff8ee) };
     shader.uniforms.uBottomShadeTint = { value: new THREE.Color(0x98a8bf) };
-
-    if (mottleTex) {
-      shader.uniforms.tMottle = { value: mottleTex };
-    }
-    if (cavityTex) {
-      shader.uniforms.tCavity = { value: cavityTex };
-    }
+    shader.uniforms.tMottle = { value: mottleTex || null };
+    shader.uniforms.tCavity = { value: cavityTex || null };
+    shader.uniforms.uHasMottle = { value: mottleTex ? 1.0 : 0.0 };
+    shader.uniforms.uHasCavity = { value: cavityTex ? 1.0 : 0.0 };
 
     // Vertex shader
     shader.vertexShader = `
@@ -53,6 +50,10 @@ function patchPainterlyShader(material, options = {}) {
       uniform float uNightness;
       uniform vec3 uTopLightTint;
       uniform vec3 uBottomShadeTint;
+      uniform sampler2D tMottle;
+      uniform sampler2D tCavity;
+      uniform float uHasMottle;
+      uniform float uHasCavity;
       varying vec3 vWorldPosition;
       varying vec3 vWorldNormal;
       ${shader.fragmentShader}
@@ -63,10 +64,21 @@ function patchPainterlyShader(material, options = {}) {
       `
       #include <color_fragment>
       
-      // Soft vertical form lighting response
+      // Triplanar low-frequency surface mottling
+      if (uHasMottle > 0.5) {
+        vec3 triWeight = abs(vWorldNormal);
+        triWeight /= (triWeight.x + triWeight.y + triWeight.z + 0.001);
+        float mottleX = texture2D(tMottle, vWorldPosition.yz * 0.5).r;
+        float mottleY = texture2D(tMottle, vWorldPosition.xz * 0.5).r;
+        float mottleZ = texture2D(tMottle, vWorldPosition.xy * 0.5).r;
+        float mottleVal = mottleX * triWeight.x + mottleY * triWeight.y + mottleZ * triWeight.z;
+        diffuseColor.rgb *= mix(0.92, 1.08, mottleVal);
+      }
+
+      // Soft vertical directional form lighting response (warm top, cool shade)
       float upFactor = clamp(vWorldNormal.y * 0.5 + 0.5, 0.0, 1.0);
       vec3 formTint = mix(uBottomShadeTint, uTopLightTint, upFactor);
-      diffuseColor.rgb *= mix(vec3(1.0), formTint, 0.15);
+      diffuseColor.rgb *= mix(vec3(1.0), formTint, 0.12);
       `
     );
 
@@ -84,7 +96,7 @@ export function getStyleMaterial(family, opts = {}) {
     opts.flatShading ? 'flat' : 'smooth',
     opts.side || 'front',
     opts.texture || 'none',
-    opts.color || 'none',
+    opts.color !== undefined ? opts.color : 'default',
   ].join('|');
 
   if (materialPool.has(key)) {
@@ -226,13 +238,22 @@ export function getStyleMaterial(family, opts = {}) {
       break;
   }
 
-  baseOpts.color = opts.color !== undefined ? opts.color : defaultColor;
-
+  let tex = null;
   if (textureName) {
-    const tex = getStyleTexture(textureName, { repeat: opts.repeat || [1, 1] });
+    tex = getStyleTexture(textureName, { repeat: opts.repeat || [1, 1] });
     if (tex) {
       baseOpts.map = tex;
     }
+  }
+
+  // If map exists and user did not explicitly supply a tint color, preserve pure white
+  // so Three.js MeshStandardMaterial does not multiply the texture by a solid color overlay.
+  if (opts.color !== undefined) {
+    baseOpts.color = opts.color;
+  } else if (baseOpts.map) {
+    baseOpts.color = 0xffffff;
+  } else {
+    baseOpts.color = defaultColor;
   }
 
   const mat = new THREE.MeshStandardMaterial(baseOpts);

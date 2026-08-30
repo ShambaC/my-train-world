@@ -5,6 +5,7 @@ import { BIOME, mulberry32, isClearingCell } from '../terrain.js';
 import { applyWindSway } from './wind.js';
 import { scatterRegistry } from './scatterRegistry.js';
 import { addSetDiff, collectExclusionSets, cellKey } from './instanceExclusion.js';
+import { createInstancedTreeDef } from './treeArchetypes.js';
 
 const VOXEL = 0.5;
 
@@ -189,7 +190,8 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       return false;
     };
     for (const [defIndex, def] of SCATTER_DEFS.entries()) {
-      const entry = ModelLibrary.getEntry(def.key);
+      const isNature = def.key === 'lineside-oak' || def.key === 'lineside-pine' || def.key === 'lineside-shrub';
+      const entry = !isNature ? ModelLibrary.getEntry(def.key) : null;
       const instances = [];
       // Trees (oak/pine) share one placement list so trees never overlap
       // trees; bushes/shrubs may freely grow under or next to them.
@@ -257,72 +259,96 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
 
       if (instances.length === 0) continue;
 
-      const isWindy = WIND_DEFS.has(def.key);
+      if (isNature) {
+        // Fluffy procedural nature archetypes (Tiny Glade style)
+        const treeDef = createInstancedTreeDef(def.key, instances.length, seed + defIndex);
+        instances.forEach((inst, i) => {
+          treeDef.setInstance(i, inst.x, inst.y, inst.z, inst.rotY, inst.scale);
+          treeDef.meshes.forEach((m) => {
+            registerLayout({
+              mesh: m,
+              index: i,
+              cellX: inst.cellX,
+              cellZ: inst.cellZ,
+              ox: inst.x,
+              oy: inst.y,
+              oz: inst.z,
+              rotQ: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, inst.rotY, 0)),
+              scale: inst.scale,
+            });
+          });
+        });
 
-      const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);
-      // Instanced casters cost one draw call per def in the shadow pass —
-      // cheap enough to give every scattered prop realtime shadows.
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      if (isWindy) applyWindSway(entry.material, { strength: 1 });
+        treeDef.meshes.forEach((m) => {
+          m.instanceMatrix.needsUpdate = true;
+          groupRef.current.add(m);
+        });
+      } else {
+        const isWindy = WIND_DEFS.has(def.key);
 
-      const patchMesh = new THREE.InstancedMesh(PATCH_GEO, PATCH_MAT, instances.length);
-      patchMesh.rotation.x = -Math.PI / 2;
-      patchMesh.renderOrder = 1;
+        const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        if (isWindy) applyWindSway(entry.material, { strength: 1 });
 
-      let glowMesh = null;
-      if (isBuilding) {
-        glowMesh = new THREE.InstancedMesh(GLOW_GEO, GLOW_MAT, instances.length * 4);
-        glowMesh.renderOrder = 2;
-      }
-      const b = entry.bounds;
-      const hx = (b.max.x - b.min.x) / 2;
-      const hz = (b.max.z - b.min.z) / 2;
-      const yMid = b.max.y * 0.55;
+        const patchMesh = new THREE.InstancedMesh(PATCH_GEO, PATCH_MAT, instances.length);
+        patchMesh.rotation.x = -Math.PI / 2;
+        patchMesh.renderOrder = 1;
 
-      instances.forEach((inst, i) => {
-        // Model instance
-        position.set(inst.x, inst.y, inst.z);
-        quaternion.setFromEuler(new THREE.Euler(0, inst.rotY, 0));
-        scaleVec.set(inst.scale, inst.scale, inst.scale);
-        matrix.compose(position, quaternion, scaleVec);
-        mesh.setMatrixAt(i, matrix);
-        registerLayout({ mesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
-
-        // Fake contact patch
-        position.set(inst.x, inst.y + 0.013, inst.z);
-        matrix.compose(position, quaternion, scaleVec);
-        patchMesh.setMatrixAt(i, matrix);
-        registerLayout({ mesh: patchMesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y + 0.013, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
-
-        // Window glows (4 sides)
-        if (glowMesh) {
-          const cos = Math.cos(inst.rotY);
-          const sin = Math.sin(inst.rotY);
-          for (let s = 0; s < 4; s++) {
-            const side = GLOW_SIDES[s];
-            const localX = side[0] * hx * 0.62;
-            const localZ = side[1] * hz * 0.62;
-            const ox = inst.x + localX * cos + localZ * sin;
-            const oz = inst.z - localX * sin + localZ * cos;
-            const oy = inst.y + yMid * inst.scale + (rng() - 0.5) * 0.05;
-            position.set(ox, oy, oz);
-            quaternion.setFromEuler(new THREE.Euler(0, inst.rotY + side[2], 0));
-            scaleVec.set(inst.scale, inst.scale, inst.scale);
-            matrix.compose(position, quaternion, scaleVec);
-            const idx = i * 4 + s;
-            glowMesh.setMatrixAt(idx, matrix);
-            registerLayout({ mesh: glowMesh, index: idx, cellX: inst.cellX, cellZ: inst.cellZ, ox, oy, oz, rotQ: quaternion.clone(), scale: inst.scale });
-          }
+        let glowMesh = null;
+        if (isBuilding) {
+          glowMesh = new THREE.InstancedMesh(GLOW_GEO, GLOW_MAT, instances.length * 4);
+          glowMesh.renderOrder = 2;
         }
-      });
+        const b = entry.bounds;
+        const hx = (b.max.x - b.min.x) / 2;
+        const hz = (b.max.z - b.min.z) / 2;
+        const yMid = b.max.y * 0.55;
 
-      mesh.instanceMatrix.needsUpdate = true;
-      patchMesh.instanceMatrix.needsUpdate = true;
-      if (glowMesh) glowMesh.instanceMatrix.needsUpdate = true;
+        instances.forEach((inst, i) => {
+          // Model instance
+          position.set(inst.x, inst.y, inst.z);
+          quaternion.setFromEuler(new THREE.Euler(0, inst.rotY, 0));
+          scaleVec.set(inst.scale, inst.scale, inst.scale);
+          matrix.compose(position, quaternion, scaleVec);
+          mesh.setMatrixAt(i, matrix);
+          registerLayout({ mesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
 
-      groupRef.current.add(mesh, patchMesh);
-      if (glowMesh) groupRef.current.add(glowMesh);
+          // Fake contact patch
+          position.set(inst.x, inst.y + 0.013, inst.z);
+          matrix.compose(position, quaternion, scaleVec);
+          patchMesh.setMatrixAt(i, matrix);
+          registerLayout({ mesh: patchMesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y + 0.013, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
+
+          // Window glows (4 sides)
+          if (glowMesh) {
+            const cos = Math.cos(inst.rotY);
+            const sin = Math.sin(inst.rotY);
+            for (let s = 0; s < 4; s++) {
+              const side = GLOW_SIDES[s];
+              const localX = side[0] * hx * 0.62;
+              const localZ = side[1] * hz * 0.62;
+              const ox = inst.x + localX * cos + localZ * sin;
+              const oz = inst.z - localX * sin + localZ * cos;
+              const oy = inst.y + yMid * inst.scale + (rng() - 0.5) * 0.05;
+              position.set(ox, oy, oz);
+              quaternion.setFromEuler(new THREE.Euler(0, inst.rotY + side[2], 0));
+              scaleVec.set(inst.scale, inst.scale, inst.scale);
+              matrix.compose(position, quaternion, scaleVec);
+              const idx = i * 4 + s;
+              glowMesh.setMatrixAt(idx, matrix);
+              registerLayout({ mesh: glowMesh, index: idx, cellX: inst.cellX, cellZ: inst.cellZ, ox, oy, oz, rotQ: quaternion.clone(), scale: inst.scale });
+            }
+          }
+        });
+
+        mesh.instanceMatrix.needsUpdate = true;
+        patchMesh.instanceMatrix.needsUpdate = true;
+        if (glowMesh) glowMesh.instanceMatrix.needsUpdate = true;
+
+        groupRef.current.add(mesh, patchMesh);
+        if (glowMesh) groupRef.current.add(glowMesh);
+      }
     }
 
     layoutRef.current._needsExclusion = true;

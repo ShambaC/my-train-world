@@ -24,7 +24,11 @@ const WaterShader = {
     uFoamPoints: { value: Array.from({ length: MAX_FOAM_POINTS }, () => new THREE.Vector3(9999, 0, 9999)) },
     uFoamCount: { value: 0 },
     tRipple: { value: null },
+    tRippleCross: { value: null },
     tCaustic: { value: null },
+    tCausticBroken: { value: null },
+    tShoreDamp: { value: null },
+    tShoreFoam: { value: null },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -54,7 +58,11 @@ const WaterShader = {
     uniform vec3 uFoamPoints[${MAX_FOAM_POINTS}];
     uniform float uFoamCount;
     uniform sampler2D tRipple;
+    uniform sampler2D tRippleCross;
     uniform sampler2D tCaustic;
+    uniform sampler2D tCausticBroken;
+    uniform sampler2D tShoreDamp;
+    uniform sampler2D tShoreFoam;
     varying vec2 vUv;
     varying vec3 vWorldPos;
 
@@ -70,28 +78,36 @@ const WaterShader = {
 
       float depth = max(0.0, uWaterY - terrainTopY);
 
-      // Multi-layer calm ripple normal perturbation
-      vec2 uv1 = vWorldPos.xz * 0.16 + vec2(uTime * 0.025, uTime * 0.018);
-      vec2 uv2 = vWorldPos.xz * 0.24 - vec2(uTime * 0.018, uTime * 0.022);
+      // Multi-layer calm ripple normal perturbation (broad swell + crossing ripples)
+      vec2 uv1 = vWorldPos.xz * 0.15 + vec2(uTime * 0.022, uTime * 0.015);
+      vec2 uv2 = vWorldPos.xz * 0.26 - vec2(uTime * 0.016, uTime * 0.020);
+      vec2 uv3 = vWorldPos.zx * 0.32 + vec2(uTime * 0.012, -uTime * 0.014);
       float r1 = texture2D(tRipple, uv1).r;
-      float r2 = texture2D(tRipple, uv2).r;
-      vec3 normal = normalize(vec3((r1 - 0.5) * 0.15 + (r2 - 0.5) * 0.1, 1.0, (r1 - 0.5) * 0.12 - (r2 - 0.5) * 0.08));
+      float r2 = texture2D(tRippleCross, uv2).r;
+      float r3 = texture2D(tRipple, uv3).r;
+      vec3 normal = normalize(vec3(
+        (r1 - 0.5) * 0.16 + (r2 - 0.5) * 0.10 + (r3 - 0.5) * 0.06,
+        1.0,
+        (r1 - 0.5) * 0.12 - (r2 - 0.5) * 0.10 + (r3 - 0.5) * 0.05
+      ));
 
       // Luminous depth absorption gradient (Tiny Glade teal/turquoise)
-      float shallowMix = 1.0 - smoothstep(0.08, 1.4, depth);
-      float sandMix = (1.0 - smoothstep(0.02, 0.45, depth)) * 0.7;
+      float shallowMix = 1.0 - smoothstep(0.06, 1.3, depth);
+      float sandMix = (1.0 - smoothstep(0.02, 0.45, depth)) * 0.75;
       vec3 waterBody = mix(uColorDeep, uColorShallow, shallowMix);
       vec3 col = mix(waterBody, uColorSand, sandMix);
 
-      // Subtle shallow caustics
-      float caustic = texture2D(tCaustic, vWorldPos.xz * 0.18 + uTime * 0.012).r;
-      col += uSunColor * caustic * shallowMix * 0.16;
+      // Dual-layer shallow caustics with organic breakup
+      float c1 = texture2D(tCaustic, vWorldPos.xz * 0.18 + uTime * 0.012).r;
+      float c2 = texture2D(tCausticBroken, vWorldPos.xz * 0.28 - uTime * 0.016).r;
+      float caustic = c1 * 0.7 + c2 * 0.3;
+      col += uSunColor * caustic * shallowMix * 0.20;
 
-      // Soft shore contact foam fringe
-      float shoreContact = 1.0 - smoothstep(0.02, 0.22, depth);
-      float shorePulse = sin(depth * 36.0 - uTime * 2.4);
-      shoreContact *= (0.7 + 0.3 * smoothstep(0.0, 1.0, shorePulse));
-      col = mix(col, uColorFoam, shoreContact * 0.45);
+      // Soft shore contact foam fringe using mask
+      float shoreContact = 1.0 - smoothstep(0.02, 0.24, depth);
+      float shoreMask = texture2D(tShoreFoam, vWorldPos.xz * 0.35 + uTime * 0.01).r;
+      shoreContact *= (0.65 + 0.35 * shoreMask);
+      col = mix(col, uColorFoam, shoreContact * 0.48);
 
       // Interactive object foam rings
       float objectFoam = 0.0;
@@ -107,12 +123,12 @@ const WaterShader = {
       // View & Fresnel sky reflection
       vec3 viewDir = normalize(uCameraPos - vWorldPos);
       float fresnel = pow(1.0 - max(dot(viewDir, normal), 0.0), 3.2);
-      col = mix(col, uSkyColor, fresnel * 0.55);
+      col = mix(col, uSkyColor, fresnel * 0.58);
 
       // Crisp sun specular glints on ripples
       vec3 halfDir = normalize(uSunDir + viewDir);
       float spec = pow(max(dot(normal, halfDir), 0.0), 96.0);
-      col += uSunColor * spec * 0.65;
+      col += uSunColor * spec * 0.70;
 
       float alpha = clamp(0.72 + depth * 0.25, 0.72, 0.94);
       gl_FragColor = vec4(col, alpha);
@@ -120,7 +136,7 @@ const WaterShader = {
   `,
 };
 
-const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager }, ref) {
+const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager, quality }, ref) {
   const materialRef = useRef();
   const meshRef = useRef();
   const { camera } = useThree();
@@ -130,7 +146,11 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
   );
 
   const rippleTex = useMemo(() => getStyleTexture('water_ripple_broad', { repeat: [2, 2] }), []);
+  const rippleCrossTex = useMemo(() => getStyleTexture('water_ripple_crossing', { repeat: [2, 2] }) || rippleTex, [rippleTex]);
   const causticTex = useMemo(() => getStyleTexture('caustic_soft', { repeat: [2, 2] }), []);
+  const causticBrokenTex = useMemo(() => getStyleTexture('caustic_broken', { repeat: [2, 2] }) || causticTex, [causticTex]);
+  const shoreDampTex = useMemo(() => getStyleTexture('shore_damp_mask'), []);
+  const shoreFoamTex = useMemo(() => getStyleTexture('shore_foam_mask') || rippleTex, [rippleTex]);
 
   useImperativeHandle(ref, () => meshRef.current);
 
@@ -235,7 +255,11 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
         uniforms-uFoamPoints-value={foamPoints}
         uniforms-uFoamCount-value={0}
         uniforms-tRipple-value={rippleTex}
+        uniforms-tRippleCross-value={rippleCrossTex}
         uniforms-tCaustic-value={causticTex}
+        uniforms-tCausticBroken-value={causticBrokenTex}
+        uniforms-tShoreDamp-value={shoreDampTex}
+        uniforms-tShoreFoam-value={shoreFoamTex}
       />
     </mesh>
   );

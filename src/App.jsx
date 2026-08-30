@@ -839,6 +839,7 @@ function AppRuntime() {
         selectedTrainId={selection?.kind === 'train' ? selection.id : null}
         roadManager={roadManagerRef.current}
         signalManager={signalManagerRef.current}
+        graphicsQuality={graphicsQuality}
         onCanvasReady={(canvas) => { canvasRef.current = canvas; }}
       />
       

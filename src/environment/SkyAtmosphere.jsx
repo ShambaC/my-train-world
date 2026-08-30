@@ -133,9 +133,11 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
   const domeRef = useRef();
   const cloudsRef1 = useRef();
   const cloudsRef2 = useRef();
+  const cloudsRef3 = useRef();
 
-  const cloudTexA = useMemo(() => getStyleTexture('cloud_large_a'), []);
-  const cloudTexB = useMemo(() => getStyleTexture('cloud_medium_a'), []);
+  const cloudTexA = useMemo(() => getStyleTexture('cloud_large_a', { repeat: [8, 1] }), []);
+  const cloudTexB = useMemo(() => getStyleTexture('cloud_medium_a', { repeat: [6, 1] }), []);
+  const cloudTexHaze = useMemo(() => getStyleTexture('cloud_haze_a', { repeat: [10, 1] }), []);
 
   const skyMat = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -151,7 +153,7 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
     return new THREE.MeshBasicMaterial({
       map: cloudTexA,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.88,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -161,11 +163,21 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
     return new THREE.MeshBasicMaterial({
       map: cloudTexB,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.78,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
   }, [cloudTexB]);
+
+  const cloudMat3 = useMemo(() => {
+    return new THREE.MeshBasicMaterial({
+      map: cloudTexHaze,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+  }, [cloudTexHaze]);
 
   useFrame(() => {
     if (lighting) {
@@ -174,35 +186,44 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
       skyMat.uniforms.uGround.value.copy(lighting.skyGround || lighting.fog.color);
       skyMat.uniforms.uSunDir.value.copy(lighting.sun.position).normalize();
 
-      const cloudColor = lighting.sun.color;
-      cloudMat1.color.copy(cloudColor);
-      cloudMat2.color.copy(cloudColor);
+      const cloudLit = new THREE.Color().copy(lighting.sun.color).lerp(new THREE.Color(0xffffff), 0.45);
+      cloudMat1.color.copy(cloudLit);
+      cloudMat2.color.copy(cloudLit);
+      cloudMat3.color.copy(lighting.fog.color);
     }
 
     const t = windTime;
     if (cloudsRef1.current) {
-      cloudsRef1.current.rotation.y = t * 0.006;
+      cloudsRef1.current.rotation.y = t * 0.008;
     }
     if (cloudsRef2.current) {
-      cloudsRef2.current.rotation.y = -t * 0.004 + 1.2;
+      cloudsRef2.current.rotation.y = -t * 0.005 + 1.2;
+    }
+    if (cloudsRef3.current) {
+      cloudsRef3.current.rotation.y = t * 0.003 + 2.5;
     }
   });
 
   return (
     <group name="SkyAtmosphere">
       {/* Luminous Sky Gradient Dome */}
-      <mesh ref={domeRef} material={skyMat}>
-        <sphereGeometry args={[180, 24, 16]} />
+      <mesh ref={domeRef} material={skyMat} renderOrder={-10}>
+        <sphereGeometry args={[180, 32, 20]} />
+      </mesh>
+
+      {/* Distant Atmospheric Haze Band */}
+      <mesh ref={cloudsRef3} position={[0, 18, 0]} material={cloudMat3} renderOrder={-9}>
+        <cylinderGeometry args={[120, 120, 22, 32, 1, true]} />
       </mesh>
 
       {/* Fluffy Cloud Layer 1 */}
-      <mesh ref={cloudsRef1} position={[0, 44, 0]} material={cloudMat1}>
-        <cylinderGeometry args={[130, 130, 30, 24, 1, true]} />
+      <mesh ref={cloudsRef1} position={[0, 26, 0]} material={cloudMat1} renderOrder={-8}>
+        <cylinderGeometry args={[85, 85, 24, 32, 1, true]} />
       </mesh>
 
       {/* Fluffy Cloud Layer 2 */}
-      <mesh ref={cloudsRef2} position={[0, 56, 0]} material={cloudMat2}>
-        <cylinderGeometry args={[150, 150, 26, 24, 1, true]} />
+      <mesh ref={cloudsRef2} position={[0, 36, 0]} material={cloudMat2} renderOrder={-7}>
+        <cylinderGeometry args={[100, 100, 26, 32, 1, true]} />
       </mesh>
     </group>
   );
