@@ -20,10 +20,11 @@ import { cameraBus } from "./utils/cameraBus";
 import { trainAudio } from "./audio/trainAudio";
 import { RoadManager } from "./environment/roadNetwork";
 import { SignalManager } from "./signals/SignalManager";
-import { ATLAS_TEXTURE_COUNT, preloadAtlases } from "./utils/atlasTextures";
+import { STYLE_TEXTURE_COUNT, preloadStyleTextures } from "./utils/atlasTextures";
 import { GRASS_TEXTURE_COUNT, preloadGrassTextures } from "./environment/GrassField";
-import { SKYBOX_COUNT, preloadSkyboxes } from "./environment/Skybox";
+import { SKYBOX_COUNT, preloadSkyboxes } from "./environment/SkyAtmosphere";
 import { MODEL_DEFS } from "./models/ModelLibrary";
+import { normalizeGraphicsQuality } from "./render/graphicsQuality";
 import {
   saveWorldToFile,
   loadWorldFromFile,
@@ -132,7 +133,7 @@ function loadGlobalGraphicsDefaults() {
     signalsEnabled: defaults.signalsEnabled ?? true,
   };
 }
-
+// Runtime owns machine-level graphics quality; world payloads stay unchanged.
 function AppRuntime() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
   const [terrainSeed, setTerrainSeed] = useState(1337);
@@ -165,6 +166,7 @@ function AppRuntime() {
     const v = loadSettings().frameLimit;
     return v === undefined || v === null ? 120 : v;
   });
+  const [graphicsQuality, setGraphicsQuality] = useState(() => normalizeGraphicsQuality(loadSettings().graphicsQuality));
   const [vsync, setVsync] = useState(() => {
     const v = loadSettings().vsync;
     return v === undefined || v === null ? true : v;
@@ -240,7 +242,7 @@ function AppRuntime() {
   useEffect(() => {
     const counts = {
       models: MODEL_DEFS.length,
-      atlases: ATLAS_TEXTURE_COUNT,
+      atlases: STYLE_TEXTURE_COUNT,
       grass: GRASS_TEXTURE_COUNT,
       skyboxes: SKYBOX_COUNT,
     };
@@ -253,7 +255,7 @@ function AppRuntime() {
     };
 
     Promise.all([
-      preloadAtlases((progress) => updateProgress('atlases', progress)),
+      preloadStyleTextures((progress) => updateProgress('atlases', progress)),
       ModelLibrary.preloadAll((progress) => updateProgress('models', progress)),
       preloadGrassTextures((progress) => updateProgress('grass', progress)),
       preloadSkyboxes((progress) => updateProgress('skyboxes', progress)),
@@ -282,8 +284,23 @@ function AppRuntime() {
     saveSettings({ audioVolumes });
   }, [audioVolumes]);
   useEffect(() => {
+    saveSettings({ graphicsQuality });
+  }, [graphicsQuality]);
+  useEffect(() => {
     saveSettings({ globalGraphics });
   }, [globalGraphics]);
+  useEffect(() => {
+    const onVisualQuality = (event) => setGraphicsQuality(normalizeGraphicsQuality(event.detail));
+    const onVisualTime = (event) => {
+      if (['dawn', 'day', 'dusk', 'night'].includes(event.detail)) setTimeOfDay(event.detail);
+    };
+    window.addEventListener('mtw:visual-quality', onVisualQuality);
+    window.addEventListener('mtw:visual-time', onVisualTime);
+    return () => {
+      window.removeEventListener('mtw:visual-quality', onVisualQuality);
+      window.removeEventListener('mtw:visual-time', onVisualTime);
+    };
+  }, []);
   useEffect(() => {
     saveSettings({ developerDiagnostics: showDebug, debugDetail, debugPosition, showTechnicalInfo });
   }, [debugDetail, debugPosition, showDebug, showTechnicalInfo]);
@@ -771,6 +788,8 @@ function AppRuntime() {
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
         onVsyncChange={setVsync}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={setGraphicsQuality}
         audioVolumes={audioVolumes}
         onAudioVolumeChange={(patch) => setAudioVolumes((value) => ({ ...value, ...patch }))}
         globalGraphics={globalGraphics}
@@ -819,6 +838,7 @@ function AppRuntime() {
         trainDirection={trainDirection}
         frameLimit={frameLimit}
         vsync={vsync}
+        graphicsQuality={graphicsQuality}
         ambientEnabled={ambientEnabled}
         soundsEnabled={soundsEnabled}
         trafficEnabled={trafficEnabled}
@@ -876,6 +896,8 @@ function AppRuntime() {
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
         onVsyncChange={setVsync}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={setGraphicsQuality}
         ambientEnabled={ambientEnabled}
         onAmbientChange={setAmbientEnabled}
         soundsEnabled={soundsEnabled}

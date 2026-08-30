@@ -1,6 +1,7 @@
 import { useRef, useMemo, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { getGraphicsQuality } from '../render/graphicsQuality.js';
 import { VOXEL_SIZE, WATER_LEVEL } from '../terrain.js';
 
 const MAX_FOAM_POINTS = 64;
@@ -8,20 +9,23 @@ const MAX_FOAM_POINTS = 64;
 const WaterShader = {
   uniforms: {
     uTime: { value: 0 },
-    uColorDeep: { value: new THREE.Color(0x0a5d8c) },
-    uColorShallow: { value: new THREE.Color(0x2ba3c9) },
+    uColorDeep: { value: new THREE.Color(0x245f77) },
+    uColorShallow: { value: new THREE.Color(0x68a8ae) },
     uColorFoam: { value: new THREE.Color(0xe8f8ff) },
-    uColorSand: { value: new THREE.Color(0xd9b878) },
+    uColorSand: { value: new THREE.Color(0xd2b981) },
     uSunColor: { value: new THREE.Color(0xfff8e0) },
     uSkyColor: { value: new THREE.Color(0x87ceeb) },
     uCameraPos: { value: new THREE.Vector3() },
     uHeightMap: { value: null },
     uTerrainSize: { value: new THREE.Vector2(50, 50) },
-    uWaterY: { value: 1.0 },
+    uWaterY: { value: WATER_LEVEL },
     uVoxel: { value: VOXEL_SIZE },
     uFlowDir: { value: new THREE.Vector2(0, 1) },
     uFoamPoints: { value: Array.from({ length: MAX_FOAM_POINTS }, () => new THREE.Vector3(9999, 0, 9999)) },
     uFoamCount: { value: 0 },
+    uReflectivity: { value: 0.3 },
+    uRoughness: { value: 0.75 },
+    uNightness: { value: 0 },
   },
   vertexShader: `
     uniform float uTime;
@@ -34,13 +38,10 @@ const WaterShader = {
 
       // Waves use local plane axes (pos.x, pos.y). Plane lies in XY;
       // mesh rotation.x = -PI/2 maps local +Z to world UP.
-      float e = 0.0;
-      e += sin(pos.x * 4.0 + uTime * 2.0) * 0.03;
-      e += cos(pos.y * 3.5 - uTime * 1.5) * 0.026;
-      e += sin((pos.x + pos.y) * 2.5 + uTime * 2.8) * 0.016;
-      e += cos((pos.x - pos.y) * 5.0 + uTime * 3.5) * 0.009;
+      float broadSwell = sin(pos.x * 1.35 + uTime * 0.38) * 0.025;
+      float crossingRipple = cos((pos.x - pos.y) * 2.1 - uTime * 0.26) * 0.012;
+      pos.z += broadSwell + crossingRipple;
 
-      pos.z += e; // displace along local normal = world UP
 
       vWorldPos = (modelMatrix * vec4(pos, 1.0)).xyz;
 
@@ -61,6 +62,9 @@ const WaterShader = {
     uniform float uWaterY;
     uniform float uVoxel;
     uniform vec2 uFlowDir;
+    uniform float uReflectivity;
+    uniform float uRoughness;
+    uniform float uNightness;
     uniform vec3 uFoamPoints[${MAX_FOAM_POINTS}];
     uniform float uFoamCount;
     varying vec2 vUv;
@@ -168,18 +172,15 @@ const WaterShader = {
       // --- Waterfall / steep-bank churn ---
       col = mix(col, uColorFoam, churn * 0.4);
 
-      // --- Subtle caustics, only in shallow water ---
-      float caustic = sin(vWorldPos.x * 9.0 - uTime * 1.6) * sin(vWorldPos.z * 7.0 + uTime * 1.4);
-      caustic = smoothstep(0.6, 1.0, caustic * 0.5 + 0.5);
-      col += uSunColor * caustic * shallowMix * 0.1;
+      // --- Soft shallow caustics; disabled by blue-hour/night palette ---
+      float caustic = sin(vWorldPos.x * 4.5 - uTime * 0.45) * sin(vWorldPos.z * 3.7 + uTime * 0.38);
+      caustic = smoothstep(0.45, 0.9, caustic * 0.5 + 0.5);
+      col += uSunColor * caustic * shallowMix * 0.055 * (1.0 - uNightness);
 
-      // --- Fresnel: sky tint at grazing camera angles ---
+      // --- Broad Fresnel reflection, roughness keeps it calm ---
       vec3 viewDir = normalize(uCameraPos - vWorldPos);
       float fresnel = pow(1.0 - max(dot(viewDir, vec3(0.0, 1.0, 0.0)), 0.0), 2.5);
-      col = mix(col, uSkyColor, fresnel * 0.38);
-
-      // Subtle sun sheen
-      col += uSunColor * 0.04;
+      col = mix(col, uSkyColor, fresnel * uReflectivity * (1.0 - uRoughness * 0.35));
 
       float alpha = 0.75;
 
@@ -188,10 +189,10 @@ const WaterShader = {
   `,
 };
 
-const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager }, ref) {
+const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager, graphicsQuality = 'medium' }, ref) {
   const materialRef = useRef();
   const meshRef = useRef();
-  const { camera } = useThree();
+  const quality = getGraphicsQuality(graphicsQuality);
   const foamPoints = useMemo(
     () => Array.from({ length: MAX_FOAM_POINTS }, () => new THREE.Vector3(9999, 0, 9999)),
     [],
@@ -201,6 +202,7 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
 
   const width = (terrainSize.length) * VOXEL_SIZE;
   const height = (terrainSize.breadth) * VOXEL_SIZE;
+  const segments = quality.id === 'low' ? 48 : quality.id === 'high' ? 96 : 72;
 
   // Build height texture from terrain userData (raw voxel heights)
   const heightTexture = useMemo(() => {
@@ -231,8 +233,6 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
     const mat = materialRef.current;
     if (!mat) return;
     mat.uniforms.uTime.value += delta;
-    mat.uniforms.uCameraPos.value.copy(camera.position);
-    // Interpolated lighting state overrides the static preset mapping below
     if (lighting) {
       mat.uniforms.uColorDeep.value.copy(lighting.waterDeep);
       mat.uniforms.uColorShallow.value.copy(lighting.waterShallow);
@@ -240,6 +240,9 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
       mat.uniforms.uColorSand.value.copy(lighting.waterSand);
       mat.uniforms.uSunColor.value.copy(lighting.sunTint);
       mat.uniforms.uSkyColor.value.copy(lighting.skyTint);
+      mat.uniforms.uReflectivity.value = lighting.waterReflectivity;
+      mat.uniforms.uRoughness.value = lighting.waterRoughness;
+      mat.uniforms.uNightness.value = lighting.nightness;
     }
 
     let foamCount = 0;
@@ -314,7 +317,7 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
       position={[0, 2.0, 0]}
       receiveShadow
     >
-      <planeGeometry args={[width, height, 96, 96]} />
+      <planeGeometry args={[width, height, segments, segments]} />
       <shaderMaterial
         ref={materialRef}
         args={[WaterShader]}

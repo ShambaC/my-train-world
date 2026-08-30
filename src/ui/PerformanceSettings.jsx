@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { UI_ICONS } from './iconRegistry';
-
+import { GRAPHICS_QUALITY_OPTIONS } from '../render/graphicsQuality';
 const FRAME_LIMIT_OPTIONS = [
   { value: 30, label: '30' },
   { value: 60, label: '60' },
@@ -19,7 +19,7 @@ const FRAME_LIMIT_OPTIONS = [
  * monitors below 120 Hz the browser's vsync still caps the presentation)
  * and vsync on (browser-synchronized frames).
  */
-function PerformanceSettings({ frameLimit, vsync, onFrameLimitChange, onVsyncChange }) {
+function PerformanceSettings({ frameLimit, vsync, onFrameLimitChange, onVsyncChange, graphicsQuality, onGraphicsQualityChange, diagnostics }) {
   const [isOpen, setIsOpen] = useState(true);
 
   return (
@@ -77,6 +77,26 @@ function PerformanceSettings({ frameLimit, vsync, onFrameLimitChange, onVsyncCha
                 }`}
               />
             </button>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Graphics quality</label>
+            <div className="grid grid-cols-3 gap-2">
+              {GRAPHICS_QUALITY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => onGraphicsQualityChange?.(option.value)}
+                  className={`p-2 rounded text-sm font-medium transition-all ${
+                    graphicsQuality === option.value
+                      ? 'bg-blue-600 hover:bg-blue-500 ring-2 ring-blue-400'
+                      : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                  title={option.description}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {diagnostics && <p className="mt-2 text-xs text-gray-500">{diagnostics}</p>}
           </div>
           <p className="text-xs text-gray-500">
             {vsync

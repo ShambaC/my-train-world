@@ -21,8 +21,10 @@ export function advanceWind(delta) {
 export function applyWindSway(material, { strength = 1, leaves = true } = {}) {
   if (!material || material.userData?.windApplied) return material;
   material.userData.windApplied = true;
+  const previousOnBeforeCompile = material.onBeforeCompile;
 
   material.onBeforeCompile = (shader) => {
+    previousOnBeforeCompile?.(shader);
     shader.uniforms.uWindTime = windTime;
     shader.uniforms.uWindStrength = { value: strength };
     shader.vertexShader =
@@ -31,11 +33,11 @@ export function applyWindSway(material, { strength = 1, leaves = true } = {}) {
         '#include <begin_vertex>',
         `#include <begin_vertex>
           float windAmp = uWindStrength * ${leaves ? 0.045 : 0.014};
-          float windH = ${leaves ? 'position.y' : '1.0'};
+          float windH = ${leaves ? 'max(position.y, 0.0)' : '1.0'};
           float windPhase = position.x * 2.4 + position.z * 1.7 + uWindTime * 1.5;
           transformed.x += sin(windPhase) * windAmp * windH;
           transformed.z += cos(windPhase * 0.75 + 1.2) * windAmp * windH * 0.55;
-        `
+        `,
       );
   };
   material.needsUpdate = true;

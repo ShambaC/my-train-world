@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { makeStyleMaterial } from '../render/styleMaterials.js';
 
 import bigRedBarnUrl from '../assets/Models/Buildings/big-red-barn.glb';
 import bufferStopUrl from '../assets/Models/Buildings/buffer-stop.glb';
@@ -69,6 +70,26 @@ function findFirstMesh(object) {
   });
   return found;
 }
+function styleRole(category) {
+  if (category === 'buildings') return 'cream-plaster';
+  if (category === 'rocks') return 'warm_rock';
+  if (category === 'trains') return 'rolling_brass';
+  if (category === 'trees') return 'foliage';
+  return 'galvanized';
+}
+
+function styleLoadedMaterial(material, category, geometry) {
+  const source = Array.isArray(material) ? material[0] : material;
+  const styled = makeStyleMaterial(styleRole(category), {
+    color: source?.color?.getHex?.() ?? 0xffffff,
+    roughness: category === 'trains' ? 0.72 : 0.9,
+    metalness: category === 'trains' || category === 'rocks' ? 0.18 : 0.04,
+    vertexColors: Boolean(geometry.attributes.color),
+  });
+  if (source?.emissive) styled.emissive.copy(source.emissive);
+  if (source?.emissiveIntensity) styled.emissiveIntensity = source.emissiveIntensity;
+  return Array.isArray(material) ? material.map(() => styled) : styled;
+}
 
 class ModelLibrary {
   constructor() {
@@ -114,7 +135,7 @@ class ModelLibrary {
           key,
           category: def.category,
           geometry,
-          material: mesh.material,
+          material: styleLoadedMaterial(mesh.material, def.category, geometry),
           bounds: geometry.boundingBox.clone(),
         };
         this.entries.set(key, entry);

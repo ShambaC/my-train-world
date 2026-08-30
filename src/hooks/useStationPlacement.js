@@ -174,7 +174,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
     lastMousePos.current = { x: event.clientX, y: event.clientY };
 
     raycaster.current.setFromCamera(mouse.current, camera);
-    const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+    const intersects = raycaster.current.intersectObject(terrainRef.current?.userData?.interactionSurface || terrainRef.current, true);
     if (intersects.length === 0) {
       setGhost(null);
       return;
@@ -283,7 +283,7 @@ export function useStationPlacement(terrainRef, stationManager, orientation, ter
     mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.current.setFromCamera(mouse.current, camera);
-    const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+    const intersects = raycaster.current.intersectObject(terrainRef.current?.userData?.interactionSurface || terrainRef.current, true);
     if (intersects.length === 0) return null;
 
     const point = intersects[0].point;

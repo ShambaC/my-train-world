@@ -21,6 +21,8 @@ export default function WorldSettingsModal({
   onFrameLimitChange,
   vsync,
   onVsyncChange,
+  graphicsQuality,
+  onGraphicsQualityChange,
   ambientEnabled,
   onAmbientChange,
   soundsEnabled,
@@ -83,6 +85,8 @@ export default function WorldSettingsModal({
 
           {tab === 'performance' && <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
             <PerformanceSettings
+              graphicsQuality={graphicsQuality}
+              onGraphicsQualityChange={onGraphicsQualityChange}
               frameLimit={frameLimit}
               vsync={vsync}
               onFrameLimitChange={onFrameLimitChange}

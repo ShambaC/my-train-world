@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VOXEL_SIZE, mulberry32 } from '../terrain.js';
 import { applyWindSway } from './wind.js';
-import { makeAtlasTexture } from '../utils/atlasTextures.js';
+import { makeStyleTexture } from '../utils/atlasTextures.js';
 
 /**
  * Creates an optimized forest border using InstancedMesh.
@@ -31,7 +31,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
     color: 0x41503a,
     roughness: 0.9,
     metalness: 0.1,
-    map: makeAtlasTexture('forest_ground', [0.5, 0.5]),
+    map: makeStyleTexture('forest_ground', [0.5, 0.5]),
   });
   const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
   groundPlane.rotation.x = -Math.PI / 2;
@@ -57,38 +57,35 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
   const trunkMat = new THREE.MeshStandardMaterial({
     color: 0x4a3728,
-    map: makeAtlasTexture('bark'),
+    map: makeStyleTexture('bark'),
   });
   applyWindSway(trunkMat, { leaves: false, strength: 0.6 });
-  const coneGeos = [
-    new THREE.ConeGeometry(0.8, 1.5, 6),
-    new THREE.ConeGeometry(0.6, 1.3, 6),
-    new THREE.ConeGeometry(0.4, 1.0, 6),
-  ];
+  const foliageGeo = new THREE.SphereGeometry(0.72, 8, 5);
   const foliageMat = new THREE.MeshStandardMaterial({
-    color: 0x3a6b1f,
+    color: 0x52765b,
+    roughness: 0.94,
     flatShading: true,
-    map: makeAtlasTexture('leaf_dark'),
+    map: makeStyleTexture('leaf_dark'),
   });
-  applyWindSway(foliageMat, { strength: 1 });
+  applyWindSway(foliageMat, { strength: 0.75 });
 
   const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, totalTrees);
-  const cone1Inst = new THREE.InstancedMesh(coneGeos[0], foliageMat, totalTrees);
-  const cone2Inst = new THREE.InstancedMesh(coneGeos[1], foliageMat, totalTrees);
-  const cone3Inst = new THREE.InstancedMesh(coneGeos[2], foliageMat, totalTrees);
+  const canopyAInst = new THREE.InstancedMesh(foliageGeo, foliageMat, totalTrees);
+  const canopyBInst = new THREE.InstancedMesh(foliageGeo, foliageMat, totalTrees);
+  const canopyCInst = new THREE.InstancedMesh(foliageGeo, foliageMat, totalTrees);
 
-  // Border trees sit outside the play area — they never cast shadows
-  // (shadow-map budget goes to the buildable region) but still receive.
-  [trunkInst, cone1Inst, cone2Inst, cone3Inst].forEach(m => {
-    m.receiveShadow = true;
+  // Border trees sit outside play area — no shadow casting; mid/far masses
+  // retain a broken, rounded silhouette without perfect cone stacks.
+  [trunkInst, canopyAInst, canopyBInst, canopyCInst].forEach((mesh) => {
+    mesh.receiveShadow = true;
+    mesh.userData.visualOnly = true;
+    mesh.raycast = () => {};
   });
-
-  // --- 4. Place trees ring by ring ---
-  let treeIndex = 0;
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scaleVec = new THREE.Vector3();
+  let treeIndex = 0;
 
   const placeTrees = (startX, endX, startZ, endZ, count) => {
     const w = Math.abs(endX - startX);
@@ -99,23 +96,22 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
       const z = startZ + rng() * d;
       const scale = 0.7 + rng() * 0.9;
       const rotY = rng() * Math.PI * 2;
-      const tilt = (rng() - 0.5) * 0.1; // slight tilt
+      const tilt = (rng() - 0.5) * 0.1;
       quaternion.setFromEuler(new THREE.Euler(tilt, rotY, tilt * 0.5));
 
-      const setPart = (mesh, yOff) => {
-        position.set(x, yOff * scale, z);
-        scaleVec.set(scale, scale, scale);
+      const setPart = (mesh, yOff, xOff = 0, zOff = 0, yScale = 1) => {
+        position.set(x + xOff * scale, yOff * scale, z + zOff * scale);
+        scaleVec.set(scale, scale * yScale, scale);
         matrix.compose(position, quaternion, scaleVec);
         mesh.setMatrixAt(treeIndex, matrix);
       };
-      setPart(trunkInst, 1.0);
-      setPart(cone1Inst, 2.5);
-      setPart(cone2Inst, 3.5);
-      setPart(cone3Inst, 4.5);
+      setPart(trunkInst, 1.0, 0, 0, 1.1);
+      setPart(canopyAInst, 2.5, -0.22, 0.02, 0.85);
+      setPart(canopyBInst, 3.45, 0.18, -0.06, 0.72);
+      setPart(canopyCInst, 4.25, -0.02, 0.16, 0.62);
       treeIndex++;
     }
   };
-
   for (let r = 0; r < rows; r++) {
     const offset = 0.3 + r * rowSpacing;
     const density = baseDensity * (1 - (r / rows) * 0.6);
@@ -123,26 +119,19 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
     const innerB = worldHalfB + (r === 0 ? 0 : 0.3 + (r - 1) * rowSpacing);
     const outerL = worldHalfL + offset + rowSpacing;
     const outerB = worldHalfB + offset + rowSpacing;
-
     const perim = (outerL * outerB) - (innerL * innerB);
     const count = Math.floor(perim * density);
-
-    // North
     placeTrees(-outerL, outerL, worldHalfB + offset, worldHalfB + offset + rowSpacing, Math.floor(count * 0.25));
-    // South
     placeTrees(-outerL, outerL, -worldHalfB - offset - rowSpacing, -worldHalfB - offset, Math.floor(count * 0.25));
-    // East
     placeTrees(worldHalfL + offset, worldHalfL + offset + rowSpacing, -outerB, outerB, Math.floor(count * 0.25));
-    // West
     placeTrees(-worldHalfL - offset - rowSpacing, -worldHalfL - offset, -outerB, outerB, Math.floor(count * 0.25));
   }
 
   trunkInst.instanceMatrix.needsUpdate = true;
-  cone1Inst.instanceMatrix.needsUpdate = true;
-  cone2Inst.instanceMatrix.needsUpdate = true;
-  cone3Inst.instanceMatrix.needsUpdate = true;
-
-  borderGroup.add(trunkInst, cone1Inst, cone2Inst, cone3Inst);
+  canopyAInst.instanceMatrix.needsUpdate = true;
+  canopyBInst.instanceMatrix.needsUpdate = true;
+  canopyCInst.instanceMatrix.needsUpdate = true;
+  borderGroup.add(trunkInst, canopyAInst, canopyBInst, canopyCInst);
 
   return borderGroup;
 }

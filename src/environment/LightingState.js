@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { getLightingForTime } from './Skybox.jsx';
+import { getLightingForTime } from './SkyAtmosphere.jsx';
+import { getStyleTimePalette } from '../render/stylePalette.js';
 
 // Exponential smoothing rate: reaches ~95% of the way in ~1 second.
 const LERP_RATE = 3.0;
@@ -15,6 +16,9 @@ const LERP_RATE = 3.0;
 export default class LightingState {
   constructor(timeOfDay) {
     this.ambient = { color: new THREE.Color(), intensity: 1 };
+    this.hemisphereSky = new THREE.Color();
+    this.hemisphereGround = new THREE.Color();
+    this.hemisphereIntensity = 0.7;
     this.sun = { color: new THREE.Color(), intensity: 1, position: new THREE.Vector3() };
     this.fog = { color: new THREE.Color(), density: 0.01 };
     this.skyTint = new THREE.Color();
@@ -25,16 +29,36 @@ export default class LightingState {
     this.waterSand = new THREE.Color();
     this.nightness = 0;
     this.shadowRadius = 4;
+    this.skyTop = new THREE.Color();
+    this.skyHorizon = new THREE.Color();
+    this.skyGround = new THREE.Color();
+    this.shadowTint = new THREE.Color();
+    this.highlightTint = new THREE.Color();
+    this.sunDiskColor = new THREE.Color();
+    this.cloudLight = new THREE.Color();
+    this.cloudShadow = new THREE.Color();
+    this.bloomThreshold = 1.5;
+    this.bloomStrength = 0.2;
+    this.exposure = 1;
+    this.saturation = 1;
+    this.contrast = 1;
+    this.waterReflectivity = 0.3;
+    this.waterRoughness = 0.75;
+    this.atmosphereStrength = 0.1;
     this.target = null;
     this.setTarget(timeOfDay, true);
   }
 
-  /** Snapshot the preset's colors into lerp-friendly THREE objects. */
+  /** Snapshot preset colors into lerp-friendly THREE objects. */
   setTarget(timeOfDay, snap = false) {
     const p = getLightingForTime(timeOfDay);
+    const style = getStyleTimePalette(timeOfDay);
     this.target = {
       ambientColor: new THREE.Color(p.ambient.color),
       ambientIntensity: p.ambient.intensity,
+      hemisphereSky: new THREE.Color(style.hemisphereSky),
+      hemisphereGround: new THREE.Color(style.hemisphereGround),
+      hemisphereIntensity: p.ambient.intensity,
       sunColor: new THREE.Color(p.directional.color),
       sunIntensity: p.directional.intensity,
       sunPosition: new THREE.Vector3(...p.directional.position),
@@ -48,6 +72,22 @@ export default class LightingState {
       waterSand: new THREE.Color(p.waterSand),
       nightness: p.nightness,
       shadowRadius: p.shadowRadius,
+      skyTop: new THREE.Color(style.skyTop),
+      skyHorizon: new THREE.Color(style.skyHorizon),
+      skyGround: new THREE.Color(style.skyGround),
+      shadowTint: new THREE.Color(style.shadowTint),
+      highlightTint: new THREE.Color(style.highlightTint),
+      sunDiskColor: new THREE.Color(style.sunDiskColor),
+      cloudLight: new THREE.Color(style.cloudLight),
+      cloudShadow: new THREE.Color(style.cloudShadow),
+      bloomThreshold: style.bloomThreshold,
+      bloomStrength: style.bloomStrength,
+      exposure: style.exposure,
+      saturation: style.saturation,
+      contrast: style.contrast,
+      waterReflectivity: style.waterReflectivity,
+      waterRoughness: style.waterRoughness,
+      atmosphereStrength: style.atmosphereStrength,
     };
     if (snap) this.snapTo(this.target);
   }
@@ -55,6 +95,9 @@ export default class LightingState {
   snapTo(t) {
     this.ambient.color.copy(t.ambientColor);
     this.ambient.intensity = t.ambientIntensity;
+    this.hemisphereSky.copy(t.hemisphereSky);
+    this.hemisphereGround.copy(t.hemisphereGround);
+    this.hemisphereIntensity = t.hemisphereIntensity;
     this.sun.color.copy(t.sunColor);
     this.sun.intensity = t.sunIntensity;
     this.sun.position.copy(t.sunPosition);
@@ -68,6 +111,22 @@ export default class LightingState {
     this.waterSand.copy(t.waterSand);
     this.nightness = t.nightness;
     this.shadowRadius = t.shadowRadius;
+    this.skyTop.copy(t.skyTop);
+    this.skyHorizon.copy(t.skyHorizon);
+    this.skyGround.copy(t.skyGround);
+    this.shadowTint.copy(t.shadowTint);
+    this.highlightTint.copy(t.highlightTint);
+    this.sunDiskColor.copy(t.sunDiskColor);
+    this.cloudLight.copy(t.cloudLight);
+    this.cloudShadow.copy(t.cloudShadow);
+    this.bloomThreshold = t.bloomThreshold;
+    this.bloomStrength = t.bloomStrength;
+    this.exposure = t.exposure;
+    this.saturation = t.saturation;
+    this.contrast = t.contrast;
+    this.waterReflectivity = t.waterReflectivity;
+    this.waterRoughness = t.waterRoughness;
+    this.atmosphereStrength = t.atmosphereStrength;
   }
 
   /** Ease current values toward the target preset. Call once per frame. */
@@ -90,5 +149,24 @@ export default class LightingState {
     this.waterSand.lerp(t.waterSand, k);
     this.nightness += (t.nightness - this.nightness) * k;
     this.shadowRadius += (t.shadowRadius - this.shadowRadius) * k;
+    this.hemisphereSky.lerp(t.hemisphereSky, k);
+    this.hemisphereGround.lerp(t.hemisphereGround, k);
+    this.hemisphereIntensity += (t.hemisphereIntensity - this.hemisphereIntensity) * k;
+    this.skyTop.lerp(t.skyTop, k);
+    this.skyHorizon.lerp(t.skyHorizon, k);
+    this.skyGround.lerp(t.skyGround, k);
+    this.shadowTint.lerp(t.shadowTint, k);
+    this.highlightTint.lerp(t.highlightTint, k);
+    this.sunDiskColor.lerp(t.sunDiskColor, k);
+    this.cloudLight.lerp(t.cloudLight, k);
+    this.cloudShadow.lerp(t.cloudShadow, k);
+    this.bloomThreshold += (t.bloomThreshold - this.bloomThreshold) * k;
+    this.bloomStrength += (t.bloomStrength - this.bloomStrength) * k;
+    this.exposure += (t.exposure - this.exposure) * k;
+    this.saturation += (t.saturation - this.saturation) * k;
+    this.contrast += (t.contrast - this.contrast) * k;
+    this.waterReflectivity += (t.waterReflectivity - this.waterReflectivity) * k;
+    this.waterRoughness += (t.waterRoughness - this.waterRoughness) * k;
+    this.atmosphereStrength += (t.atmosphereStrength - this.atmosphereStrength) * k;
   }
 }

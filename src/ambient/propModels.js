@@ -5,7 +5,7 @@
  * No assets, no per-item material allocation beyond the small palette.
  */
 import * as THREE from 'three';
-import { makeAtlasMaterial } from '../utils/atlasTextures.js';
+import { makeStyleMaterial } from '../render/styleMaterials.js';
 
 import { createPedestrian, getRandomPedestrianType } from './pedestrianModels.js';
 
@@ -29,11 +29,11 @@ const SHIRT_MATS = SHIRT_COLORS.map((c) => new THREE.MeshLambertMaterial({ color
 const PANTS_MATS = PANTS_COLORS.map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const SKIN_MATS = SKIN_COLORS.map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const HEAD_MAT = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true }); // hat/cap
-const CRATE_MAT = makeAtlasMaterial('crate', { color: 0x8a6a3f });
-const SACK_MAT = makeAtlasMaterial('sack', { color: 0xc9a86a });
-const COAL_MAT = makeAtlasMaterial('coal', { color: 0x2a2a2a });
-const CONTAINER_MAT = makeAtlasMaterial('container', { color: 0xd65b20 });
-const TANKER_MAT = makeAtlasMaterial('tanker', { color: 0xb9c2c9 });
+const CRATE_MAT = makeStyleMaterial('crate', { color: 0x8a6a3f });
+const SACK_MAT = makeStyleMaterial('sack', { color: 0xc9a86a });
+const COAL_MAT = makeStyleMaterial('coal', { color: 0x2a2a2a });
+const CONTAINER_MAT = makeStyleMaterial('container', { color: 0xd65b20 });
+const TANKER_MAT = makeStyleMaterial('tanker', { color: 0xb9c2c9 });
 
 const randOf = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -56,7 +56,7 @@ export function createCargo(type) {
     g.add(c);
     const lid = new THREE.Mesh(
       new THREE.BoxGeometry(0.19, 0.024, 0.19),
-      makeAtlasMaterial('crate_lid', { color: 0x6b4e2c })
+      makeStyleMaterial('crate_lid', { color: 0x6b4e2c })
     );
     lid.position.y = 0.152;
     g.add(lid);

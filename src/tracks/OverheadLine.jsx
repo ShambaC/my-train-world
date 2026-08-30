@@ -11,7 +11,7 @@
  */
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { makeAtlasMaterial } from '../utils/atlasTextures.js';
+import { makeStyleMaterial } from '../render/styleMaterials.js';
 import { pointOnTrack } from './trackGeometry.js';
 
 const POLE_X = 0.55;        // posts stand ±0.55 across the track
@@ -36,9 +36,9 @@ function getGantryTemplate() {
   if (gantryTemplate) return gantryTemplate;
   gantryTemplate = new THREE.Group();
 
-  const postMat = makeAtlasMaterial('steel_beam', { color: COLORS.post });
-  const beamMat = makeAtlasMaterial('steel_beam', { color: COLORS.beam });
-  const insulatorMat = makeAtlasMaterial('insulator', { color: COLORS.insulator });
+  const postMat = makeStyleMaterial('steel_beam', { color: COLORS.post });
+  const beamMat = makeStyleMaterial('steel_beam', { color: COLORS.beam });
+  const insulatorMat = makeStyleMaterial('insulator', { color: COLORS.insulator });
 
   const postGeo = new THREE.CylinderGeometry(0.035, 0.045, BEAM_Y, 6);
   for (const side of [-1, 1]) {

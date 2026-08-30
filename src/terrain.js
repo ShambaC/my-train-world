@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
 import { applyWindSway } from './environment/wind.js';
-import { makeAtlasMaterial } from './utils/atlasTextures.js';
+import { makeStyleMaterial } from './render/styleMaterials.js';
 
 // Voxel size - smaller than Minecraft for higher resolution
 export const VOXEL_SIZE = 0.5;
@@ -78,11 +78,10 @@ export function isClearingCell(x, z, plateaus) {
 // --- generateVegetation: biome-aware, keeps build areas clear ---
 function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, breadth, seed, waterLevel) {
   const noise2D = createNoise2D(() => seed * 2);
-  const treeTrunks = [];
-  const treeCones1 = [];
-  const treeCones2 = [];
+  const trunks = [];
+  const deciduousClusters = [];
+  const pineClusters = [];
   const bushes = [];
-
   const BIOME_TREE_DENSITY = {
     [BIOME.forest]: 0.2,
     [BIOME.meadow]: 0.055,
@@ -92,123 +91,85 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
   };
   const minSpacing = 3;
   const placedVegetation = [];
-
-  const trunkGeo = new THREE.CylinderGeometry(0.04, 0.07, 0.5, 5);
-  const cone1Geo = new THREE.ConeGeometry(0.35, 0.5, 5);
-  const cone2Geo = new THREE.ConeGeometry(0.25, 0.4, 5);
-  const bushGeo = new THREE.DodecahedronGeometry(0.2, 0);
-
-  const trunkMat = makeAtlasMaterial('bark');
-  const leafMat1 = makeAtlasMaterial('leaf_dark');
-  const leafMat2 = makeAtlasMaterial('leaf_light');
-  const bushMat = makeAtlasMaterial('bush');
-
-  // Wind sway — vegetation breathes together, driven by the shared wind clock
-  applyWindSway(trunkMat, { leaves: false, strength: 0.5 });
-  applyWindSway(leafMat1, { strength: 1 });
-  applyWindSway(leafMat2, { strength: 1 });
-  applyWindSway(bushMat, { strength: 0.7 });
+  const trunkGeo = new THREE.CylinderGeometry(0.045, 0.075, 0.55, 6);
+  const foliageGeo = new THREE.SphereGeometry(0.42, 8, 5);
+  const bushGeo = new THREE.SphereGeometry(0.3, 8, 5);
+  const trunkMat = makeStyleMaterial('bark', { color: 0x684c3c, roughness: 0.95 });
+  const deciduousMat = makeStyleMaterial('leaf_light', { color: 0x78985f, roughness: 0.92 });
+  const pineMat = makeStyleMaterial('leaf_dark', { color: 0x4f725d, roughness: 0.94 });
+  const bushMat = makeStyleMaterial('bush', { color: 0x668558, roughness: 0.94 });
+  applyWindSway(trunkMat, { leaves: false, strength: 0.45 });
+  applyWindSway(deciduousMat, { strength: 0.9 });
+  applyWindSway(pineMat, { strength: 0.75 });
+  applyWindSway(bushMat, { strength: 0.65 });
 
   for (let x = 1; x < length - 1; x += 2) {
     for (let z = 1; z < breadth - 1; z += 2) {
       const height = heightMap[x][z];
-
-      if (height <= waterLevel) continue; // Skip water level
-      if (isClearingCell(x, z, plateaus)) continue; // Keep build areas clear
-
+      if (height <= waterLevel || isClearingCell(x, z, plateaus)) continue;
       const biome = biomeMask[x * breadth + z];
-      const vegetationDensity = BIOME_TREE_DENSITY[biome];
-      if (!vegetationDensity) continue;
-
+      const density = BIOME_TREE_DENSITY[biome];
+      if (!density) continue;
       const vegetationNoise = noise2D(x * 0.1, z * 0.1);
-      const threshold = 1 - vegetationDensity * 2;
+      const threshold = 1 - density * 2;
       if (vegetationNoise < threshold) continue;
-
-      let tooClose = false;
-      for (const placed of placedVegetation) {
-        const dist = Math.sqrt(Math.pow(x - placed.x, 2) + Math.pow(z - placed.z, 2));
-        if (dist < minSpacing) {
-          tooClose = true;
-          break;
-        }
-      }
-      if (tooClose) continue;
+      if (placedVegetation.some((placed) => Math.hypot(x - placed.x, z - placed.z) < minSpacing)) continue;
 
       const worldX = (x - length / 2) * VOXEL_SIZE;
       const worldY = (height + 0.5) * VOXEL_SIZE;
       const worldZ = (z - breadth / 2) * VOXEL_SIZE;
-
-      // Wetlands and highlands read as scrub/reeds, not trees. Otherwise the
-      // upper half of the placement band is trees, the lower half bushes.
-      const isBush =
-        biome === BIOME.wetland ||
-        biome === BIOME.highland ||
+      const rng = mulberry32((seed ^ (x * 73856093) ^ (z * 19349663)) >>> 0);
+      const isBush = biome === BIOME.wetland || biome === BIOME.highland ||
         vegetationNoise < threshold + (1 - threshold) * 0.5;
-
       if (isBush) {
-        bushes.push(new THREE.Vector3(worldX, worldY, worldZ));
+        bushes.push({ x: worldX, y: worldY + 0.14, z: worldZ, scale: 0.75 + rng() * 0.45 });
       } else {
-        treeTrunks.push(new THREE.Vector3(worldX, worldY + 0.25, worldZ));
-        treeCones1.push(new THREE.Vector3(worldX, worldY + 0.6, worldZ));
-        treeCones2.push(new THREE.Vector3(worldX, worldY + 0.95, worldZ));
+        trunks.push({ x: worldX, y: worldY + 0.25, z: worldZ, scale: 0.85 + rng() * 0.25 });
+        const isPine = biome === BIOME.forest && rng() > 0.42;
+        const clusters = 5 + Math.floor(rng() * 5);
+        for (let cluster = 0; cluster < clusters; cluster += 1) {
+          const angle = rng() * Math.PI * 2;
+          const radius = cluster === 0 ? 0.05 : 0.16 + rng() * 0.28;
+          const y = 0.38 + (cluster % 3) * 0.22 + rng() * 0.15;
+          const scale = 0.65 + rng() * 0.42;
+          (isPine ? pineClusters : deciduousClusters).push({
+            x: worldX + Math.cos(angle) * radius,
+            y: worldY + y,
+            z: worldZ + Math.sin(angle) * radius,
+            scale: isPine ? { x: scale * 0.78, y: scale * 1.05, z: scale * 0.78 } : { x: scale, y: scale * (0.8 + rng() * 0.35), z: scale * 0.9 },
+            rotation: rng() * Math.PI * 2,
+          });
+        }
       }
       placedVegetation.push({ x, z });
     }
   }
 
   const matrix = new THREE.Matrix4();
-
-  // Trunks
-  if (treeTrunks.length > 0) {
-    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeTrunks.length);
-    treeTrunks.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      trunkMesh.setMatrixAt(i, matrix);
+  const quaternion = new THREE.Quaternion();
+  const axis = new THREE.Vector3(0, 1, 0);
+  const addInstances = (geometry, material, records, name) => {
+    if (!records.length) return;
+    const mesh = new THREE.InstancedMesh(geometry, material, records.length);
+    records.forEach((record, index) => {
+      quaternion.setFromAxisAngle(axis, record.rotation || 0);
+      const scale = typeof record.scale === 'number'
+        ? new THREE.Vector3(record.scale, record.scale, record.scale)
+        : new THREE.Vector3(record.scale.x, record.scale.y, record.scale.z);
+      matrix.compose(new THREE.Vector3(record.x, record.y, record.z), quaternion, scale);
+      mesh.setMatrixAt(index, matrix);
     });
-    trunkMesh.instanceMatrix.needsUpdate = true;
-    trunkMesh.receiveShadow = true;
-    trunkMesh.castShadow = true;
-    terrain.add(trunkMesh);
-  }
-
-  // Cone Layer 1
-  if (treeCones1.length > 0) {
-    const cone1Mesh = new THREE.InstancedMesh(cone1Geo, leafMat1, treeCones1.length);
-    treeCones1.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      cone1Mesh.setMatrixAt(i, matrix);
-    });
-    cone1Mesh.instanceMatrix.needsUpdate = true;
-    cone1Mesh.receiveShadow = true;
-    cone1Mesh.castShadow = true;
-    terrain.add(cone1Mesh);
-  }
-
-  // Cone Layer 2
-  if (treeCones2.length > 0) {
-    const cone2Mesh = new THREE.InstancedMesh(cone2Geo, leafMat2, treeCones2.length);
-    treeCones2.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      cone2Mesh.setMatrixAt(i, matrix);
-    });
-    cone2Mesh.instanceMatrix.needsUpdate = true;
-    cone2Mesh.receiveShadow = true;
-    cone2Mesh.castShadow = true;
-    terrain.add(cone2Mesh);
-  }
-
-  // Bushes
-  if (bushes.length > 0) {
-    const bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, bushes.length);
-    bushes.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      bushMesh.setMatrixAt(i, matrix);
-    });
-    bushMesh.instanceMatrix.needsUpdate = true;
-    bushMesh.receiveShadow = true;
-    bushMesh.castShadow = true;
-    terrain.add(bushMesh);
-  }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.receiveShadow = true;
+    mesh.castShadow = name !== 'foliageFar';
+    mesh.userData.visualOnly = true;
+    mesh.name = name;
+    terrain.add(mesh);
+  };
+  addInstances(trunkGeo, trunkMat, trunks, 'visualTreeTrunks');
+  addInstances(foliageGeo, deciduousMat, deciduousClusters, 'visualDeciduousCanopy');
+  addInstances(foliageGeo, pineMat, pineClusters, 'visualPineCanopy');
+  addInstances(bushGeo, bushMat, bushes, 'visualShrubClusters');
 }
 
 /**
@@ -813,13 +774,70 @@ function patchTerrainUVOffset(material) {
   };
 }
 
-/**
- * Generate voxel terrain using multi-scale simplex noise (OPTIMIZED)
- * @param {number} length - Length of the terrain (X axis)
- * @param {number} breadth - Breadth of the terrain (Z axis)
- * @param {number} seed - Random seed for terrain generation (deterministic)
- * @returns {THREE.Group} Group containing all terrain voxels
- */
+function createTerrainSurfaceShell(heightMap, biomeMask, blend, length, breadth, surfaceColor, sideColor) {
+  const positions = [];
+  const normals = [];
+  const colors = [];
+  const uvs = [];
+  const indices = [];
+  const addQuad = (vertices, normal, color) => {
+    const offset = positions.length / 3;
+    vertices.forEach(([x, y, z], index) => {
+      positions.push(x, y, z);
+      normals.push(...normal);
+      colors.push(color.r, color.g, color.b);
+      uvs.push(index === 0 || index === 3 ? 0 : 1, index < 2 ? 0 : 1);
+    });
+    indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3);
+  };
+  const topAt = (x, z) => (heightMap[x][z] + 0.5) * VOXEL_SIZE;
+  const worldX = (x) => (x - length / 2) * VOXEL_SIZE;
+  const worldZ = (z) => (z - breadth / 2) * VOXEL_SIZE;
+  for (let x = 0; x < length; x += 1) {
+    for (let z = 0; z < breadth; z += 1) {
+      const y = topAt(x, z);
+      const h = heightMap[x][z];
+      const neighbors = [
+        x > 0 ? heightMap[x - 1][z] : -1,
+        x < length - 1 ? heightMap[x + 1][z] : -1,
+        z > 0 ? heightMap[x][z - 1] : -1,
+        z < breadth - 1 ? heightMap[x][z + 1] : -1,
+      ];
+      const slope = Math.max(...neighbors.map((neighbor) => Math.abs(h - neighbor)));
+      const topColor = new THREE.Color(surfaceColor(biomeMask[x * breadth + z], blend?.[x * breadth + z] ?? 0));
+      const x0 = worldX(x);
+      const x1 = worldX(x + 1);
+      const z0 = worldZ(z);
+      const z1 = worldZ(z + 1);
+      addQuad([[x0, y, z0], [x0, y, z1], [x1, y, z1], [x1, y, z0]], [0, 1, 0], topColor);
+      const lowerFaces = [
+        [neighbors[0], [[x0, y, z1], [x0, y, z0], [x0, topAt(x, z) - (h - neighbors[0]) * VOXEL_SIZE, z0], [x0, topAt(x, z) - (h - neighbors[0]) * VOXEL_SIZE, z1]], [1, 0, 0]],
+        [neighbors[1], [[x1, y, z0], [x1, y, z1], [x1, topAt(x, z) - (h - neighbors[1]) * VOXEL_SIZE, z1], [x1, topAt(x, z) - (h - neighbors[1]) * VOXEL_SIZE, z0]], [-1, 0, 0]],
+        [neighbors[2], [[x1, y, z0], [x0, y, z0], [x0, topAt(x, z) - (h - neighbors[2]) * VOXEL_SIZE, z0], [x1, topAt(x, z) - (h - neighbors[2]) * VOXEL_SIZE, z0]], [0, 0, 1]],
+        [neighbors[3], [[x0, y, z1], [x1, y, z1], [x1, topAt(x, z) - (h - neighbors[3]) * VOXEL_SIZE, z1], [x0, topAt(x, z) - (h - neighbors[3]) * VOXEL_SIZE, z1]], [0, 0, -1]],
+      ];
+      for (const [neighbor, face, normal] of lowerFaces) {
+        if (neighbor < h) addQuad(face, normal, new THREE.Color(sideColor(biomeMask[x * breadth + z])));
+      }
+      if (slope >= 3) topColor.multiplyScalar(0.92);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geometry, makeStyleMaterial('meadow', { vertexColors: true, roughness: 0.98, side: THREE.DoubleSide }));
+  mesh.receiveShadow = true;
+  mesh.userData.visualOnly = true;
+  mesh.name = 'terrainVisualSurface';
+  mesh.raycast = () => {};
+  return mesh;
+}
+
 export function generateTerrain(length, breadth, seed = 1337) {
   const terrain = new THREE.Group();
   const riverPlan = createRiverPlan(length, breadth);
@@ -884,14 +902,14 @@ export function generateTerrain(length, breadth, seed = 1337) {
   // the tile (≈1 unit tile) so the stylized blobs read without stamping.
   const TERRAIN_TEXTURE_REPEAT = [0.5, 0.5];
   const makeTerrainMaterial = (color) => {
-    if (color === TERRAIN_COLORS.sand) return makeAtlasMaterial('sand', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.rock) return makeAtlasMaterial('rock', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.dirt) return makeAtlasMaterial('dirt', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.forest) return makeAtlasMaterial('forest', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.highland) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.wetland) return makeAtlasMaterial('wetland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.industrial) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    return makeAtlasMaterial('grass', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.sand) return makeStyleMaterial('sand', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.rock) return makeStyleMaterial('rock', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.dirt) return makeStyleMaterial('dirt', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.forest) return makeStyleMaterial('forest', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.highland) return makeStyleMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.wetland) return makeStyleMaterial('wetland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    if (color === TERRAIN_COLORS.industrial) return makeStyleMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
+    return makeStyleMaterial('grass', { repeat: TERRAIN_TEXTURE_REPEAT });
   };
 
   // =================================================================
@@ -1026,6 +1044,60 @@ export function generateTerrain(length, breadth, seed = 1337) {
 
       terrain.add(instancedMesh);
     });
+  });
+  for (const child of [...terrain.children]) {
+    if (!child.name.startsWith('terrainChunk_')) continue;
+    terrain.remove(child);
+    child.geometry?.dispose();
+    const chunkMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    chunkMaterials.forEach((material) => {
+      material.map?.dispose();
+      material.dispose();
+    });
+  }
+  terrain.add(createTerrainSurfaceShell(heightMap, biomeMask, blend, length, breadth, surfaceColor, sideColor));
+  // Exact gameplay proxy. Visual voxels remain visible but never intercept
+  // placement or selection raycasts.
+  const interactionGeometry = new THREE.BoxGeometry(VOXEL_SIZE, 0.01, VOXEL_SIZE);
+  const interactionMaterial = new THREE.MeshBasicMaterial({
+    colorWrite: false,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const interactionSurface = new THREE.InstancedMesh(
+    interactionGeometry,
+    interactionMaterial,
+    length * breadth,
+  );
+  const interactionMatrix = new THREE.Matrix4();
+  let interactionIndex = 0;
+  for (let x = 0; x < length; x += 1) {
+    for (let z = 0; z < breadth; z += 1) {
+      const top = (heightMap[x][z] + 0.5) * VOXEL_SIZE;
+      interactionMatrix.makeTranslation(
+        (x - length / 2 + 0.5) * VOXEL_SIZE,
+        top - 0.005,
+        (z - breadth / 2 + 0.5) * VOXEL_SIZE,
+      );
+      interactionSurface.setMatrixAt(interactionIndex, interactionMatrix);
+      interactionIndex += 1;
+    }
+  }
+  interactionSurface.instanceMatrix.needsUpdate = true;
+  interactionSurface.userData.interactionSurface = true;
+  interactionSurface.name = 'terrainInteractionSurface';
+  interactionSurface.castShadow = false;
+  interactionSurface.receiveShadow = false;
+  interactionSurface.computeBoundingBox();
+  interactionSurface.computeBoundingSphere();
+  terrain.add(interactionSurface);
+  terrain.userData.interactionSurface = interactionSurface;
+
+  terrain.traverse((child) => {
+    if (child !== interactionSurface && child.isMesh) {
+      child.userData.visualOnly = true;
+      child.raycast = () => {};
+    }
   });
 
   if (import.meta.env.DEV) {

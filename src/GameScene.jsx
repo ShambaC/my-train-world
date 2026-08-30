@@ -5,15 +5,19 @@ import * as THREE from 'three';
 import { generateTerrain, createGrid, VOXEL_SIZE } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
 import TrainRenderer from './trains/TrainRenderer';
-import Skybox from './environment/Skybox';
+import SkyAtmosphere from './environment/SkyAtmosphere';
 import LightingState from './environment/LightingState';
 import Fireflies from './environment/Fireflies';
 import { advanceWind } from './environment/wind';
 import CameraController from './environment/CameraController';
 import { createForestBorder } from './environment/ForestBorder';
+import ShoreDressing from './environment/ShoreDressing';
 import WaterSurface from './environment/WaterSurface';
 import FogWall from './environment/FogWall';
 import Effects from './postprocessing/Effects';
+import { getGraphicsQuality } from './render/graphicsQuality';
+import { installVisualReview } from './render/VisualReviewHarness';
+import { initializeStyleKTX2 } from './utils/atlasTextures';
 import ScatterProps from './environment/ScatterProps';
 import GrassField from './environment/GrassField';
 import StationRenderer from './stations/StationRenderer';
@@ -86,10 +90,15 @@ function Scene({
   trainsVersion,
   stationsScatterVersion,
   showAxes,
+  graphicsQuality = 'medium',
+  visualFocusRef,
 }) {
   const terrainRef = useRef();
   const waterRef = useRef();
   const orbitRef = useRef(null);
+  const visualFocus = visualFocusRef || { current: { point: new THREE.Vector3(), distance: 0, mode: 'orbit' } };
+  const focusTargetRef = useRef(new THREE.Vector3());
+  const desiredCameraRef = useRef(new THREE.Vector3());
   const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
@@ -135,15 +144,26 @@ function Scene({
     if (dir) dir.shadow.radius = lighting.target?.shadowRadius ?? 4;
   }, [timeOfDay, lighting, scene]);
 
-  // Dev-only test hook
+  // Dev-only review and diagnostics hook
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      window.__mtw = {
-        ...window.__mtw, camera, scene, gl: gl.domElement, renderer: gl, THREE,
-        terrainRef: terrainRef.current, terrainData: terrain?.userData, terrainGroup: terrain,
-      };
-    }
-  }, [camera, gl, terrain, terrainRef]);
+    if (!import.meta.env.DEV) return;
+    window.__mtw = {
+      ...window.__mtw, camera, scene, gl: gl.domElement, renderer: gl, THREE,
+      terrainRef: terrainRef.current, terrainData: terrain?.userData, terrainGroup: terrain,
+    };
+    installVisualReview({
+      camera,
+      controlsRef: orbitRef,
+      renderer: gl,
+      getTimeOfDay: () => timeOfDay,
+      getGraphicsQuality: () => graphicsQuality,
+    });
+  }, [camera, gl, terrain, timeOfDay, graphicsQuality]);
+  useEffect(() => {
+    initializeStyleKTX2(gl).catch((error) => {
+      console.error('Style KTX2 initialization failed:', error);
+    });
+  }, [gl]);
 
   // Auto-scatter signals beside long track runs
   useEffect(() => {
@@ -165,32 +185,33 @@ function Scene({
 
     lighting.update(delta);
     advanceWind(delta);
-    trainAudio.updateAmbient(camera, terrain?.userData, timeOfDay);
-
-    // Train follow camera
     const controls = orbitRef.current;
     const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
-    if (controls) controls.enabled = !followTrain;
+    const focusTarget = focusTargetRef.current;
+    const desiredCamera = desiredCameraRef.current;
     if (followTrain) {
       const hx = Math.sin(followTrain.rotation);
       const hz = Math.cos(followTrain.rotation);
       const sideX = hz;
       const sideZ = -hx;
-      const target = new THREE.Vector3(
+      focusTarget.set(
         followTrain.position.x,
         followTrain.position.y + 0.25,
         followTrain.position.z,
       );
-      const desired = new THREE.Vector3(
-        target.x - hx * 3.6 + sideX * 1.4,
-        target.y + 2.25,
-        target.z - hz * 3.6 + sideZ * 1.4,
+      desiredCamera.set(
+        focusTarget.x - hx * 3.6 + sideX * 1.4,
+        focusTarget.y + 2.25,
+        focusTarget.z - hz * 3.6 + sideZ * 1.4,
       );
-      constrainCamera(desired, target, terrain?.userData, trackManager, trainManager);
+      constrainCamera(desiredCamera, focusTarget, terrain?.userData, trackManager, trainManager);
       const k = 1 - Math.exp(-3.5 * Math.min(delta, 0.1));
-      camera.position.lerp(desired, k);
-      controls.target.lerp(target, k);
+      camera.position.lerp(desiredCamera, k);
+      controls.target.lerp(focusTarget, k);
       controls.update();
+      visualFocus.current.mode = 'follow';
+      visualFocus.current.point.copy(focusTarget);
+      visualFocus.current.distance = camera.position.distanceTo(focusTarget);
       return;
     }
 
@@ -199,14 +220,18 @@ function Scene({
       const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
       controls.zoomSpeed = 1.5 * closeRangeBoost;
       controls.panSpeed = 1.5 * closeRangeBoost;
+      visualFocus.current.mode = distance > 80 ? 'overview' : 'orbit';
+      visualFocus.current.point.copy(controls.target);
+      visualFocus.current.distance = distance;
       if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
     }
-
-    const amb = scene.getObjectByName('ambientLight');
-    if (amb) {
-      amb.color.copy(lighting.ambient.color);
-      amb.intensity = lighting.ambient.intensity;
+    const hemi = scene.getObjectByName('hemisphereLight');
+    if (hemi) {
+      hemi.color.copy(lighting.hemisphereSky);
+      hemi.groundColor.copy(lighting.hemisphereGround);
+      hemi.intensity = lighting.hemisphereIntensity;
     }
+
 
     const dir = scene.getObjectByName('directionalLight');
     if (dir) {
@@ -250,33 +275,48 @@ function Scene({
         diagnostics: newTerrain.userData.diagnostics,
       });
     }
-
     if (onTerrainReady) onTerrainReady(newTerrain.userData);
-
     return () => {
       if (border) {
         border.traverse((child) => {
           if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+              material.map?.dispose();
+              material.dispose();
+            });
+          }
         });
       }
+      newTerrain.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            material.map?.dispose();
+            material.dispose();
+          });
+        }
+      });
     };
+
   }, [terrainSize, terrainSeed, onTerrainGenerated, onTerrainReady, onSceneProgress]);
 
   return (
     <>
-      <Skybox timeOfDay={timeOfDay} />
+      <SkyAtmosphere timeOfDay={timeOfDay} cloudLayers={getGraphicsQuality(graphicsQuality).cloudLayers} lighting={lighting} />
       <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} />
       
       {/* Lighting */}
-      <ambientLight name="ambientLight" intensity={0.5} />
+      <hemisphereLight name="hemisphereLight" intensity={0.7} />
       <directionalLight
         name="directionalLight"
         position={[50, 60, 30]}
         intensity={1.15}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={getGraphicsQuality(graphicsQuality).shadowMapSize}
+        shadow-mapSize-height={getGraphicsQuality(graphicsQuality).shadowMapSize}
         shadow-camera-far={200}
         shadow-camera-left={-shadowHalf}
         shadow-camera-right={shadowHalf}
@@ -300,7 +340,15 @@ function Scene({
          lighting={lighting}
          trackManager={trackManager}
          trainManager={trainManager}
+         graphicsQuality={graphicsQuality}
        />
+      <ShoreDressing
+        terrainData={terrain?.userData}
+        trackManager={trackManager}
+        stationManager={stationManager}
+        roadManager={roadManager}
+        revision={trackLayoutVersion + stationsScatterVersion}
+      />
 
       {/* Forest Border */}
       {forestBorder && (
@@ -401,6 +449,7 @@ function Scene({
           stationsVersion={stationsScatterVersion}
           roadManager={roadManager}
           lighting={lighting}
+          graphicsQuality={graphicsQuality}
         />
       )}
 
@@ -509,9 +558,10 @@ export default function GameScene({
   shadowMode = 'soft',
   tiltShiftEnabled = false,
   celShadingEnabled = false,
-  trainDirection = 1,
   frameLimit = 120,
   vsync = true,
+  graphicsQuality = 'medium',
+  trainDirection = 1,
   ambientEnabled = true,
   soundsEnabled = true,
   trafficEnabled = true,
@@ -547,6 +597,11 @@ export default function GameScene({
   const [memStats, setMemStats] = useState({ jsHeapMB: -1, geometries: 0, textures: 0, programs: 0, drawCalls: 0, triangles: 0 });
 
   const [currentEngineType, setCurrentEngineType] = useState('steam-engine');
+  const visualFocusRef = useRef({
+    point: new THREE.Vector3(),
+    distance: 0,
+    mode: 'orbit',
+  });
 
   const activityManagerRef = useRef(null);
   if (!activityManagerRef.current) {
@@ -747,6 +802,7 @@ export default function GameScene({
     <div className="relative w-full h-full">
       <Canvas
         camera={{ position: [20, 15, 20], fov: 60 }}
+        dpr={[1, getGraphicsQuality(graphicsQuality).dprCap]}
         shadows
         frameloop="never"
         gl={{ antialias: true, preserveDrawingBuffer: true }}
@@ -783,6 +839,8 @@ export default function GameScene({
           currentEngineType={currentEngineType}
           frameLimit={frameLimit}
           vsync={vsync}
+          graphicsQuality={graphicsQuality}
+          visualFocusRef={visualFocusRef}
           ambientEnabled={ambientEnabled}
           onStationPlaced={handleStationPlaced}
           activityManager={activityManagerRef.current}
@@ -805,7 +863,7 @@ export default function GameScene({
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt
             blur and cel passes stay opt-in toggles. */}
-        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
+        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} graphicsQuality={graphicsQuality} visualFocusRef={visualFocusRef} />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
 
@@ -861,6 +919,8 @@ export default function GameScene({
             <div>WebGL: {memStats.geometries} geo • {memStats.textures} tex • {memStats.programs} prog</div>
             <div>Draw calls: {memStats.drawCalls} • Tris: {memStats.triangles.toLocaleString()}</div>
             <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
+            <div>Graphics: {graphicsQuality} • DPR cap: {getGraphicsQuality(graphicsQuality).dprCap}</div>
+            <div>Shadow map: {getGraphicsQuality(graphicsQuality).shadowMapSize}px • Bloom: {getGraphicsQuality(graphicsQuality).bloom ? 'On' : 'Off'}</div>
             {selectedTool && <div className="border-t border-gray-600 pt-2"><div>Tool: {selectedTool.name}</div>{selectedTool.type === 'station' ? <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div> : <div>Rotation: {rotation}°</div>}{heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}</div>}
           </>}
         </div>

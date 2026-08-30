@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
 import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
 
@@ -23,9 +24,10 @@ const BLUR_STRENGTH = 3.7;
 const FinalShader = {
   uniforms: {
     tDiffuse: { value: null },
-    exposure: { value: 1.1 },
-    saturation: { value: 1.2 },
-    vignette: { value: 0.15 },
+    exposure: { value: 1.0 },
+    saturation: { value: 1.0 },
+    contrast: { value: 1.01 },
+    vignette: { value: 0.1 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -38,11 +40,13 @@ const FinalShader = {
     uniform sampler2D tDiffuse;
     uniform float exposure;
     uniform float saturation;
+    uniform float contrast;
     uniform float vignette;
     varying vec2 vUv;
 
-    vec3 acesFilmic(vec3 x) {
+    vec3 filmic(vec3 x) {
       x *= exposure;
+      x = max(x, vec3(0.0));
       return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
     }
     vec3 linearToSRGB(vec3 c) {
@@ -51,16 +55,12 @@ const FinalShader = {
 
     void main() {
       vec4 color = texture2D(tDiffuse, vUv);
-      color.rgb = acesFilmic(color.rgb);
-
-      // Saturation lift
+      color.rgb = filmic(color.rgb);
       float luma = dot(color.rgb, vec3(0.299, 0.587, 0.114));
       color.rgb = mix(vec3(luma), color.rgb, saturation);
-
-      // Vignette
+      color.rgb = mix(vec3(0.5), color.rgb, contrast);
       float vignetteDist = length(vUv - 0.5);
       color.rgb *= 1.0 - vignette * smoothstep(0.55, 0.95, vignetteDist);
-
       color.rgb = linearToSRGB(color.rgb);
       gl_FragColor = color;
     }
@@ -126,15 +126,16 @@ const CelShader = {
 
 // ─── Effects Component ────────────────────────────────────────────────────
 // Only mount when (tiltShiftEnabled || celShadingEnabled) — see GameScene.jsx
-export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
+export default function Effects({ tiltShiftEnabled, celShadingEnabled, graphicsQuality = 'medium', visualFocusRef }) {
   const { gl, scene, camera, size } = useThree();
   const composerRef = useRef();
   const tiltPassRef = useRef();
   const celPassRef = useRef();
-
-  // Build composer on mount
+  const bloomPassRef = useRef();
+  const finalPassRef = useRef();
   useEffect(() => {
     const composer = new EffectComposer(gl);
+    if (import.meta.env.DEV) window.__mtw.composer = composer;
     composerRef.current = composer;
 
     const renderPass = new RenderPass(scene, camera);
@@ -145,9 +146,16 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     celPassRef.current = celPass;
     composer.addPass(celPass);
 
-    // Two separable tilt-shift passes (horizontal then vertical), per
-    // tilt-shift-guide.md — each modulates its blur by distance from the
-    // focus line using the stock three.js shaders.
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(size.width, size.height),
+      0.25,
+      0.65,
+      1.35,
+    );
+    bloomPass.enabled = graphicsQuality !== 'low';
+    bloomPassRef.current = bloomPass;
+    composer.addPass(bloomPass);
+
     const tiltHPass = new ShaderPass(HorizontalTiltShiftShader);
     const tiltVPass = new ShaderPass(VerticalTiltShiftShader);
     tiltHPass.enabled = tiltShiftEnabled;
@@ -155,10 +163,9 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     tiltPassRef.current = [tiltHPass, tiltVPass];
     composer.addPass(tiltHPass);
     composer.addPass(tiltVPass);
-
     const finalPass = new ShaderPass(FinalShader);
+    finalPassRef.current = finalPass;
     composer.addPass(finalPass);
-
     composer.setSize(size.width, size.height);
     composer.setPixelRatio(gl.getPixelRatio());
 
@@ -191,7 +198,8 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
       passes[1].enabled = tiltShiftEnabled;
     }
     if (celPassRef.current) celPassRef.current.enabled = celShadingEnabled;
-  }, [tiltShiftEnabled, celShadingEnabled]);
+    if (bloomPassRef.current) bloomPassRef.current.enabled = graphicsQuality !== 'low';
+  }, [tiltShiftEnabled, celShadingEnabled, graphicsQuality]);
 
   // Update tilt-shift focus + blur footprint (physical render pixels) on resize
   useEffect(() => {
@@ -208,6 +216,13 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
       passes[1].uniforms.v.value = BLUR_STRENGTH / renderH;
       passes[1].uniforms.r.value = FOCUS_Y;
     }
+    if (bloomPassRef.current) {
+      bloomPassRef.current.resolution.set(
+        size.width * (graphicsQuality === 'high' ? 0.5 : 0.25),
+        size.height * (graphicsQuality === 'high' ? 0.5 : 0.25),
+      );
+      bloomPassRef.current.threshold = graphicsQuality === 'high' ? 1.15 : 1.35;
+    }
     if (composerRef.current) {
       composerRef.current.setSize(size.width, size.height);
     }
@@ -218,14 +233,14 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled }) {
     if (composerRef.current) {
       composerRef.current.render();
     }
-    // Tilt-shift blur scales with camera distance: tight and readable at
-    // close construction range, stronger miniature blur from overviews.
+    // Tilt-shift blur scales with camera-to-focus distance.
     const passes = tiltPassRef.current;
     if (passes && passes[0].enabled && composerRef.current) {
       const pixelRatio = gl.getPixelRatio();
       const renderW = size.width * pixelRatio;
       const renderH = size.height * pixelRatio;
-      const dist = THREE.MathUtils.clamp(camera.position.length() / 30, 0.4, 1.5);
+      const focusDistance = visualFocusRef?.current?.distance ?? camera.position.length();
+      const dist = THREE.MathUtils.clamp(focusDistance / 30, 0.4, 1.5);
       passes[0].uniforms.h.value = (BLUR_STRENGTH * dist) / renderW;
       passes[0].uniforms.r.value = FOCUS_Y;
       passes[1].uniforms.v.value = (BLUR_STRENGTH * dist) / renderH;

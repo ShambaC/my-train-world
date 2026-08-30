@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "toolVersion": "1.0.0",
+  "sourceRoot": "src/assets/art-source/painterly-diorama",
+  "runtimeRoot": "src/assets/Textures/style",
+  "generatedRequired": false,
+  "ktx2Encoder": "basisu",
+  "encoderVersion": "2.50",
+  "encoderArgs": ["-ktx2", "-output_file", "{output}", "{input}"],
+  "defaults": {
+    "width": 1254,
+    "height": 1254,
+    "generated": "generated/{name}.png",
+    "cropped": "cropped/{name}.png",
+    "kind": "color",
+    "colorSpace": "srgb",
+    "tileable": true,
+    "alpha": "none",
+    "materialFamily": "style",
+    "gutter": 8,
+    "compression": "etc1s",
+    "atlas": "styleColor"
+  },
+  "dimensions": {
+    "style-cloud-haze-a": [2172, 2172],
+    "style-cloud-large-b": [1672, 1672],
+    "style-cloud-wisp": [1024, 1024],
+    "style-flower-cluster-purple": [1024, 1024],
+    "style-ground-damp": [1024, 1024],
+    "style-soot-breakup": [1024, 1024],
+    "style-deciduous-clump-a": [1287, 1288]
+  },
+  "assetNames": [
+    "style-cloud-wisp", "style-cloud-haze-a", "style-cloud-medium-b", "style-cloud-medium-a", "style-cloud-large-b", "style-cloud-large-a",
+    "style-reed-cluster-b", "style-reed-cluster-a", "style-flower-spike-cream", "style-flower-spike-pink", "style-flower-cluster-gold", "style-flower-cluster-purple",
+    "style-grass-cluster-b", "style-grass-cluster-a", "style-shrub-clump-b", "style-shrub-clump-a", "style-pine-clump-b", "style-pine-clump-a",
+    "style-deciduous-breakup-b", "style-deciduous-breakup-a", "style-deciduous-clump-b", "style-deciduous-clump-a", "style-cloud-opacity", "style-foliage-variation",
+    "style-cargo-variation", "style-fabric-variation", "style-soot-breakup", "style-edge-wear", "style-painted-metal-breakup", "style-roof-breakup",
+    "style-timber-breakup", "style-stone-breakup", "style-moss-breakup", "style-plaster-wear", "style-cavity-accumulation", "style-ground-damp",
+    "style-mottle-b", "style-mottle-a", "style-shore-damp-mask", "style-shore-foam-mask", "style-caustic-broken", "style-caustic-soft",
+    "style-shore-ripples", "style-pond-rings", "style-water-ripple-crossing", "style-water-ripple-broad", "style-carriage-glass", "style-rolling-brass",
+    "style-wheel-rod-steel", "style-boiler-chassis-metal", "style-cream-trim", "style-green-enamel", "style-blue-enamel", "style-red-enamel",
+    "style-woven-cargo", "style-ceramic-insulator", "style-sign-green-paint", "style-crossing-red-metal", "style-lamp-metal", "style-galvanized-steel",
+    "style-dirt-road", "style-road-shoulder", "style-asphalt", "style-platform-edge-stone", "style-platform-deck", "style-bridge-deck",
+    "style-structural-beam", "style-sleeper-planks", "style-ballast", "style-rail-steel", "style-aged-brass", "style-window-recess",
+    "style-terracotta-roof", "style-teal-roof", "style-slate-blue-roof", "style-warm-timber", "style-dark-timber", "style-sage-plaster",
+    "style-peach-plaster", "style-cream-plaster", "style-cool-masonry", "style-limestone", "style-cool-rock", "style-warm-rock",
+    "style-shore-sand", "style-soil", "style-highland-ground", "style-wetland-ground", "style-forest-ground", "style-meadow"
+  ]
+}

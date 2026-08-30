@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import menuArt from '../assets/ui/ui-menu-key-art.png';
+import { useState, useEffect } from 'react';
 import { UI_ICONS } from './iconRegistry';
+import { GRAPHICS_QUALITY_OPTIONS } from '../render/graphicsQuality';
+import menuArt from '../assets/ui/ui-menu-key-art.png';
 
 const SIZE_PRESETS = [
   { key: 'small', label: 'Small', size: { length: 100, breadth: 100 }, hint: 'Quick build' },
@@ -185,8 +186,9 @@ export default function MainMenu({
   onVsyncChange,
   audioVolumes,
   onAudioVolumeChange,
+  graphicsQuality,
+  onGraphicsQualityChange,
   globalGraphics,
-  onGlobalGraphicsChange,
   showDebug,
   onToggleDebug,
   showAxes,
@@ -352,6 +354,22 @@ export default function MainMenu({
                 Vsync
                 <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
               </label>
+              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-5 border-t border-white/10 pt-5`}>
+                <div className="text-sm font-semibold text-[#c5d0df]">Graphics quality</div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {GRAPHICS_QUALITY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      title={option.description}
+                      onClick={() => onGraphicsQualityChange(option.value)}
+                      className={`rounded-xl border p-2 text-sm font-semibold ${graphicsQuality === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
                 <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>

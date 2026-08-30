@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import ModelLibrary from '../models/ModelLibrary';
 import { PuffSystem } from '../environment/PuffSystem';
 import { mulberry32 } from '../terrain.js';
-import { makeAtlasMaterial } from '../utils/atlasTextures.js';
+import { makeStyleMaterial } from '../render/styleMaterials.js';
 
 export const STATION_WIDTH = 3; // voxels perpendicular to the track
 export const STATION_WIDTH_WORLD = STATION_WIDTH * 0.5; // 1.5 units
@@ -17,7 +17,7 @@ export const MIN_STATION_LENGTH = 8; // voxels
 export const MAX_STATION_LENGTH = 40; // voxels
 
 const VOXEL = 0.5;
-const STATION_DECK_MAT = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
+const STATION_DECK_MAT = makeStyleMaterial('deck', { repeat: [1, 0.33] });
 const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
 
 // Shared practical-light materials (additive, toneMapped off — cheap glow

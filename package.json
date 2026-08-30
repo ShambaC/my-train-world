@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "textures:style": "node tools/build-style-textures.mjs --manifest tools/style-textures.manifest.json",
     "preview": "vite preview",
     "tauri": "tauri"
   },
@@ -24,6 +25,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
+    "sharp": "0.33.5",
     "tailwindcss": "^3.4.17",
     "vite": "^7.0.4"
   }

@@ -1,7 +1,7 @@
 /**
  * Small persisted settings store (localStorage).
- * Used for render preferences that must survive reloads without touching
- * world state: frame limit, vsync mode.
+ * Used for machine-level render preferences. World payloads never read this
+ * store, so graphics quality remains global and cannot pollute .world files.
  */
 const SETTINGS_KEY = 'mytrainworld.settings.v1';
 

@@ -256,7 +256,9 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       }
 
       if (instances.length === 0) continue;
-
+      // Natural tree placement remains registered for roads/grass, but visible
+      // tree meshes come from the layered procedural canopy in terrain.js.
+      if (isTree || def.key === 'lineside-shrub') continue;
       const isWindy = WIND_DEFS.has(def.key);
 
       const mesh = new THREE.InstancedMesh(entry.geometry, entry.material, instances.length);

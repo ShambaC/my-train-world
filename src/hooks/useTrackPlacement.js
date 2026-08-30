@@ -70,7 +70,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.current.setFromCamera(mouse.current, camera);
-      const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+      const intersects = raycaster.current.intersectObject(terrainRef.current?.userData?.interactionSurface || terrainRef.current, true);
       latestRef.current = {
         ...latestRef.current,
         hitPoint: intersects.length ? { ...intersects[0].point } : null,
@@ -91,7 +91,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.current.setFromCamera(mouse.current, camera);
-      const intersects = raycaster.current.intersectObject(terrainRef.current, true);
+      const intersects = raycaster.current.intersectObject(terrainRef.current?.userData?.interactionSurface || terrainRef.current, true);
       if (intersects.length === 0) {
         publish(null, true, null);
         return;

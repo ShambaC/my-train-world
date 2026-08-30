@@ -5,6 +5,7 @@ import { BIOME, mulberry32 } from '../terrain.js';
 import { windTime } from './wind.js';
 import { scatterRegistry } from './scatterRegistry.js';
 import { addSetDiff, collectExclusionSets, cellKey } from './instanceExclusion.js';
+import { getGraphicsQuality } from '../render/graphicsQuality.js';
 import { makeBladeGeometry, makeBladeMaterial, makeFlowerMaterial, makeFlowerDepthMaterial } from './grassMaterials.js';
 import maskFlowerA from '../assets/Textures/flower/flowers.png';
 import rgbFlowerA from '../assets/Textures/flower/flowersRGB.png';
@@ -140,13 +141,14 @@ FLOWER_GEO.translate(0, 0.5, 0);
  * hidden (zero-scaled) under tracks, stations, roads and scattered buildings,
  * exactly like ScatterProps. Deterministic per terrain seed.
  */
-export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting }) {
+export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting, graphicsQuality = 'medium' }) {
   const groupRef = useRef(new THREE.Group());
   const layoutRef = useRef([]);
   const layoutByCellRef = useRef(new Map());
   const exclusionSetsRef = useRef(null);
 
   const length = terrainData?.length || 0;
+  const quality = getGraphicsQuality(graphicsQuality);
   const breadth = terrainData?.breadth || 0;
 
   const matrix = new THREE.Matrix4();
@@ -245,7 +247,7 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
 
     let total = 0;
     for (const p of patches) {
-      p.count = p.loose ? 180 + Math.floor(rng() * 140) : 160 + Math.floor(rng() * 120);
+      p.count = Math.max(1, Math.floor((p.loose ? 180 + Math.floor(rng() * 140) : 160 + Math.floor(rng() * 120)) * quality.grassDensity));
       p.shape = new Array(SHAPE_SAMPLES);
       for (let i = 0; i < SHAPE_SAMPLES; i++) {
         p.shape[i] = p.r * (0.45 + rng() * 0.55);
@@ -331,7 +333,7 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
     const typeRng = mulberry32((((seed * 2654435761) >>> 0) ^ 0x85ebca6b) >>> 0);
     for (let x = 0; x < length; x++) {
       for (let z = 0; z < breadth; z++) {
-        if (isGrassCell(x, z) && typeRng() < 1 / 8) flowers.push({ x, z });
+        if (isGrassCell(x, z) && typeRng() < quality.flowerDensity / 8) flowers.push({ x, z });
       }
     }
     const useA = flowers.map(() => typeRng() < 0.5);
@@ -390,7 +392,7 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
     }
     for (const key of ['A', 'B']) flowerMeshes[key].instanceMatrix.needsUpdate = true;
     if (flowers.length) old.add(flowerMeshes.A, flowerMeshes.B);
-  }, [terrainData, length, breadth, flowerMats]);
+  }, [terrainData, length, breadth, flowerMats, quality]);
 
   // Exclusion pass: update only cells whose dynamic exclusion sources changed.
   useEffect(() => {
