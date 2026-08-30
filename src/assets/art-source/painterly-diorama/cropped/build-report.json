@@ -1,0 +1,992 @@
+{
+  "timestamp": "2026-08-30T10:23:00.130Z",
+  "texturesCount": 90,
+  "atlases": {
+    "terrain": {
+      "width": 1536,
+      "height": 1536,
+      "items": 9,
+      "pngBytes": 5533329,
+      "ktx2Bytes": 405347
+    },
+    "architecture": {
+      "width": 2048,
+      "height": 1536,
+      "items": 12,
+      "pngBytes": 7202847,
+      "ktx2Bytes": 491946
+    },
+    "wood": {
+      "width": 1536,
+      "height": 1024,
+      "items": 5,
+      "pngBytes": 2605863,
+      "ktx2Bytes": 213052
+    },
+    "infrastructure": {
+      "width": 1536,
+      "height": 1536,
+      "items": 7,
+      "pngBytes": 3688502,
+      "ktx2Bytes": 290141
+    },
+    "roads": {
+      "width": 1024,
+      "height": 1024,
+      "items": 3,
+      "pngBytes": 1678862,
+      "ktx2Bytes": 140403
+    },
+    "rolling_stock": {
+      "width": 1536,
+      "height": 1536,
+      "items": 7,
+      "pngBytes": 3858794,
+      "ktx2Bytes": 290921
+    },
+    "cargo": {
+      "width": 1024,
+      "height": 1024,
+      "items": 3,
+      "pngBytes": 1403746,
+      "ktx2Bytes": 132466
+    },
+    "nature": {
+      "width": 1536,
+      "height": 1536,
+      "items": 7,
+      "pngBytes": 2296534,
+      "ktx2Bytes": 234636
+    },
+    "cutouts": {
+      "width": 2048,
+      "height": 1536,
+      "items": 10,
+      "pngBytes": 1829709,
+      "ktx2Bytes": 882353
+    },
+    "clouds": {
+      "width": 1536,
+      "height": 1536,
+      "items": 7,
+      "pngBytes": 1475066,
+      "ktx2Bytes": 163412
+    },
+    "water": {
+      "width": 1536,
+      "height": 1536,
+      "items": 8,
+      "pngBytes": 2496382,
+      "ktx2Bytes": 2069995
+    },
+    "masks": {
+      "width": 2048,
+      "height": 1536,
+      "items": 12,
+      "pngBytes": 5176645,
+      "ktx2Bytes": 3644265
+    }
+  },
+  "textures": {
+    "meadow": {
+      "atlas": "terrain",
+      "ktx2Bytes": 53693,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "forest_ground": {
+      "atlas": "terrain",
+      "ktx2Bytes": 53517,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "soil": {
+      "atlas": "terrain",
+      "ktx2Bytes": 53340,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "highland_ground": {
+      "atlas": "terrain",
+      "ktx2Bytes": 56376,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "wetland_ground": {
+      "atlas": "terrain",
+      "ktx2Bytes": 52085,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "shore_sand": {
+      "atlas": "terrain",
+      "ktx2Bytes": 48567,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "warm_rock": {
+      "atlas": "terrain",
+      "ktx2Bytes": 58407,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "cool_rock": {
+      "atlas": "terrain",
+      "ktx2Bytes": 54933,
+      "uv": [
+        0.3333333333333333,
+        0,
+        0.6666666666666666,
+        0.33333333333333337
+      ]
+    },
+    "limestone": {
+      "atlas": "terrain",
+      "ktx2Bytes": 52064,
+      "uv": [
+        0.6666666666666666,
+        0,
+        1,
+        0.33333333333333337
+      ]
+    },
+    "cream_plaster": {
+      "atlas": "architecture",
+      "ktx2Bytes": 46423,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.25,
+        1
+      ]
+    },
+    "peach_plaster": {
+      "atlas": "architecture",
+      "ktx2Bytes": 47773,
+      "uv": [
+        0.25,
+        0.6666666666666667,
+        0.5,
+        1
+      ]
+    },
+    "sage_plaster": {
+      "atlas": "architecture",
+      "ktx2Bytes": 49353,
+      "uv": [
+        0.5,
+        0.6666666666666667,
+        0.75,
+        1
+      ]
+    },
+    "cream_trim": {
+      "atlas": "architecture",
+      "ktx2Bytes": 43091,
+      "uv": [
+        0.75,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "cool_masonry": {
+      "atlas": "architecture",
+      "ktx2Bytes": 55377,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.25,
+        0.6666666666666667
+      ]
+    },
+    "slate_blue_roof": {
+      "atlas": "architecture",
+      "ktx2Bytes": 49265,
+      "uv": [
+        0.25,
+        0.33333333333333337,
+        0.5,
+        0.6666666666666667
+      ]
+    },
+    "teal_roof": {
+      "atlas": "architecture",
+      "ktx2Bytes": 52711,
+      "uv": [
+        0.5,
+        0.33333333333333337,
+        0.75,
+        0.6666666666666667
+      ]
+    },
+    "terracotta_roof": {
+      "atlas": "architecture",
+      "ktx2Bytes": 51976,
+      "uv": [
+        0.75,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "platform_deck": {
+      "atlas": "architecture",
+      "ktx2Bytes": 53671,
+      "uv": [
+        0,
+        0,
+        0.25,
+        0.33333333333333337
+      ]
+    },
+    "platform_edge_stone": {
+      "atlas": "architecture",
+      "ktx2Bytes": 53020,
+      "uv": [
+        0.25,
+        0,
+        0.5,
+        0.33333333333333337
+      ]
+    },
+    "window_recess": {
+      "atlas": "architecture",
+      "ktx2Bytes": 50713,
+      "uv": [
+        0.5,
+        0,
+        0.75,
+        0.33333333333333337
+      ]
+    },
+    "carriage_glass": {
+      "atlas": "architecture",
+      "ktx2Bytes": 51421,
+      "uv": [
+        0.75,
+        0,
+        1,
+        0.33333333333333337
+      ]
+    },
+    "dark_timber": {
+      "atlas": "wood",
+      "ktx2Bytes": 45651,
+      "uv": [
+        0,
+        0.5,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "warm_timber": {
+      "atlas": "wood",
+      "ktx2Bytes": 51423,
+      "uv": [
+        0.3333333333333333,
+        0.5,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "structural_beam": {
+      "atlas": "wood",
+      "ktx2Bytes": 45933,
+      "uv": [
+        0.6666666666666666,
+        0.5,
+        1,
+        1
+      ]
+    },
+    "sleeper_planks": {
+      "atlas": "wood",
+      "ktx2Bytes": 48413,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.5
+      ]
+    },
+    "bridge_deck": {
+      "atlas": "wood",
+      "ktx2Bytes": 49285,
+      "uv": [
+        0.3333333333333333,
+        0,
+        0.6666666666666666,
+        0.5
+      ]
+    },
+    "rail_steel": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 53265,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "ballast": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 54970,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "galvanized_steel": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 52516,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "lamp_metal": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 43344,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "ceramic_insulator": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 50017,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "crossing_red_metal": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 46415,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "sign_green_paint": {
+      "atlas": "infrastructure",
+      "ktx2Bytes": 44423,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "asphalt": {
+      "atlas": "roads",
+      "ktx2Bytes": 49247,
+      "uv": [
+        0,
+        0.5,
+        0.5,
+        1
+      ]
+    },
+    "road_shoulder": {
+      "atlas": "roads",
+      "ktx2Bytes": 53152,
+      "uv": [
+        0.5,
+        0.5,
+        1,
+        1
+      ]
+    },
+    "dirt_road": {
+      "atlas": "roads",
+      "ktx2Bytes": 54814,
+      "uv": [
+        0,
+        0,
+        0.5,
+        0.5
+      ]
+    },
+    "red_enamel": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 46436,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "blue_enamel": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 47938,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "green_enamel": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 46295,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "aged_brass": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 55672,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "rolling_brass": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 52333,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "boiler_chassis_metal": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 44464,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "wheel_rod_steel": {
+      "atlas": "rolling_stock",
+      "ktx2Bytes": 51707,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "cargo_variation": {
+      "atlas": "cargo",
+      "ktx2Bytes": 45693,
+      "uv": [
+        0,
+        0.5,
+        0.5,
+        1
+      ]
+    },
+    "fabric_variation": {
+      "atlas": "cargo",
+      "ktx2Bytes": 48401,
+      "uv": [
+        0.5,
+        0.5,
+        1,
+        1
+      ]
+    },
+    "woven_cargo": {
+      "atlas": "cargo",
+      "ktx2Bytes": 51423,
+      "uv": [
+        0,
+        0,
+        0.5,
+        0.5
+      ]
+    },
+    "deciduous_clump_a": {
+      "atlas": "nature",
+      "ktx2Bytes": 44300,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "deciduous_clump_b": {
+      "atlas": "nature",
+      "ktx2Bytes": 47242,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "pine_clump_a": {
+      "atlas": "nature",
+      "ktx2Bytes": 41995,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "pine_clump_b": {
+      "atlas": "nature",
+      "ktx2Bytes": 48848,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "shrub_clump_a": {
+      "atlas": "nature",
+      "ktx2Bytes": 40749,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "shrub_clump_b": {
+      "atlas": "nature",
+      "ktx2Bytes": 38465,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "foliage_variation": {
+      "atlas": "nature",
+      "ktx2Bytes": 44973,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "deciduous_breakup_a": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 73785,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.25,
+        1
+      ]
+    },
+    "deciduous_breakup_b": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 60970,
+      "uv": [
+        0.25,
+        0.6666666666666667,
+        0.5,
+        1
+      ]
+    },
+    "grass_cluster_a": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 114567,
+      "uv": [
+        0.5,
+        0.6666666666666667,
+        0.75,
+        1
+      ]
+    },
+    "grass_cluster_b": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 124190,
+      "uv": [
+        0.75,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "flower_cluster_gold": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 94989,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.25,
+        0.6666666666666667
+      ]
+    },
+    "flower_cluster_purple": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 102059,
+      "uv": [
+        0.25,
+        0.33333333333333337,
+        0.5,
+        0.6666666666666667
+      ]
+    },
+    "flower_spike_cream": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 47484,
+      "uv": [
+        0.5,
+        0.33333333333333337,
+        0.75,
+        0.6666666666666667
+      ]
+    },
+    "flower_spike_pink": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 44112,
+      "uv": [
+        0.75,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "reed_cluster_a": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 88792,
+      "uv": [
+        0,
+        0,
+        0.25,
+        0.33333333333333337
+      ]
+    },
+    "reed_cluster_b": {
+      "atlas": "cutouts",
+      "ktx2Bytes": 146150,
+      "uv": [
+        0.25,
+        0,
+        0.5,
+        0.33333333333333337
+      ]
+    },
+    "cloud_large_a": {
+      "atlas": "clouds",
+      "ktx2Bytes": 143432,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "cloud_large_b": {
+      "atlas": "clouds",
+      "ktx2Bytes": 80970,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "cloud_medium_a": {
+      "atlas": "clouds",
+      "ktx2Bytes": 101652,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "cloud_medium_b": {
+      "atlas": "clouds",
+      "ktx2Bytes": 112184,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "cloud_haze_a": {
+      "atlas": "clouds",
+      "ktx2Bytes": 33560,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "cloud_wisp": {
+      "atlas": "clouds",
+      "ktx2Bytes": 77230,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "cloud_opacity": {
+      "atlas": "clouds",
+      "ktx2Bytes": 302367,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "water_ripple_broad": {
+      "atlas": "water",
+      "ktx2Bytes": 287489,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.3333333333333333,
+        1
+      ]
+    },
+    "water_ripple_crossing": {
+      "atlas": "water",
+      "ktx2Bytes": 282020,
+      "uv": [
+        0.3333333333333333,
+        0.6666666666666667,
+        0.6666666666666666,
+        1
+      ]
+    },
+    "caustic_soft": {
+      "atlas": "water",
+      "ktx2Bytes": 279999,
+      "uv": [
+        0.6666666666666666,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "caustic_broken": {
+      "atlas": "water",
+      "ktx2Bytes": 287536,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.3333333333333333,
+        0.6666666666666667
+      ]
+    },
+    "pond_rings": {
+      "atlas": "water",
+      "ktx2Bytes": 254662,
+      "uv": [
+        0.3333333333333333,
+        0.33333333333333337,
+        0.6666666666666666,
+        0.6666666666666667
+      ]
+    },
+    "shore_ripples": {
+      "atlas": "water",
+      "ktx2Bytes": 258154,
+      "uv": [
+        0.6666666666666666,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "shore_damp_mask": {
+      "atlas": "water",
+      "ktx2Bytes": 295784,
+      "uv": [
+        0,
+        0,
+        0.3333333333333333,
+        0.33333333333333337
+      ]
+    },
+    "shore_foam_mask": {
+      "atlas": "water",
+      "ktx2Bytes": 144393,
+      "uv": [
+        0.3333333333333333,
+        0,
+        0.6666666666666666,
+        0.33333333333333337
+      ]
+    },
+    "mottle_a": {
+      "atlas": "masks",
+      "ktx2Bytes": 294644,
+      "uv": [
+        0,
+        0.6666666666666667,
+        0.25,
+        1
+      ]
+    },
+    "mottle_b": {
+      "atlas": "masks",
+      "ktx2Bytes": 296028,
+      "uv": [
+        0.25,
+        0.6666666666666667,
+        0.5,
+        1
+      ]
+    },
+    "edge_wear": {
+      "atlas": "masks",
+      "ktx2Bytes": 298710,
+      "uv": [
+        0.5,
+        0.6666666666666667,
+        0.75,
+        1
+      ]
+    },
+    "cavity_accumulation": {
+      "atlas": "masks",
+      "ktx2Bytes": 292934,
+      "uv": [
+        0.75,
+        0.6666666666666667,
+        1,
+        1
+      ]
+    },
+    "moss_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 300884,
+      "uv": [
+        0,
+        0.33333333333333337,
+        0.25,
+        0.6666666666666667
+      ]
+    },
+    "stone_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 303857,
+      "uv": [
+        0.25,
+        0.33333333333333337,
+        0.5,
+        0.6666666666666667
+      ]
+    },
+    "plaster_wear": {
+      "atlas": "masks",
+      "ktx2Bytes": 297144,
+      "uv": [
+        0.5,
+        0.33333333333333337,
+        0.75,
+        0.6666666666666667
+      ]
+    },
+    "timber_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 302369,
+      "uv": [
+        0.75,
+        0.33333333333333337,
+        1,
+        0.6666666666666667
+      ]
+    },
+    "roof_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 295819,
+      "uv": [
+        0,
+        0,
+        0.25,
+        0.33333333333333337
+      ]
+    },
+    "painted_metal_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 302955,
+      "uv": [
+        0.25,
+        0,
+        0.5,
+        0.33333333333333337
+      ]
+    },
+    "soot_breakup": {
+      "atlas": "masks",
+      "ktx2Bytes": 311509,
+      "uv": [
+        0.5,
+        0,
+        0.75,
+        0.33333333333333337
+      ]
+    },
+    "ground_damp": {
+      "atlas": "masks",
+      "ktx2Bytes": 299334,
+      "uv": [
+        0.75,
+        0,
+        1,
+        0.33333333333333337
+      ]
+    }
+  }
+}

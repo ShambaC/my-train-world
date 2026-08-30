@@ -36,6 +36,8 @@ import { cameraBus } from './utils/cameraBus';
 import { clone } from './utils/editActions';
 import CameraCollision, { constrainCamera } from './environment/cameraCollision';
 import PracticalLights from './environment/PracticalLights';
+import ShoreDressing from './environment/ShoreDressing.jsx';
+import VisualReviewHarness from './render/VisualReviewHarness.jsx';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -202,10 +204,11 @@ function Scene({
       if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
     }
 
-    const amb = scene.getObjectByName('ambientLight');
-    if (amb) {
-      amb.color.copy(lighting.ambient.color);
-      amb.intensity = lighting.ambient.intensity;
+    const hemi = scene.getObjectByName('hemisphereLight');
+    if (hemi) {
+      hemi.color.copy(lighting.hemisphereSky);
+      hemi.groundColor.copy(lighting.hemisphereGround);
+      hemi.intensity = lighting.ambient.intensity;
     }
 
     const dir = scene.getObjectByName('directionalLight');
@@ -265,11 +268,14 @@ function Scene({
 
   return (
     <>
-      <Skybox timeOfDay={timeOfDay} />
+      <Skybox timeOfDay={timeOfDay} lighting={lighting} />
       <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} />
       
-      {/* Lighting */}
-      <ambientLight name="ambientLight" intensity={0.5} />
+      {/* Hemisphere Lighting */}
+      <hemisphereLight
+        name="hemisphereLight"
+        args={[0xaad4f5, 0x526b48, 0.75]}
+      />
       <directionalLight
         name="directionalLight"
         position={[50, 60, 30]}
@@ -301,6 +307,11 @@ function Scene({
          trackManager={trackManager}
          trainManager={trainManager}
        />
+
+      {/* Shoreline Dressing */}
+      {terrain && (
+        <ShoreDressing terrainData={terrain?.userData} lighting={lighting} />
+      )}
 
       {/* Forest Border */}
       {forestBorder && (
@@ -485,6 +496,9 @@ function Scene({
 
       {/* Axis indicator gizmo */}
       <AxisGizmo visible={showAxes} />
+
+      {/* Visual Review Dev Harness */}
+      <VisualReviewHarness camera={camera} orbitRef={orbitRef} />
     </>
   );
 }

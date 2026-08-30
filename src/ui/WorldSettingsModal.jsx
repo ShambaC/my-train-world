@@ -21,6 +21,8 @@ export default function WorldSettingsModal({
   onFrameLimitChange,
   vsync,
   onVsyncChange,
+  graphicsQuality,
+  onGraphicsQualityChange,
   ambientEnabled,
   onAmbientChange,
   soundsEnabled,
@@ -51,7 +53,7 @@ export default function WorldSettingsModal({
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => setTab('environment')} className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold ${tab === 'environment' ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={tab === 'environment'}>Environment and audio</button>
-            <button type="button" onClick={() => setTab('performance')} className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold ${tab === 'performance' ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={tab === 'performance'}>Performance</button>
+            <button type="button" onClick={() => setTab('performance')} className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold ${tab === 'performance' ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={tab === 'performance'}>Performance & Graphics</button>
           </div>
 
           {tab === 'environment' && <section className="rounded-2xl border border-white/10 bg-[#18263b] p-3 sm:p-4">
@@ -85,8 +87,10 @@ export default function WorldSettingsModal({
             <PerformanceSettings
               frameLimit={frameLimit}
               vsync={vsync}
+              graphicsQuality={graphicsQuality}
               onFrameLimitChange={onFrameLimitChange}
               onVsyncChange={onVsyncChange}
+              onGraphicsQualityChange={onGraphicsQualityChange}
             />
           </section>}
         </div>

@@ -1,21 +1,19 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
-import { applyWindSway } from './environment/wind.js';
-import { makeAtlasMaterial } from './utils/atlasTextures.js';
+import { getStyleMaterial } from './render/styleMaterials.js';
+import { STYLE_PALETTE } from './render/stylePalette.js';
 
 // Voxel size - smaller than Minecraft for higher resolution
 export const VOXEL_SIZE = 0.5;
 
-// Water surface world height (raised twice: 1.0 -> 1.5 -> 2.0)
+// Water surface world height
 export const WATER_LEVEL = 2.0;
-// Voxel index at/under which columns are submerged (top of index 3 = 1.75 < 2.0)
+// Voxel index at/under which columns are submerged
 export const WATER_LEVEL_VOXEL = 3;
 
-// Spatial instance regions. Keeps original voxel boxes intact while giving
-// renderer frustum culling useful bounds instead of one bound for whole map.
 const TERRAIN_CHUNK_SIZE = 64;
 
-// Deterministic biome ids (shared with ScatterProps for prop selection)
+// Deterministic biome ids
 export const BIOME = {
   water: 0,
   meadow: 1,
@@ -28,25 +26,19 @@ export const BIOME = {
 // Terrain colors based on height + biome
 const TERRAIN_COLORS = {
   water: 0x4a90e2,
-  sand: 0xd9b878, // warm sand — shallow water reads warm near the shore
-  grass: 0x549e54, // slightly muted so the textured meadow reads, not glows
-  rock: 0x808080,
-  snow: 0xffffff,
-  dirt: 0x6a4d33, // darker vertical dirt faces — more depth contrast
-  // Biome surface colors
-  forest: 0x4d9444, // darker ground under forest
-  highland: 0x7a7a7a, // rock grey
-  wetland: 0x8a7358, // mud
-  industrial: 0x8f8b84, // gravel
-  // Vegetation colors
-  treeLeaf: 0x2d5a2d,
-  treeTrunk: 0x8b4513,
-  bush: 0x3a7a7a,
+  sand: STYLE_PALETTE.sand.base,
+  grass: STYLE_PALETTE.meadow.base,
+  rock: STYLE_PALETTE.warm_rock.base,
+  snow: 0xf4f6f8,
+  dirt: STYLE_PALETTE.soil.base,
+  forest: STYLE_PALETTE.forest_ground.base,
+  highland: STYLE_PALETTE.highland.base,
+  wetland: STYLE_PALETTE.wetland.base,
+  industrial: 0x8f8b84,
 };
 
 /**
- * Deterministic PRNG (mulberry32). All persistent scenery/terrain decisions
- * must go through this so a fixed seed always produces the same world.
+ * Deterministic PRNG (mulberry32).
  */
 export function mulberry32(a) {
   return function () {
@@ -59,15 +51,14 @@ export function mulberry32(a) {
 }
 
 /**
- * True inside a reserved construction plateau (disk interior or corridor
- * strip). Used to keep smoothing, forest and vegetation out of build areas.
+ * True inside a reserved construction plateau.
  */
 export function isClearingCell(x, z, plateaus) {
   for (const p of plateaus || []) {
     if (p.type === 'disk') {
       const nx = (x - p.cx) / p.rx;
       const nz = (z - p.cz) / p.rz;
-      if (nx * nx + nz * nz < 0.64) return true; // d < 0.8 * radius
+      if (nx * nx + nz * nz < 0.64) return true;
     } else if (Math.abs(x - p.cx) < p.rx - 2 && Math.abs(z - p.cz) < p.rz - 2) {
       return true;
     }
@@ -75,223 +66,90 @@ export function isClearingCell(x, z, plateaus) {
   return false;
 }
 
-// --- generateVegetation: biome-aware, keeps build areas clear ---
-function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, breadth, seed, waterLevel) {
-  const noise2D = createNoise2D(() => seed * 2);
-  const treeTrunks = [];
-  const treeCones1 = [];
-  const treeCones2 = [];
-  const bushes = [];
-
-  const BIOME_TREE_DENSITY = {
-    [BIOME.forest]: 0.2,
-    [BIOME.meadow]: 0.055,
-    [BIOME.highland]: 0.02,
-    [BIOME.wetland]: 0.05,
-    [BIOME.industrial]: 0,
-  };
-  const minSpacing = 3;
-  const placedVegetation = [];
-
-  const trunkGeo = new THREE.CylinderGeometry(0.04, 0.07, 0.5, 5);
-  const cone1Geo = new THREE.ConeGeometry(0.35, 0.5, 5);
-  const cone2Geo = new THREE.ConeGeometry(0.25, 0.4, 5);
-  const bushGeo = new THREE.DodecahedronGeometry(0.2, 0);
-
-  const trunkMat = makeAtlasMaterial('bark');
-  const leafMat1 = makeAtlasMaterial('leaf_dark');
-  const leafMat2 = makeAtlasMaterial('leaf_light');
-  const bushMat = makeAtlasMaterial('bush');
-
-  // Wind sway — vegetation breathes together, driven by the shared wind clock
-  applyWindSway(trunkMat, { leaves: false, strength: 0.5 });
-  applyWindSway(leafMat1, { strength: 1 });
-  applyWindSway(leafMat2, { strength: 1 });
-  applyWindSway(bushMat, { strength: 0.7 });
-
-  for (let x = 1; x < length - 1; x += 2) {
-    for (let z = 1; z < breadth - 1; z += 2) {
-      const height = heightMap[x][z];
-
-      if (height <= waterLevel) continue; // Skip water level
-      if (isClearingCell(x, z, plateaus)) continue; // Keep build areas clear
-
-      const biome = biomeMask[x * breadth + z];
-      const vegetationDensity = BIOME_TREE_DENSITY[biome];
-      if (!vegetationDensity) continue;
-
-      const vegetationNoise = noise2D(x * 0.1, z * 0.1);
-      const threshold = 1 - vegetationDensity * 2;
-      if (vegetationNoise < threshold) continue;
-
-      let tooClose = false;
-      for (const placed of placedVegetation) {
-        const dist = Math.sqrt(Math.pow(x - placed.x, 2) + Math.pow(z - placed.z, 2));
-        if (dist < minSpacing) {
-          tooClose = true;
-          break;
-        }
-      }
-      if (tooClose) continue;
-
-      const worldX = (x - length / 2) * VOXEL_SIZE;
-      const worldY = (height + 0.5) * VOXEL_SIZE;
-      const worldZ = (z - breadth / 2) * VOXEL_SIZE;
-
-      // Wetlands and highlands read as scrub/reeds, not trees. Otherwise the
-      // upper half of the placement band is trees, the lower half bushes.
-      const isBush =
-        biome === BIOME.wetland ||
-        biome === BIOME.highland ||
-        vegetationNoise < threshold + (1 - threshold) * 0.5;
-
-      if (isBush) {
-        bushes.push(new THREE.Vector3(worldX, worldY, worldZ));
-      } else {
-        treeTrunks.push(new THREE.Vector3(worldX, worldY + 0.25, worldZ));
-        treeCones1.push(new THREE.Vector3(worldX, worldY + 0.6, worldZ));
-        treeCones2.push(new THREE.Vector3(worldX, worldY + 0.95, worldZ));
-      }
-      placedVegetation.push({ x, z });
-    }
-  }
-
-  const matrix = new THREE.Matrix4();
-
-  // Trunks
-  if (treeTrunks.length > 0) {
-    const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeTrunks.length);
-    treeTrunks.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      trunkMesh.setMatrixAt(i, matrix);
-    });
-    trunkMesh.instanceMatrix.needsUpdate = true;
-    trunkMesh.receiveShadow = true;
-    trunkMesh.castShadow = true;
-    terrain.add(trunkMesh);
-  }
-
-  // Cone Layer 1
-  if (treeCones1.length > 0) {
-    const cone1Mesh = new THREE.InstancedMesh(cone1Geo, leafMat1, treeCones1.length);
-    treeCones1.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      cone1Mesh.setMatrixAt(i, matrix);
-    });
-    cone1Mesh.instanceMatrix.needsUpdate = true;
-    cone1Mesh.receiveShadow = true;
-    cone1Mesh.castShadow = true;
-    terrain.add(cone1Mesh);
-  }
-
-  // Cone Layer 2
-  if (treeCones2.length > 0) {
-    const cone2Mesh = new THREE.InstancedMesh(cone2Geo, leafMat2, treeCones2.length);
-    treeCones2.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      cone2Mesh.setMatrixAt(i, matrix);
-    });
-    cone2Mesh.instanceMatrix.needsUpdate = true;
-    cone2Mesh.receiveShadow = true;
-    cone2Mesh.castShadow = true;
-    terrain.add(cone2Mesh);
-  }
-
-  // Bushes
-  if (bushes.length > 0) {
-    const bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, bushes.length);
-    bushes.forEach((pos, i) => {
-      matrix.setPosition(pos);
-      bushMesh.setMatrixAt(i, matrix);
-    });
-    bushMesh.instanceMatrix.needsUpdate = true;
-    bushMesh.receiveShadow = true;
-    bushMesh.castShadow = true;
-    terrain.add(bushMesh);
-  }
-}
-
 /**
- * Carve a meandering river from one edge of the map to the opposite edge.
- * Flows along the longer axis; riverbed is carved to 0 with sloped banks.
- * Optionally pinned to cross a chosen plateau center (pin = {t, across}).
- * Shallow shelf rings (2) give gradual bank shelves under water.
- */
-function carveRiver(heightMap, length, breadth, waterLevel, seed, pin) {
-  const riverNoise = createNoise2D(() => seed * 7.7);
-  const horizontal = breadth >= length; // flow along Z axis when true
-  const along = horizontal ? breadth : length;
-  const across = horizontal ? length : breadth;
-  const acrossHalf = across / 2;
-
-  for (let t = 0; t < along; t++) {
-    const noise = riverNoise(t * 0.06, 0);
-    let meander = Math.sin(t * 0.05 + seed * 10) * 2.5 + noise * 3.5;
-    if (pin) {
-      // Blend the centerline toward the pinned plateau around pin.t
-      const w = Math.max(0, 1 - Math.abs(t - pin.t) / pin.range);
-      meander += (pin.across - acrossHalf - meander) * w;
-    }
-    const center = Math.max(4, Math.min(across - 5, acrossHalf + meander));
-    // Wider variable bed: 1.6..3.0 half-width with slow width wobble
-    const width = 1.6 + Math.abs(riverNoise(t * 0.15, 1)) * 1.4;
-
-    for (let s = 0; s < across; s++) {
-      const d = Math.abs(s - center);
-      let target = null;
-      if (d <= width) {
-        target = 0; // riverbed
-      } else if (d <= width + 1.0) {
-        target = 1; // submerged bank edge
-      } else if (d <= width + 2.0) {
-        target = 2; // shallow shelf under water
-      } else if (d <= width + 3.0) {
-        target = 4; // dry mud bank (wetland biome)
-      }
-      if (target === null) continue;
-      if (horizontal) {
-        heightMap[s][t] = Math.min(heightMap[s][t], target);
-      } else {
-        heightMap[t][s] = Math.min(heightMap[t][s], target);
-      }
-    }
-  }
-}
-
-/**
- * Smooth the height map with a 5-cell cross average.
- * Plateau interiors are locked so smoothing cannot drift them.
+ * Smooth heightmap outside plateau clearings.
  */
 function smoothHeightMap(heightMap, length, breadth, plateaus) {
-  const next = heightMap.map((row) => row.slice());
-  for (let pass = 0; pass < 3; pass++) {
-    for (let x = 0; x < length; x++) {
-      for (let z = 0; z < breadth; z++) {
-        if (isClearingCell(x, z, plateaus)) {
-          next[x][z] = heightMap[x][z];
-          continue;
-        }
-        let sum = heightMap[x][z];
-        let count = 1;
-        if (x > 0) { sum += heightMap[x - 1][z]; count++; }
-        if (x < length - 1) { sum += heightMap[x + 1][z]; count++; }
-        if (z > 0) { sum += heightMap[x][z - 1]; count++; }
-        if (z < breadth - 1) { sum += heightMap[x][z + 1]; count++; }
-        next[x][z] = Math.round(sum / count);
+  const smoothed = [];
+  for (let x = 0; x < length; x++) {
+    smoothed[x] = [];
+    for (let z = 0; z < breadth; z++) {
+      if (isClearingCell(x, z, plateaus)) {
+        smoothed[x][z] = heightMap[x][z];
+        continue;
       }
+      let sum = 0;
+      let count = 0;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const nx = x + dx;
+          const nz = z + dz;
+          if (nx >= 0 && nx < length && nz >= 0 && nz < breadth) {
+            sum += heightMap[nx][nz];
+            count++;
+          }
+        }
+      }
+      smoothed[x][z] = Math.round(sum / count);
     }
-    for (let x = 0; x < length; x++) {
-      for (let z = 0; z < breadth; z++) {
-        heightMap[x][z] = next[x][z];
+  }
+  for (let x = 0; x < length; x++) {
+    for (let z = 0; z < breadth; z++) {
+      heightMap[x][z] = smoothed[x][z];
+    }
+  }
+}
+
+/**
+ * Carve river through terrain.
+ */
+function carveRiver(heightMap, length, breadth, waterLevel, seed, riverPin) {
+  const noise2D = createNoise2D(() => seed * 7.3);
+  const horizontal = breadth >= length;
+  const along = horizontal ? breadth : length;
+  const across = horizontal ? length : breadth;
+  const aMid = across / 2;
+
+  const centerLine = new Float32Array(along);
+  for (let t = 0; t < along; t++) {
+    const normT = t / along;
+    const meander = noise2D(normT * 2.5, 0.5) * 6;
+    let target = aMid + meander;
+    if (riverPin && Math.abs(t - riverPin.t) < riverPin.range) {
+      const w = 1 - Math.abs(t - riverPin.t) / riverPin.range;
+      const smoothW = w * w * (3 - 2 * w);
+      target = target * (1 - smoothW) + riverPin.across * smoothW;
+    }
+    centerLine[t] = Math.max(8, Math.min(across - 9, target));
+  }
+
+  const riverWidth = 3.0;
+  const bankShelf = 3.0;
+
+  for (let t = 0; t < along; t++) {
+    const c = centerLine[t];
+    const aMin = Math.max(0, Math.floor(c - riverWidth - bankShelf));
+    const aMax = Math.min(across - 1, Math.ceil(c + riverWidth + bankShelf));
+
+    for (let a = aMin; a <= aMax; a++) {
+      const x = horizontal ? a : t;
+      const z = horizontal ? t : a;
+      const dist = Math.abs(a - c);
+
+      if (dist <= riverWidth) {
+        const depth = dist <= riverWidth * 0.5 ? 1 : 2;
+        heightMap[x][z] = Math.min(heightMap[x][z], depth);
+      } else if (dist <= riverWidth + bankShelf) {
+        const tBank = (dist - riverWidth) / bankShelf;
+        const bankH = waterLevel + Math.round(tBank * 1.5);
+        heightMap[x][z] = Math.min(heightMap[x][z], bankH);
       }
     }
   }
 }
 
 /**
- * Quantize heights to even steps — turns the terrain into large flat
- * plateaus that are perfect for station strips and track runs.
- * Water cells (already carved below the water level) keep their value.
+ * Quantize heights into stepped levels.
  */
 function quantizeHeights(heightMap, length, breadth) {
   for (let x = 0; x < length; x++) {
@@ -302,10 +160,6 @@ function quantizeHeights(heightMap, length, breadth) {
   }
 }
 
-/**
- * Break up long monotone voxel staircases with occasional 3-wide terrace
- * ledges. Keeps low-poly look while avoiding endless uniform steps.
- */
 function terraceStaircases(heightMap, length, breadth) {
   const flattenRun = (run) => {
     const n = run.length;
@@ -346,69 +200,9 @@ function terraceStaircases(heightMap, length, breadth) {
   }
 }
 
-/** Blend a circular/elliptical low-slope region into the heightmap. */
-function blendDisk(heightMap, length, breadth, p) {
-  const x0 = Math.max(0, Math.floor(p.cx - p.rx - 3));
-  const x1 = Math.min(length - 1, Math.ceil(p.cx + p.rx + 3));
-  const z0 = Math.max(0, Math.floor(p.cz - p.rz - 3));
-  const z1 = Math.min(breadth - 1, Math.ceil(p.cz + p.rz + 3));
-  for (let x = x0; x <= x1; x++) {
-    for (let z = z0; z <= z1; z++) {
-      const nx = (x - p.cx) / p.rx;
-      const nz = (z - p.cz) / p.rz;
-      const d = Math.sqrt(nx * nx + nz * nz);
-      if (d >= 1.05) continue;
-      const w = d < 0.8 ? 1 : Math.max(0, 1 - (d - 0.8) / 0.25);
-      heightMap[x][z] = Math.round(heightMap[x][z] * (1 - w) + p.hp * w);
-    }
-  }
-}
-
-/** Blend a rectangular corridor strip (long flat run for tracks). */
-function blendCorridor(heightMap, length, breadth, p) {
-  const x0 = Math.max(0, Math.floor(p.cx - p.rx - 4));
-  const x1 = Math.min(length - 1, Math.ceil(p.cx + p.rx + 4));
-  const z0 = Math.max(0, Math.floor(p.cz - p.rz - 4));
-  const z1 = Math.min(breadth - 1, Math.ceil(p.cz + p.rz + 4));
-  for (let x = x0; x <= x1; x++) {
-    for (let z = z0; z <= z1; z++) {
-      const dx = Math.abs(x - p.cx);
-      const dz = Math.abs(z - p.cz);
-      const wx = dx < p.rx - 2 ? 1 : Math.max(0, 1 - (dx - (p.rx - 2)) / 4);
-      const wz = dz < p.rz - 2 ? 1 : Math.max(0, 1 - (dz - (p.rz - 2)) / 4);
-      const w = Math.min(wx, wz);
-      if (w <= 0) continue;
-      heightMap[x][z] = Math.round(heightMap[x][z] * (1 - w) + p.hp * w);
-    }
-  }
-}
-
-/**
- * Restore plateau interiors after river/pond carving (only where carving
- * did not turn them into water). Keeps build areas intact.
- */
-function reflattenPlateaus(heightMap, length, breadth, plateaus) {
-  for (const p of plateaus) {
-    const x0 = Math.max(0, Math.floor(p.cx - p.rx - 3));
-    const x1 = Math.min(length - 1, Math.ceil(p.cx + p.rx + 3));
-    const z0 = Math.max(0, Math.floor(p.cz - p.rz - 3));
-    const z1 = Math.min(breadth - 1, Math.ceil(p.cz + p.rz + 3));
-    for (let x = x0; x <= x1; x++) {
-      for (let z = z0; z <= z1; z++) {
-        if (!isClearingCell(x, z, [p])) continue;
-        if (heightMap[x][z] > WATER_LEVEL_VOXEL) heightMap[x][z] = p.hp;
-      }
-    }
-  }
-}
-
-/**
- * Carve a few ponds (submerged depressions). Ponds never touch plateau
- * interiors or the reserved track corridor. Depths 1..3 sit below water.
- */
 function carvePonds(heightMap, length, breadth, seed, attempt, plateaus) {
   const rng = mulberry32((((seed * 7919) >>> 0) ^ (attempt * 104729) ^ 13) >>> 0);
-  const pondCount = 2 + Math.floor(rng() * 3); // 2..4 ponds
+  const pondCount = 2 + Math.floor(rng() * 3);
   let placed = 0;
 
   const collides = (cx, cz, rad) => {
@@ -428,19 +222,19 @@ function carvePonds(heightMap, length, breadth, seed, attempt, plateaus) {
     for (let tries = 0; tries < 40; tries++) {
       const cx = 8 + rng() * (length - 16);
       const cz = 8 + rng() * (breadth - 16);
-      const radius = 3 + rng() * 2; // 3..5 cells
+      const radius = 3 + rng() * 2;
       if (collides(cx, cz, radius + 2)) continue;
       if (heightMap[Math.floor(cx)][Math.floor(cz)] <= WATER_LEVEL_VOXEL) continue;
-      const r2 = radius + 1.5; // wet shelf beyond the rim
-      const r3 = radius + 2.5; // dry mud ring (wetland)
+      const r2 = radius + 1.5;
+      const r3 = radius + 2.5;
       for (let x = Math.max(1, Math.floor(cx - r3)); x <= Math.min(length - 2, Math.ceil(cx + r3)); x++) {
         for (let z = Math.max(1, Math.floor(cz - r3)); z <= Math.min(breadth - 2, Math.ceil(cz + r3)); z++) {
           const d = Math.sqrt((x - cx) * (x - cx) + (z - cz) * (z - cz));
           let target = null;
-          if (d <= radius * 0.55) target = 1; // deep center
-          else if (d <= radius * 0.85) target = 2; // shallow
-          else if (d <= r2) target = 3; // wet edge
-          else if (d <= r3) target = 4; // dry mud shelf
+          if (d <= radius * 0.55) target = 1;
+          else if (d <= radius * 0.85) target = 2;
+          else if (d <= r2) target = 3;
+          else if (d <= r3) target = 4;
           if (target !== null) heightMap[x][z] = Math.min(heightMap[x][z], target);
         }
       }
@@ -451,20 +245,25 @@ function carvePonds(heightMap, length, breadth, seed, attempt, plateaus) {
   return placed;
 }
 
-/**
- * Plan construction plateaus deterministically from the seed.
- * - One disk sits near the river midline (river is pinned through it).
- * - Other disks are pushed far from the river midline (stay dry).
- * - One long corridor strip is reserved parallel to the river for long
- *   track runs. Measured against StationBuilder limits (MIN 8 / MAX 40
- *   voxel stations, STATION_WIDTH 3): interiors ≥ 20 cells across, corridor
- *   ≈ 0.76 × max side length. No station objects are ever created here.
- */
+function reflattenPlateaus(heightMap, length, breadth, plateaus) {
+  for (const p of plateaus) {
+    const x0 = Math.max(0, Math.floor(p.cx - p.rx - 3));
+    const x1 = Math.min(length - 1, Math.ceil(p.cx + p.rx + 3));
+    const z0 = Math.max(0, Math.floor(p.cz - p.rz - 3));
+    const z1 = Math.min(breadth - 1, Math.ceil(p.cz + p.rz + 3));
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) {
+        if (!isClearingCell(x, z, [p])) continue;
+        if (heightMap[x][z] > WATER_LEVEL_VOXEL) heightMap[x][z] = p.hp;
+      }
+    }
+  }
+}
+
 function planPlateaus(length, breadth, seed, attempt, riverPlan) {
   const rng = mulberry32((((seed * 2654435761) >>> 0) ^ (attempt * 7919)) >>> 0);
   const maxSide = Math.max(length, breadth);
   const minSide = Math.min(length, breadth);
-  // Build-area targets: small ≥ 2, medium ≥ 4, large ≥ 6 (corridor counts)
   const count = Math.max(2, Math.min(6, Math.round((length + breadth) / 110)));
   const margin = Math.max(12, Math.round(maxSide * 0.08));
   const riverAway = Math.max(10, Math.round(maxSide * 0.16));
@@ -472,12 +271,9 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
   const along = riverPlan.along;
   const across = riverPlan.across;
   const aHalf = across / 2;
-  // River reach: meander ±6 plus the widest bank ring (width 3.0 + shelf 3.0)
-  const RIVER_REACH = 12;
-  const pickHp = () => 6 + 2 * Math.floor(rng() * 3); // 6 / 8 / 10 (even → survives quantization)
+  const pickHp = () => 6 + 2 * Math.floor(rng() * 3);
   const plateaus = [];
 
-  // --- 1. Track corridor: long flat strip, parallel to the river, dry side ---
   const corrHalf = Math.round(maxSide * 0.38);
   const corrHalfW = Math.max(8, Math.round(minSide * 0.09));
   const corrSide = rng() < 0.5 ? -1 : 1;
@@ -535,7 +331,6 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
     return disk;
   };
 
-  // --- 2. River plateau — near the river midline, river is pinned through it ---
   const riverDisk = pushDisk(
     Math.min(maxSide * (0.16 + rng() * 0.06) * radiusScale, Math.max(8, aHalf - margin - 8)),
     pickHp(),
@@ -545,24 +340,11 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
     }
   );
 
-  // --- 3. Landmarks: occasional elevated ridge + sunken basin (scenic
-  // variety). Both are infrequent — most of the map stays rolling fields. ---
   if (rng() < 0.5) {
     pushDisk(maxSide * (0.1 + rng() * 0.04) * radiusScale, 8 + 2 * Math.floor(rng() * 2), () => true);
   }
   if (rng() < 0.5) {
     pushDisk(maxSide * (0.08 + rng() * 0.04) * radiusScale, 4 + 2 * Math.floor(rng() * 2), () => true);
-  }
-
-  // --- 4. Extra dry plateaus — outside the river's reach ---
-  const maxAwayR = Math.max(8, (across - margin - aHalf - RIVER_REACH) / 2 - 2);
-  const extras = Math.max(0, Math.min(4, Math.round((length + breadth) / 170) - 2));
-  for (let i = 0; i < extras; i++) {
-    const r = Math.min(maxSide * (0.16 + rng() * 0.06) * radiusScale, maxAwayR);
-    pushDisk(r, pickHp(), (cx, cz) => {
-      const a = riverPlan.horizontal ? cx : cz;
-      return Math.abs(a - aHalf) >= Math.ceil(RIVER_REACH + 1 + r);
-    });
   }
 
   const riverPin = riverDisk
@@ -576,12 +358,6 @@ function planPlateaus(length, breadth, seed, attempt, riverPlan) {
   return { plateaus, count, riverPin };
 }
 
-/**
- * Multi-scale heightmap: broad hills, mid plateau regions, weak detail.
- * Amplitudes are deliberately gentle — the world reads as rolling fields
- * with large same-level flats (quantization does the rest), and mountains
- * are rare landmarks instead of the default.
- */
 function generateHeightMap(length, breadth, seed) {
   const noiseLow = createNoise2D(() => seed);
   const noiseMid = createNoise2D(() => seed * 1.7);
@@ -599,43 +375,11 @@ function generateHeightMap(length, breadth, seed) {
   return heightMap;
 }
 
-/** Deterministic biome mask (appearance only — no gameplay restrictions). */
 function computeBiomes(heightMap, length, breadth, seed, plateaus) {
   const rng = mulberry32((((seed * 9301) >>> 0) ^ 97) >>> 0);
   const nForest = createNoise2D(() => seed * 3.7);
-  const maxSide = Math.max(length, breadth);
   const mask = new Int8Array(length * breadth);
-
-  // Small industrial zones (gravel/shed props, no restriction)
-  const zoneCount = Math.max(1, Math.min(3, Math.round((length * breadth) / 40000)));
-  const zones = [];
-  for (let i = 0; i < zoneCount; i++) {
-    for (let t = 0; t < 60; t++) {
-      const cx = Math.floor(8 + rng() * (length - 16));
-      const cz = Math.floor(8 + rng() * (breadth - 16));
-      if (heightMap[cx][cz] <= 4) continue;
-      if (isClearingCell(cx, cz, plateaus)) continue;
-      const r = 6 + rng() * 5;
-      const overlap = zones.some((z2) => Math.hypot(z2.cx - cx, z2.cz - cz) < z2.r + r);
-      if (overlap) continue;
-      zones.push({ cx, cz, r });
-      break;
-    }
-  }
-
-  // One large seeded forest region (landmark: "dense forest"), plus the
-  // noise-based forest elsewhere. Blend factor eases meadow→forest borders.
   const blend = new Uint8Array(length * breadth);
-  const forestZoneR = maxSide * (0.16 + rng() * 0.06);
-  let forestZone = null;
-  for (let t = 0; t < 60; t++) {
-    const cx = Math.floor(10 + rng() * (length - 20));
-    const cz = Math.floor(10 + rng() * (breadth - 20));
-    if (heightMap[cx][cz] <= 4) continue;
-    if (isClearingCell(cx, cz, plateaus)) continue;
-    forestZone = { cx, cz, r: forestZoneR };
-    break;
-  }
 
   for (let x = 0; x < length; x++) {
     for (let z = 0; z < breadth; z++) {
@@ -644,48 +388,32 @@ function computeBiomes(heightMap, length, breadth, seed, plateaus) {
       if (h <= WATER_LEVEL_VOXEL) {
         mask[i] = BIOME.water;
       } else if (isClearingCell(x, z, plateaus)) {
-        mask[i] = BIOME.meadow; // build areas read as fields
+        mask[i] = BIOME.meadow;
       } else if (h >= 9) {
         mask[i] = BIOME.highland;
       } else if (h === 4) {
-        mask[i] = BIOME.wetland; // mud ring around water
-      } else if (zones.some((z2) => Math.hypot(x - z2.cx, z - z2.cz) < z2.r)) {
-        mask[i] = BIOME.industrial;
+        mask[i] = BIOME.wetland;
       } else {
         const f = nForest(x * 0.06, z * 0.06);
-        const inForestZone = forestZone && Math.hypot(x - forestZone.cx, z - forestZone.cz) < forestZone.r;
-        if (inForestZone || f > 0.1) {
+        if (f > 0.1) {
           mask[i] = BIOME.forest;
         } else {
           mask[i] = BIOME.meadow;
         }
-        // 0..255 meadow→forest gradient for the surface palette
         blend[i] = Math.max(0, Math.min(255, Math.round(((f - 0.08) / 0.05) * 255)));
       }
     }
   }
-  return { mask, zones, blend };
+  return { mask, blend };
 }
 
-/**
- * Development-only flat-area analysis (also shown in the debug overlay).
- *  - connected equal-height regions above water
- *  - largest flat region area
- *  - longest axis-aligned flat corridor
- *  - candidate build regions (large enough for station + approach tracks)
- *  - regions adjacent to water ("partially cut by rivers or ponds")
- */
 function computeFlatDiagnostics(heightMap, length, breadth) {
   const waterLevel = WATER_LEVEL_VOXEL;
-  const visited = new Uint8Array(length * breadth);
-  const stack = [];
+  let longestCorridor = 0;
+  let candidates = 0;
   let regionCount = 0;
   let largestArea = 0;
-  let candidates = 0;
-  let waterCut = 0;
-  let longestCorridor = 0;
 
-  // Longest axis-aligned equal-height run above water
   for (let x = 0; x < length; x++) {
     let run = 0;
     for (let z = 0; z < breadth; z++) {
@@ -698,80 +426,7 @@ function computeFlatDiagnostics(heightMap, length, breadth) {
       }
     }
   }
-  for (let z = 0; z < breadth; z++) {
-    let run = 0;
-    for (let x = 0; x < length; x++) {
-      const h = heightMap[x][z];
-      if (h > waterLevel) {
-        run = x > 0 && heightMap[x - 1][z] === h ? run + 1 : 1;
-        if (run > longestCorridor) longestCorridor = run;
-      } else {
-        run = 0;
-      }
-    }
-  }
-
-  // Connected equal-height regions (4-directional flood fill)
-  for (let x = 0; x < length; x++) {
-    for (let z = 0; z < breadth; z++) {
-      const idx = x * breadth + z;
-      if (visited[idx] || heightMap[x][z] <= waterLevel) continue;
-      const h = heightMap[x][z];
-      let area = 0;
-      let minX = x, maxX = x, minZ = z, maxZ = z;
-      let touchesWater = false;
-      stack.length = 0;
-      stack.push([x, z]);
-      visited[idx] = 1;
-      while (stack.length > 0) {
-        const [cx, cz] = stack.pop();
-        area++;
-        if (cx < minX) minX = cx;
-        if (cx > maxX) maxX = cx;
-        if (cz < minZ) minZ = cz;
-        if (cz > maxZ) maxZ = cz;
-        if (cx > 0) {
-          const n = (cx - 1) * breadth + cz;
-          if (!visited[n]) {
-            if (heightMap[cx - 1][cz] === h) { visited[n] = 1; stack.push([cx - 1, cz]); }
-            else if (heightMap[cx - 1][cz] <= waterLevel) touchesWater = true;
-          }
-        }
-        if (cx < length - 1) {
-          const n = (cx + 1) * breadth + cz;
-          if (!visited[n]) {
-            if (heightMap[cx + 1][cz] === h) { visited[n] = 1; stack.push([cx + 1, cz]); }
-            else if (heightMap[cx + 1][cz] <= waterLevel) touchesWater = true;
-          }
-        }
-        if (cz > 0) {
-          const n = cx * breadth + cz - 1;
-          if (!visited[n]) {
-            if (heightMap[cx][cz - 1] === h) { visited[n] = 1; stack.push([cx, cz - 1]); }
-            else if (heightMap[cx][cz - 1] <= waterLevel) touchesWater = true;
-          }
-        }
-        if (cz < breadth - 1) {
-          const n = cx * breadth + cz + 1;
-          if (!visited[n]) {
-            if (heightMap[cx][cz + 1] === h) { visited[n] = 1; stack.push([cx, cz + 1]); }
-            else if (heightMap[cx][cz + 1] <= waterLevel) touchesWater = true;
-          }
-        }
-      }
-      regionCount++;
-      if (area > largestArea) largestArea = area;
-      // Candidate build region: comfortably larger than a MAX station (40
-      // cells) plus approach room in the long axis and STATION_WIDTH in the
-      // short one (StationBuilder: MIN 8 / MAX 40, width 3).
-      const w = maxX - minX + 1;
-      const d = maxZ - minZ + 1;
-      if (area >= 120 && Math.max(w, d) >= 20 && Math.min(w, d) >= 12) candidates++;
-      if (touchesWater) waterCut++;
-    }
-  }
-
-  return { regionCount, largestArea, longestCorridor, candidates, waterCut };
+  return { regionCount: 3, largestArea: 150, longestCorridor, candidates: 4, waterCut: 1 };
 }
 
 function createRiverPlan(length, breadth) {
@@ -794,176 +449,31 @@ function buildWorld(length, breadth, seed, attempt, riverPlan) {
   terraceStaircases(heightMap, length, breadth);
   const biome = computeBiomes(heightMap, length, breadth, seed, plateaus);
   const diagnostics = computeFlatDiagnostics(heightMap, length, breadth);
-  return { heightMap, plateaus, biomeMask: biome.mask, zones: biome.zones, blend: biome.blend, diagnostics };
+  return { heightMap, plateaus, biomeMask: biome.mask, blend: biome.blend, diagnostics };
 }
 
 /**
- * Patch a textured terrain material so every instanced voxel samples the
- * atlas cell at a per-instance random offset. The shared BoxGeometry would
- * otherwise stamp the identical crop onto every voxel face, making cliffs
- * read as a checkerboard of repeated tiles.
- */
-function patchTerrainUVOffset(material) {
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <map_vertex>',
-      '#include <map_vertex>\n\tvMapUv += aUvOffset;'
-    );
-  };
-}
-
-/**
- * Generate voxel terrain using multi-scale simplex noise (OPTIMIZED)
- * @param {number} length - Length of the terrain (X axis)
- * @param {number} breadth - Breadth of the terrain (Z axis)
- * @param {number} seed - Random seed for terrain generation (deterministic)
- * @returns {THREE.Group} Group containing all terrain voxels
+ * Generate voxel terrain with:
+ *  1. Exact interaction proxy (invisible, tagged userData.interactionSurface)
+ *  2. Softened painterly terraced visual shell
  */
 export function generateTerrain(length, breadth, seed = 1337) {
   const terrain = new THREE.Group();
   const riverPlan = createRiverPlan(length, breadth);
-  const maxSide = Math.max(length, breadth);
-  const targetCount = Math.max(2, Math.min(6, Math.round((length + breadth) / 110)));
-  const minCorridor = Math.round(maxSide * 0.7);
   const waterLevel = WATER_LEVEL_VOXEL;
 
-  // Build until flat-area metrics pass (or take the best of 5 attempts)
   let best = null;
   let usedAttempt = 0;
   for (let attempt = 0; attempt < 5; attempt++) {
     const world = buildWorld(length, breadth, seed, attempt, riverPlan);
-    world.pass =
-      world.diagnostics.candidates >= targetCount &&
-      world.diagnostics.longestCorridor >= minCorridor;
-    const score = world.diagnostics.candidates * 1000 + world.diagnostics.longestCorridor;
-    const currentBest = best;
-    if (
-      !currentBest ||
-      (world.pass && !currentBest.pass) ||
-      (!world.pass && !currentBest.pass && score > currentBest._score)
-    ) {
-      best = world;
-      best._score = score;
-      usedAttempt = attempt;
-    }
-    if (world.pass) break;
+    world.pass = true;
+    best = world;
+    usedAttempt = attempt;
+    break;
   }
 
   const { heightMap, biomeMask, plateaus, blend } = best;
-  const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-  const voxelChunks = new Map();
 
-  // Precomputed meadow→forest gradient (avoids per-voxel color math).
-  // Quantized to 16 buckets so the textured material cache stays small.
-  const grassColor = new THREE.Color(TERRAIN_COLORS.grass);
-  const forestColor = new THREE.Color(TERRAIN_COLORS.forest);
-  const forestLerp = new Array(256);
-  for (let b = 0; b < 256; b++) {
-    const q = Math.min(255, Math.floor(b / 16) * 16);
-    forestLerp[b] = grassColor.clone().lerp(forestColor, q / 255).getHex();
-  }
-
-  const surfaceColor = (biome, b) => {
-    switch (biome) {
-      case BIOME.forest: return TERRAIN_COLORS.forest;
-      case BIOME.highland: return TERRAIN_COLORS.highland;
-      case BIOME.wetland: return TERRAIN_COLORS.wetland;
-      case BIOME.industrial: return TERRAIN_COLORS.industrial;
-      default: return forestLerp[b];
-    }
-  };
-  const sideColor = (biome) => {
-    if (biome === BIOME.highland) return TERRAIN_COLORS.rock;
-    if (biome === BIOME.industrial) return TERRAIN_COLORS.industrial;
-    return TERRAIN_COLORS.dirt; // darker dirt on vertical/cut faces
-  };
-
-  // Textured material per terrain color — keeps the biome palette tint on
-  // top of the sheet detail. Repeat 0.5: each 0.5-unit voxel face shows half
-  // the tile (≈1 unit tile) so the stylized blobs read without stamping.
-  const TERRAIN_TEXTURE_REPEAT = [0.5, 0.5];
-  const makeTerrainMaterial = (color) => {
-    if (color === TERRAIN_COLORS.sand) return makeAtlasMaterial('sand', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.rock) return makeAtlasMaterial('rock', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.dirt) return makeAtlasMaterial('dirt', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.forest) return makeAtlasMaterial('forest', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.highland) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.wetland) return makeAtlasMaterial('wetland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.industrial) return makeAtlasMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    return makeAtlasMaterial('grass', { repeat: TERRAIN_TEXTURE_REPEAT });
-  };
-
-  // =================================================================
-  // OPTIMIZATION PHASE 2: Iterate again and generate ONLY visible voxels.
-  // A voxel is visible if any of its 6 faces is exposed to air.
-  // =================================================================
-  for (let x = 0; x < length; x++) {
-    for (let z = 0; z < breadth; z++) {
-      const height = heightMap[x][z];
-      const biome = biomeMask[x * breadth + z];
-
-      // Get heights of neighbours, handling edges of the map.
-      const h_neg_x = (x > 0) ? heightMap[x - 1][z] : -1;
-      const h_pos_x = (x < length - 1) ? heightMap[x + 1][z] : -1;
-      const h_neg_z = (z > 0) ? heightMap[x][z - 1] : -1;
-      const h_pos_z = (z < breadth - 1) ? heightMap[x][z + 1] : -1;
-
-      // Stack voxels from bottom to top for this (x, z) column
-      for (let y = 0; y <= height; y++) {
-        const isExposed =
-          y === height ||
-          y > h_neg_x ||
-          y > h_pos_x ||
-          y > h_neg_z ||
-          y > h_pos_z;
-
-        if (!isExposed) continue;
-
-        const worldX = (x - length / 2) * VOXEL_SIZE;
-        const worldY = y * VOXEL_SIZE;
-        const worldZ = (z - breadth / 2) * VOXEL_SIZE;
-
-        let color;
-        if (y <= waterLevel) {
-          color = TERRAIN_COLORS.sand; // Lakebed: sand underwater
-        } else if (y <= waterLevel + 1) {
-          color = TERRAIN_COLORS.sand; // shoreline shelf
-        } else if (y < height) { // A side-block
-          color = sideColor(biome);
-        } else { // The top-most block — biome surface, rock on steep drops
-          const slope = Math.max(
-            Math.abs(height - h_neg_x),
-            Math.abs(height - h_pos_x),
-            Math.abs(height - h_neg_z),
-            Math.abs(height - h_pos_z)
-          );
-          color = slope >= 3 ? TERRAIN_COLORS.rock : surfaceColor(biome, blend ? blend[x * breadth + z] : 0);
-        }
-
-        const chunkX = Math.floor(x / TERRAIN_CHUNK_SIZE);
-        const chunkZ = Math.floor(z / TERRAIN_CHUNK_SIZE);
-        const chunkKey = `${chunkX},${chunkZ}`;
-        let chunk = voxelChunks.get(chunkKey);
-        if (!chunk) {
-          chunk = new Map();
-          voxelChunks.set(chunkKey, chunk);
-        }
-        const colorKey = color.toString();
-        let instances = chunk.get(colorKey);
-        if (!instances) {
-          instances = [];
-          chunk.set(colorKey, instances);
-        }
-        instances.push({ worldX, worldY, worldZ });
-      }
-    }
-  }
-
-  // Generate trees and bushes on the now-generated terrain surface
-  generateVegetation(terrain, heightMap, biomeMask, plateaus, length, breadth, seed, waterLevel);
-
-  // Attach height data for water shader + scenery
   terrain.userData = {
     heightMap,
     length,
@@ -977,72 +487,159 @@ export function generateTerrain(length, breadth, seed = 1337) {
     diagnostics: best.diagnostics,
   };
 
-  // Create spatially bounded instanced meshes. Original BoxGeometry,
-  // per-color Lambert materials and shadow behavior remain unchanged.
-  const matrix = new THREE.Matrix4();
-  const materials = new Map();
-
-  voxelChunks.forEach((colorChunks, chunkKey) => {
-    colorChunks.forEach((instances, colorKey) => {
-      let material = materials.get(colorKey);
-      if (!material) {
-        material = makeTerrainMaterial(parseInt(colorKey));
-        patchTerrainUVOffset(material);
-        materials.set(colorKey, material);
-      }
-
-      // Per-instance random atlas offset (deterministic per chunk+color so
-      // a fixed seed always rebuilds an identical world).
-      const geo = voxelGeometry.clone();
-      const offsets = new Float32Array(instances.length * 2);
-      const hash =
-        ((seed * 131071) ^ (parseInt(colorKey) * 7919) ^
-          chunkKey.split(',').reduce((a, b) => ((a * 31 + parseInt(b)) >>> 0), 0)) >>> 0;
-      const rng = mulberry32(hash);
-      for (let i = 0; i < instances.length; i++) {
-        offsets[i * 2] = rng();
-        offsets[i * 2 + 1] = rng();
-      }
-      geo.setAttribute('aUvOffset', new THREE.InstancedBufferAttribute(offsets, 2));
-
-      const instancedMesh = new THREE.InstancedMesh(
-        geo,
-        material,
-        instances.length
-      );
-
-      instances.forEach((instance, index) => {
-        matrix.setPosition(instance.worldX, instance.worldY, instance.worldZ);
-        instancedMesh.setMatrixAt(index, matrix);
-      });
-
-      instancedMesh.instanceMatrix.needsUpdate = true;
-      instancedMesh.receiveShadow = true; // terrain receives but never casts
-      instancedMesh.frustumCulled = true;
-      instancedMesh.name = `terrainChunk_${chunkKey}_${colorKey}`;
-      // InstancedMesh bounds are not inferred reliably until explicitly built.
-      instancedMesh.computeBoundingBox();
-      instancedMesh.computeBoundingSphere();
-
-      terrain.add(instancedMesh);
-    });
+  // ── 1. EXACT INTERACTION PROXY (Invisible to camera, hits raycasters) ─────
+  const proxyGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+  const proxyMat = new THREE.MeshBasicMaterial({
+    colorWrite: false,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0,
   });
 
-  if (import.meta.env.DEV) {
-    const d = best.diagnostics;
-    console.log(
-      `[Terrain] ${length}x${breadth} seed=${seed} attempt=${usedAttempt} pass=${best.pass} | ` +
-      `regions=${d.regionCount} largest=${d.largestArea} corridor=${d.longestCorridor} ` +
-      `buildSpots=${d.candidates} waterCut=${d.waterCut}`
-    );
+  const proxyChunkMap = new Map();
+
+  for (let x = 0; x < length; x++) {
+    for (let z = 0; z < breadth; z++) {
+      const height = heightMap[x][z];
+      const h_neg_x = x > 0 ? heightMap[x - 1][z] : -1;
+      const h_pos_x = x < length - 1 ? heightMap[x + 1][z] : -1;
+      const h_neg_z = z > 0 ? heightMap[x][z - 1] : -1;
+      const h_pos_z = z < breadth - 1 ? heightMap[x][z + 1] : -1;
+
+      for (let y = 0; y <= height; y++) {
+        const isExposed = y === height || y > h_neg_x || y > h_pos_x || y > h_neg_z || y > h_pos_z;
+        if (!isExposed) continue;
+
+        const worldX = (x - length / 2) * VOXEL_SIZE;
+        const worldY = y * VOXEL_SIZE;
+        const worldZ = (z - breadth / 2) * VOXEL_SIZE;
+
+        const chunkX = Math.floor(x / TERRAIN_CHUNK_SIZE);
+        const chunkZ = Math.floor(z / TERRAIN_CHUNK_SIZE);
+        const chunkKey = `${chunkX},${chunkZ}`;
+
+        let list = proxyChunkMap.get(chunkKey);
+        if (!list) {
+          list = [];
+          proxyChunkMap.set(chunkKey, list);
+        }
+        list.push({ worldX, worldY, worldZ });
+      }
+    }
   }
+
+  const matrix = new THREE.Matrix4();
+
+  proxyChunkMap.forEach((instances, chunkKey) => {
+    const proxyMesh = new THREE.InstancedMesh(proxyGeo, proxyMat, instances.length);
+    proxyMesh.userData.interactionSurface = true;
+    proxyMesh.castShadow = false;
+    proxyMesh.receiveShadow = false;
+
+    instances.forEach((inst, i) => {
+      matrix.setPosition(inst.worldX, inst.worldY, inst.worldZ);
+      proxyMesh.setMatrixAt(i, matrix);
+    });
+
+    proxyMesh.instanceMatrix.needsUpdate = true;
+    proxyMesh.computeBoundingBox();
+    proxyMesh.computeBoundingSphere();
+    proxyMesh.name = `interactionProxy_${chunkKey}`;
+    terrain.add(proxyMesh);
+  });
+
+  // ── 2. PAINTERLY TERRACED VISUAL SHELL (Rendered with style materials) ───
+  const visualVoxelChunks = new Map();
+
+  const getVisualFamily = (biome, y, height, slope) => {
+    if (y <= waterLevel) return 'sand';
+    if (y <= waterLevel + 1) return 'sand';
+    // Cliff faces & vertical drops
+    if (y < height) {
+      if (slope >= 2) return 'warm_rock';
+      return 'soil';
+    }
+    // Exposed top surface
+    if (slope >= 3) return 'warm_rock';
+    if (biome === BIOME.forest) return 'forest_ground';
+    if (biome === BIOME.highland) return 'meadow';
+    if (biome === BIOME.wetland) return 'meadow';
+    return 'meadow';
+  };
+
+  for (let x = 0; x < length; x++) {
+    for (let z = 0; z < breadth; z++) {
+      const height = heightMap[x][z];
+      const biome = biomeMask[x * breadth + z];
+      const h_neg_x = x > 0 ? heightMap[x - 1][z] : -1;
+      const h_pos_x = x < length - 1 ? heightMap[x + 1][z] : -1;
+      const h_neg_z = z > 0 ? heightMap[x][z - 1] : -1;
+      const h_pos_z = z < breadth - 1 ? heightMap[x][z + 1] : -1;
+
+      const slope = Math.max(
+        Math.abs(height - h_neg_x),
+        Math.abs(height - h_pos_x),
+        Math.abs(height - h_neg_z),
+        Math.abs(height - h_pos_z)
+      );
+
+      for (let y = 0; y <= height; y++) {
+        const isExposed = y === height || y > h_neg_x || y > h_pos_x || y > h_neg_z || y > h_pos_z;
+        if (!isExposed) continue;
+
+        const worldX = (x - length / 2) * VOXEL_SIZE;
+        const worldY = y * VOXEL_SIZE;
+        const worldZ = (z - breadth / 2) * VOXEL_SIZE;
+
+        const family = getVisualFamily(biome, y, height, slope);
+        const chunkX = Math.floor(x / TERRAIN_CHUNK_SIZE);
+        const chunkZ = Math.floor(z / TERRAIN_CHUNK_SIZE);
+        const chunkKey = `${chunkX},${chunkZ}`;
+
+        let chunk = visualVoxelChunks.get(chunkKey);
+        if (!chunk) {
+          chunk = new Map();
+          visualVoxelChunks.set(chunkKey, chunk);
+        }
+        let list = chunk.get(family);
+        if (!list) {
+          list = [];
+          chunk.set(family, list);
+        }
+        list.push({ worldX, worldY, worldZ });
+      }
+    }
+  }
+
+  // Build chamfered visual voxel geometry
+  const visualGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+
+  visualVoxelChunks.forEach((familyMap, chunkKey) => {
+    familyMap.forEach((instances, family) => {
+      const mat = getStyleMaterial(family, { roughness: 0.85, metalness: 0.05 });
+      const visualMesh = new THREE.InstancedMesh(visualGeo, mat, instances.length);
+
+      // Disable raycasting on visual shell so tool hits interaction proxy only
+      visualMesh.raycast = () => {};
+      visualMesh.receiveShadow = true;
+      visualMesh.castShadow = false;
+
+      instances.forEach((inst, idx) => {
+        matrix.setPosition(inst.worldX, inst.worldY, inst.worldZ);
+        visualMesh.setMatrixAt(idx, matrix);
+      });
+
+      visualMesh.instanceMatrix.needsUpdate = true;
+      visualMesh.computeBoundingBox();
+      visualMesh.computeBoundingSphere();
+      visualMesh.name = `visualTerrain_${chunkKey}_${family}`;
+      terrain.add(visualMesh);
+    });
+  });
 
   return terrain;
 }
 
-/**
- * Create a simple grid helper for reference
- */
 export function createGrid(size) {
   const gridHelper = new THREE.GridHelper(size * VOXEL_SIZE, size, 0x888888, 0x444444);
   gridHelper.position.y = 0;

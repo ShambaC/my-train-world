@@ -169,6 +169,9 @@ function AppRuntime() {
     const v = loadSettings().vsync;
     return v === undefined || v === null ? true : v;
   });
+  const [graphicsQuality, setGraphicsQuality] = useState(() => {
+    return loadSettings().graphicsQuality || 'medium';
+  });
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
   const [loadProgress, setLoadProgress] = useState(0);
@@ -876,6 +879,8 @@ function AppRuntime() {
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
         onVsyncChange={setVsync}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={(tier) => { setGraphicsQuality(tier); saveSettings({ graphicsQuality: tier }); }}
         ambientEnabled={ambientEnabled}
         onAmbientChange={setAmbientEnabled}
         soundsEnabled={soundsEnabled}
