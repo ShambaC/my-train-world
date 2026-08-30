@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { UI_ICONS } from './iconRegistry';
-import { QUALITY_TIERS } from '../render/graphicsQuality.js';
+import {
+  QUALITY_TIERS,
+  getCustomQualityOverrides,
+  setCustomQualityOverrides,
+} from '../render/graphicsQuality.js';
 
 const FRAME_LIMIT_OPTIONS = [
   { value: 30, label: '30' },
@@ -11,12 +15,189 @@ const FRAME_LIMIT_OPTIONS = [
   { value: 0, label: 'Uncapped' },
 ];
 
-const QUALITY_OPTIONS = [
+export const QUALITY_OPTIONS = [
   { value: 'low', label: 'Low', desc: 'Analytic shadows, sky reflection, optimized foliage' },
   { value: 'medium', label: 'Medium', desc: 'PCF soft shadows, GTAO, scene refraction, bloom' },
   { value: 'high', label: 'High', desc: 'Tight 4K shadows, planar reflection, max grass density' },
   { value: 'custom', label: 'Custom', desc: 'User configured settings overrides' },
 ];
+
+export function CustomGraphicsControls() {
+  const [overrides, setOverrides] = useState(getCustomQualityOverrides());
+
+  const update = (patch) => {
+    const next = { ...overrides, ...patch };
+    setOverrides(next);
+    setCustomQualityOverrides(patch);
+  };
+
+  const dpr = overrides.dprCap ?? 1.5;
+  const shadowSize = overrides.shadowMapSize ?? 2048;
+  const grassDensity = overrides.grassDensityMultiplier ?? 0.8;
+  const flowerDensity = overrides.flowerDensityMultiplier ?? 0.8;
+  const waterRefl = overrides.waterReflection ?? 'planar';
+  const bloom = overrides.bloom ?? true;
+  const dofSamples = overrides.miniatureDof?.sampleCount ?? 8;
+  const cloudLayers = overrides.cloudLayers ?? 2;
+
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-[#132032] p-3 text-xs text-[#c5d0df]">
+      <div className="font-bold text-[#e5a94f]">Custom Quality Settings</div>
+
+      {/* DPR / Resolution Cap */}
+      <div>
+        <div className="font-semibold mb-1">Resolution / DPR Scale</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[1.0, 1.5, 2.0].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => update({ dprCap: v })}
+              className={`rounded-lg border p-1.5 font-medium transition ${
+                dpr === v ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] hover:border-[#63c9dc]'
+              }`}
+            >
+              {v}x {v === 1 ? '(Fast)' : v === 1.5 ? '(Balanced)' : '(Crisp)'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Shadow Resolution */}
+      <div>
+        <div className="font-semibold mb-1">Shadow Map Resolution</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { v: 1024, l: '1K Basic' },
+            { v: 2048, l: '2K Soft' },
+            { v: 4096, l: '4K Tight' },
+          ].map((item) => (
+            <button
+              key={item.v}
+              type="button"
+              onClick={() => update({ shadowMapSize: item.v, shadowFiltering: item.v === 4096 ? 'pcfsoft_tight' : item.v === 2048 ? 'pcfsoft' : 'basic' })}
+              className={`rounded-lg border p-1.5 font-medium transition ${
+                shadowSize === item.v ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] hover:border-[#63c9dc]'
+              }`}
+            >
+              {item.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grass Density Slider */}
+      <div>
+        <div className="flex justify-between font-semibold">
+          <span>Grass Blade Density</span>
+          <span className="font-mono text-[#aebbd0]">{(grassDensity * 100).toFixed(0)}%</span>
+        </div>
+        <input
+          type="range"
+          min="0.2"
+          max="1.5"
+          step="0.1"
+          value={grassDensity}
+          onChange={(e) => update({ grassDensityMultiplier: parseFloat(e.target.value) })}
+          className="mt-1 w-full accent-[#4b8dff]"
+        />
+      </div>
+
+      {/* Flower Density Slider */}
+      <div>
+        <div className="flex justify-between font-semibold">
+          <span>Flower Field Density</span>
+          <span className="font-mono text-[#aebbd0]">{(flowerDensity * 100).toFixed(0)}%</span>
+        </div>
+        <input
+          type="range"
+          min="0.2"
+          max="1.5"
+          step="0.1"
+          value={flowerDensity}
+          onChange={(e) => update({ flowerDensityMultiplier: parseFloat(e.target.value) })}
+          className="mt-1 w-full accent-[#4b8dff]"
+        />
+      </div>
+
+      {/* Water Reflection Mode */}
+      <div>
+        <div className="font-semibold mb-1">Water Reflection Mode</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { v: 'sky', l: 'Sky Only' },
+            { v: 'sky_refract', l: 'Refract' },
+            { v: 'planar', l: 'Planar Mirror' },
+          ].map((item) => (
+            <button
+              key={item.v}
+              type="button"
+              onClick={() => update({ waterReflection: item.v })}
+              className={`rounded-lg border p-1.5 font-medium transition ${
+                waterRefl === item.v ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] hover:border-[#63c9dc]'
+              }`}
+            >
+              {item.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Miniature DoF Blur Samples */}
+      <div>
+        <div className="font-semibold mb-1">Miniature Tilt-Shift Quality</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { v: 4, l: '4 Samples' },
+            { v: 8, l: '8 Samples' },
+            { v: 16, l: '16 Samples' },
+          ].map((item) => (
+            <button
+              key={item.v}
+              type="button"
+              onClick={() => update({ miniatureDof: { resolution: 0.5, sampleCount: item.v } })}
+              className={`rounded-lg border p-1.5 font-medium transition ${
+                dofSamples === item.v ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] hover:border-[#63c9dc]'
+              }`}
+            >
+              {item.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Cloud Layers */}
+      <div>
+        <div className="font-semibold mb-1">Volumetric Cloud Layers</div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {[1, 2, 3].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => update({ cloudLayers: v })}
+              className={`rounded-lg border p-1.5 font-medium transition ${
+                cloudLayers === v ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] hover:border-[#63c9dc]'
+              }`}
+            >
+              {v} {v === 1 ? 'Layer' : 'Layers'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bloom Toggle */}
+      <label className="flex items-center justify-between font-semibold pt-1">
+        <span>Emissive Lamp & Window Bloom</span>
+        <input
+          type="checkbox"
+          checked={bloom}
+          onChange={(e) => update({ bloom: e.target.checked })}
+          className="h-4 w-4 accent-[#4b8dff]"
+        />
+      </label>
+    </div>
+  );
+}
 
 function PerformanceSettings({
   frameLimit,
@@ -66,6 +247,9 @@ function PerformanceSettings({
             <p className="text-xs text-gray-400 mt-1">
               {QUALITY_OPTIONS.find((o) => o.value === graphicsQuality)?.desc}
             </p>
+
+            {/* If Custom, render fine-tuning options */}
+            {graphicsQuality === 'custom' && <CustomGraphicsControls />}
           </div>
 
           {/* Frame Limit */}

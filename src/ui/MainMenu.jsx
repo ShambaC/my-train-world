@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import menuArt from '../assets/ui/ui-menu-key-art.png';
 import { UI_ICONS } from './iconRegistry';
+import { QUALITY_OPTIONS, CustomGraphicsControls } from './PerformanceSettings.jsx';
 
 const SIZE_PRESETS = [
   { key: 'small', label: 'Small', size: { length: 100, breadth: 100 }, hint: 'Quick build' },
@@ -341,31 +342,6 @@ export default function MainMenu({
 
               <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5 space-y-5`}>
                 <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'low', label: 'Low', desc: 'Analytic shadows, fast foliage' },
-                      { value: 'medium', label: 'Medium', desc: 'Soft shadows, bloom, reflection' },
-                      { value: 'high', label: 'High', desc: '4K shadows, planar reflection, dense grass' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onGraphicsQualityChange?.(opt.value)}
-                        className={`rounded-xl border p-2 text-left transition ${
-                          (graphicsQuality || 'medium') === opt.value
-                            ? 'border-[#e5a94f] bg-[#244b67] text-white'
-                            : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
-                        }`}
-                      >
-                        <span className="block font-semibold">{opt.label}</span>
-                        <span className="mt-0.5 block text-[10px] text-[#aebbd0]">{opt.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
                   <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {FRAME_LIMIT_OPTIONS.map((option) => (
@@ -392,6 +368,31 @@ export default function MainMenu({
               </div>
 
               <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                {/* Graphics Quality Preset */}
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {QUALITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateGraphics({ graphicsQuality: opt.value })}
+                        className={`rounded-xl border p-2 text-sm font-semibold transition ${
+                          (globalGraphics.graphicsQuality || 'medium') === opt.value
+                            ? 'border-[#e5a94f] bg-[#244b67] text-white'
+                            : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-[#aebbd0]">
+                    {QUALITY_OPTIONS.find((o) => o.value === (globalGraphics.graphicsQuality || 'medium'))?.desc}
+                  </p>
+                  {(globalGraphics.graphicsQuality === 'custom') && <CustomGraphicsControls />}
+                </div>
+
                 <div>
                   <div className="text-sm font-semibold text-[#c5d0df]">Default environment</div>
                   <div className="mt-2 grid grid-cols-2 gap-2">

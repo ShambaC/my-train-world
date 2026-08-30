@@ -347,11 +347,11 @@ const GLOW_HALO_GEO = new THREE.SphereGeometry(0.11, 8, 8);
 const SIGN_POST_GEO = new THREE.CylinderGeometry(0.012, 0.016, 0.42, 6);
 const SIGN_BOARD_GEO = new THREE.BoxGeometry(0.15, 0.1, 0.02);
 
-// Road quads span ~0.5-1 world unit each; repeat ~0.35 keeps the texture
-// tile at roughly 1.5-3 units so the pattern reads, not screams.
-const ASPHALT_MAT = makeAtlasMaterial('asphalt', { repeat: [0.35, 0.35] });
-const SHOULDER_MAT = makeAtlasMaterial('road_shoulder', { repeat: [0.3, 0.3] });
-const DIRT_MAT = makeAtlasMaterial('dirt_road', { repeat: [0.3, 0.3] });
+// Road quads span ~0.5-1 world unit each; repeat 0.2 keeps the texture
+// scale gentle and avoids high-frequency moire striping at oblique angles.
+const ASPHALT_MAT = makeAtlasMaterial('asphalt', { repeat: [0.2, 0.2], roughness: 0.88 });
+const SHOULDER_MAT = makeAtlasMaterial('road_shoulder', { repeat: [0.2, 0.2], roughness: 0.90 });
+const DIRT_MAT = makeAtlasMaterial('dirt_road', { repeat: [0.2, 0.2], roughness: 0.92 });
 const POLE_MAT = makeAtlasMaterial('lamp_metal');
 const LAMP_HEAD_MAT = new THREE.MeshLambertMaterial({ color: 0x2c2c2c, flatShading: true });
 const GLOW_CORE_MAT = new THREE.MeshBasicMaterial({

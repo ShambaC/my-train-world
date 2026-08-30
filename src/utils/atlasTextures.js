@@ -141,11 +141,19 @@ export function preloadAtlases(onProgress) {
 function assignMap(mat, name, opts = {}) {
   const base = getStyleTexture(name, opts);
   if (!base) return;
-  mat.map = base.clone();
-  mat.map.needsUpdate = true;
+  const clone = base.clone();
+  clone.colorSpace = base.colorSpace;
+  clone.generateMipmaps = true;
+  clone.minFilter = THREE.LinearMipmapLinearFilter;
+  clone.magFilter = THREE.LinearFilter;
+  clone.anisotropy = 8;
+  clone.wrapS = THREE.RepeatWrapping;
+  clone.wrapT = THREE.RepeatWrapping;
   if (opts.repeat) {
-    mat.map.repeat.set(opts.repeat[0], opts.repeat[1]);
+    clone.repeat.set(opts.repeat[0], opts.repeat[1]);
   }
+  clone.needsUpdate = true;
+  mat.map = clone;
   mat.needsUpdate = true;
 }
 

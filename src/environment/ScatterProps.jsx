@@ -263,18 +263,14 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
         // Fluffy procedural nature archetypes (Tiny Glade style)
         const treeDef = createInstancedTreeDef(def.key, instances.length, seed + defIndex);
         instances.forEach((inst, i) => {
-          treeDef.setInstance(i, inst.x, inst.y, inst.z, inst.rotY, inst.scale);
-          treeDef.meshes.forEach((m) => {
+          const parts = treeDef.setInstance(i, inst.x, inst.y, inst.z, inst.rotY, inst.scale);
+          parts.forEach((part) => {
             registerLayout({
-              mesh: m,
-              index: i,
+              mesh: part.mesh,
+              index: part.index,
               cellX: inst.cellX,
               cellZ: inst.cellZ,
-              ox: inst.x,
-              oy: inst.y,
-              oz: inst.z,
-              rotQ: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, inst.rotY, 0)),
-              scale: inst.scale,
+              baseMatrix: part.matrix,
             });
           });
         });
@@ -312,13 +308,13 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
           scaleVec.set(inst.scale, inst.scale, inst.scale);
           matrix.compose(position, quaternion, scaleVec);
           mesh.setMatrixAt(i, matrix);
-          registerLayout({ mesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
+          registerLayout({ mesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, baseMatrix: matrix.clone() });
 
           // Fake contact patch
           position.set(inst.x, inst.y + 0.013, inst.z);
           matrix.compose(position, quaternion, scaleVec);
           patchMesh.setMatrixAt(i, matrix);
-          registerLayout({ mesh: patchMesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, ox: inst.x, oy: inst.y + 0.013, oz: inst.z, rotQ: quaternion.clone(), scale: inst.scale });
+          registerLayout({ mesh: patchMesh, index: i, cellX: inst.cellX, cellZ: inst.cellZ, baseMatrix: matrix.clone() });
 
           // Window glows (4 sides)
           if (glowMesh) {
@@ -337,7 +333,7 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
               matrix.compose(position, quaternion, scaleVec);
               const idx = i * 4 + s;
               glowMesh.setMatrixAt(idx, matrix);
-              registerLayout({ mesh: glowMesh, index: idx, cellX: inst.cellX, cellZ: inst.cellZ, ox, oy, oz, rotQ: quaternion.clone(), scale: inst.scale });
+              registerLayout({ mesh: glowMesh, index: idx, cellX: inst.cellX, cellZ: inst.cellZ, baseMatrix: matrix.clone() });
             }
           }
         });
@@ -373,18 +369,14 @@ export default function ScatterProps({ terrainData, trackManager, stationManager
       }
       exclusionSetsRef.current = next;
 
+      const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0);
       const dirtyMeshes = new Set();
       for (const key of affected) {
         const isExcluded = next.tracks.has(key) || next.stations.has(key) || next.roads.has(key) || next.buildings.has(key);
         for (const inst of layoutByCellRef.current.get(key) || []) {
           if (isExcluded === inst.hidden) continue;
           inst.hidden = isExcluded;
-
-          position.set(inst.ox, inst.oy, inst.oz);
-          quaternion.copy(inst.rotQ);
-          scaleVec.set(isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale, isExcluded ? 0 : inst.scale);
-          matrix.compose(position, quaternion, scaleVec);
-          inst.mesh.setMatrixAt(inst.index, matrix);
+          inst.mesh.setMatrixAt(inst.index, isExcluded ? ZERO_MATRIX : inst.baseMatrix);
           dirtyMeshes.add(inst.mesh);
         }
       }

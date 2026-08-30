@@ -246,15 +246,7 @@ export function getStyleMaterial(family, opts = {}) {
     }
   }
 
-  // If map exists and user did not explicitly supply a tint color, preserve pure white
-  // so Three.js MeshStandardMaterial does not multiply the texture by a solid color overlay.
-  if (opts.color !== undefined) {
-    baseOpts.color = opts.color;
-  } else if (baseOpts.map) {
-    baseOpts.color = 0xffffff;
-  } else {
-    baseOpts.color = defaultColor;
-  }
+  baseOpts.color = opts.color !== undefined ? opts.color : defaultColor;
 
   const mat = new THREE.MeshStandardMaterial(baseOpts);
   patchPainterlyShader(mat, opts);

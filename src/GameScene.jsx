@@ -240,7 +240,7 @@ function Scene({
     sceneReadyRef.current = false;
     onSceneProgress?.(0.2);
 
-    const border = createForestBorder(terrainSize, terrainSeed);
+    const border = createForestBorder(terrainSize, terrainSeed, 10, 1.1, newTerrain.userData);
     setForestBorder(border);
 
     if (onTerrainGenerated) {

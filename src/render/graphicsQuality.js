@@ -92,10 +92,27 @@ export const QUALITY_TIERS = {
 
 export const DEFAULT_QUALITY = 'medium';
 
-let customOverrides = {};
+const STORAGE_KEY = 'mtw_custom_graphics_overrides';
+
+let customOverrides = (() => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+})();
 
 export function setCustomQualityOverrides(overrides) {
   customOverrides = { ...customOverrides, ...overrides };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(customOverrides));
+  } catch {}
+  window.dispatchEvent(new CustomEvent('mtw-custom-graphics-changed', { detail: customOverrides }));
+}
+
+export function getCustomQualityOverrides() {
+  return { ...customOverrides };
 }
 
 export function getQualityPreset(tierName) {

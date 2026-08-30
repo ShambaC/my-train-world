@@ -118,17 +118,16 @@ const CelShader = {
   `,
 };
 
-// ─── Depth-Aware Miniature Tilt-Shift (Macro DoF) ─────────────────────────
 const DepthTiltShiftShader = {
   uniforms: {
     tDiffuse: { value: null },
     tDepth: { value: null },
     cameraNear: { value: 0.1 },
     cameraFar: { value: 1000.0 },
-    focusDistance: { value: 20.0 },
-    focalRange: { value: 10.0 },
-    maxBlur: { value: 4.0 },
-    resolution: { value: new THREE.Vector2(1, 1) },
+    focusDistance: { value: 16.0 },
+    focalRange: { value: 15.0 },
+    maxBlur: { value: 3.5 },
+    resolution: { value: new THREE.Vector2(1920, 1080) },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -150,28 +149,38 @@ const DepthTiltShiftShader = {
     varying vec2 vUv;
 
     float getLinearDepth(vec2 coord) {
-      float fragCoordZ = texture2D(tDepth, coord).x;
-      float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
-      return -viewZ;
+      float z = texture2D(tDepth, coord).x;
+      if (z >= 0.9999 || z <= 0.0001) return cameraFar;
+      float viewZ = perspectiveDepthToViewZ(z, cameraNear, cameraFar);
+      return clamp(-viewZ, cameraNear, cameraFar);
     }
 
     void main() {
-      vec2 texel = 1.0 / resolution;
+      vec2 texel = 1.0 / max(resolution, vec2(1.0));
       float centerDepth = getLinearDepth(vUv);
-      
-      // Compute Circle of Confusion based on real 3D distance from focal plane
-      float depthDelta = abs(centerDepth - focusDistance);
-      float coc = clamp((depthDelta - focalRange * 0.2) / max(focalRange, 0.001), 0.0, 1.0);
-      coc = smoothstep(0.04, 1.0, coc);
-      float blurRadius = coc * maxBlur;
 
-      if (blurRadius < 0.2) {
+      if (isnan(centerDepth) || isinf(centerDepth)) {
         gl_FragColor = texture2D(tDiffuse, vUv);
         return;
       }
 
-      vec4 col = vec4(0.0);
-      float totalWeight = 0.0;
+      // Sky/horizon receives soft distant bokeh
+      if (centerDepth >= cameraFar - 25.0) {
+        centerDepth = focusDistance + focalRange * 1.8;
+      }
+
+      float depthDelta = abs(centerDepth - focusDistance);
+      float coc = clamp((depthDelta - focalRange * 0.32) / max(focalRange, 0.001), 0.0, 1.0);
+      coc = smoothstep(0.04, 1.0, coc);
+      float blurRadius = coc * maxBlur;
+
+      if (blurRadius < 0.15) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
+
+      vec4 col = texture2D(tDiffuse, vUv) * 2.0;
+      float totalWeight = 2.0;
 
       const int SAMPLES = 12;
       vec2 disk[12];
@@ -188,16 +197,10 @@ const DepthTiltShiftShader = {
       disk[10] = vec2(-0.866, 0.500);
       disk[11] = vec2(-0.500, 0.866);
 
-      col += texture2D(tDiffuse, vUv) * 2.0;
-      totalWeight += 2.0;
-
       for (int i = 0; i < SAMPLES; i++) {
-        vec2 offset1 = disk[i] * texel * blurRadius * 0.5;
-        vec2 offset2 = disk[i] * texel * blurRadius * 1.0;
-
-        col += texture2D(tDiffuse, vUv + offset1);
-        col += texture2D(tDiffuse, vUv + offset2) * 0.75;
-        totalWeight += 1.75;
+        vec2 offset = disk[i] * texel * blurRadius;
+        col += texture2D(tDiffuse, vUv + offset);
+        totalWeight += 1.0;
       }
 
       gl_FragColor = col / totalWeight;
@@ -221,7 +224,6 @@ export default function Effects({
   const finalPassRef = useRef();
 
   useEffect(() => {
-    // Half-float render target with attached depth texture
     const depthTexture = new THREE.DepthTexture();
     depthTexture.type = THREE.UnsignedShortType;
     depthTextureRef.current = depthTexture;
@@ -246,7 +248,7 @@ export default function Effects({
     celPassRef.current = celPass;
     composer.addPass(celPass);
 
-    // Selective HDR Bloom (threshold 1.15 so only emissive windows/lamps glow)
+    // Selective HDR Bloom
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.width * 0.5, size.height * 0.5),
       0.45, // strength
@@ -257,12 +259,12 @@ export default function Effects({
     bloomPassRef.current = bloomPass;
     composer.addPass(bloomPass);
 
-    // Depth-Aware Miniature Mode DoF Pass
-    const depthDofPass = new ShaderPass(DepthTiltShiftShader);
-    depthDofPass.uniforms.tDepth.value = depthTexture;
-    depthDofPass.enabled = tiltShiftEnabled;
-    tiltPassRef.current = depthDofPass;
-    composer.addPass(depthDofPass);
+    // Depth-Aware Miniature Mode Tilt-Shift Pass
+    const depthPass = new ShaderPass(DepthTiltShiftShader);
+    depthPass.uniforms.tDepth.value = depthTexture;
+    depthPass.enabled = tiltShiftEnabled;
+    tiltPassRef.current = depthPass;
+    composer.addPass(depthPass);
 
     // Final color formation pass
     const finalPass = new ShaderPass(FinalShader);
@@ -316,6 +318,7 @@ export default function Effects({
     if (composerRef.current) {
       composerRef.current.render();
     }
+
     const tiltPass = tiltPassRef.current;
     if (tiltPass && tiltPass.enabled && camera) {
       const pixelRatio = gl.getPixelRatio();
@@ -326,10 +329,12 @@ export default function Effects({
       tiltPass.uniforms.cameraFar.value = camera.far || 1000.0;
       tiltPass.uniforms.resolution.value.set(renderW, renderH);
 
+      // Focus point calibrated: farther than the close bug, closer than extreme distance
       const targetPos = focusTarget ? (focusTarget.position || focusTarget) : new THREE.Vector3(0, 1.5, 0);
       const dist = camera.position.distanceTo(targetPos);
-      tiltPass.uniforms.focusDistance.value = dist;
-      tiltPass.uniforms.focalRange.value = THREE.MathUtils.clamp(dist * 0.45, 4.0, 18.0);
+      tiltPass.uniforms.focusDistance.value = THREE.MathUtils.clamp(dist * 0.78, 12.0, 22.0);
+      tiltPass.uniforms.focalRange.value = 15.0;
+      tiltPass.uniforms.maxBlur.value = 3.5;
     }
   }, 1);
 

@@ -130,6 +130,7 @@ function loadGlobalGraphicsDefaults() {
     soundsEnabled: defaults.soundsEnabled ?? true,
     trafficEnabled: defaults.trafficEnabled ?? true,
     signalsEnabled: defaults.signalsEnabled ?? true,
+    graphicsQuality: defaults.graphicsQuality ?? 'medium',
   };
 }
 
