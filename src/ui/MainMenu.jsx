@@ -179,6 +179,8 @@ export default function MainMenu({
   onDuplicateWorld,
   onExportWorld,
   onDeleteWorld,
+  graphicsQuality,
+  onGraphicsQualityChange,
   frameLimit,
   onFrameLimitChange,
   vsync,
@@ -337,21 +339,48 @@ export default function MainMenu({
               </div>
               <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
 
-              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5`}>
-                <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {FRAME_LIMIT_OPTIONS.map((option) => (
-                    <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                      {option === 0 ? 'Uncapped' : option}
-                    </button>
-                  ))}
+              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5 space-y-5`}>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'low', label: 'Low', desc: 'Analytic shadows, fast foliage' },
+                      { value: 'medium', label: 'Medium', desc: 'Soft shadows, bloom, reflection' },
+                      { value: 'high', label: 'High', desc: '4K shadows, planar reflection, dense grass' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onGraphicsQualityChange?.(opt.value)}
+                        className={`rounded-xl border p-2 text-left transition ${
+                          (graphicsQuality || 'medium') === opt.value
+                            ? 'border-[#e5a94f] bg-[#244b67] text-white'
+                            : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
+                        }`}
+                      >
+                        <span className="block font-semibold">{opt.label}</span>
+                        <span className="mt-0.5 block text-[10px] text-[#aebbd0]">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <label className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]`}>
-                Vsync
-                <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
-              </label>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {FRAME_LIMIT_OPTIONS.map((option) => (
+                      <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                        {option === 0 ? 'Uncapped' : option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                  Vsync
+                  <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
+                </label>
+              </div>
 
               <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
                 <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>

@@ -3,9 +3,10 @@ import { VOXEL_SIZE, mulberry32 } from '../terrain.js';
 import { applyWindSway } from './wind.js';
 import { getStyleMaterial } from '../render/styleMaterials.js';
 import { STYLE_PALETTE } from '../render/stylePalette.js';
+import { FOLIAGE_THEMES } from './treeArchetypes.js';
 
 /**
- * Creates an optimized forest border using InstancedMesh.
+ * Creates an optimized fluffy forest border using InstancedMesh.
  * Uses world units (terrainSize × VOXEL_SIZE). Seeded for determinism.
  */
 export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacing = 1.2) {
@@ -47,34 +48,34 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
   }
   totalTrees = Math.min(totalTrees, 16000);
 
-  // --- 3. Instanced meshes for tree trunks and foliage clusters ---
-  const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1.6, 6);
+  // --- 3. Instanced meshes for tree trunks and fluffy cloud canopies ---
+  const trunkGeo = new THREE.CylinderGeometry(0.08, 0.14, 1.8, 6);
   const trunkMat = getStyleMaterial('dark_timber', {
-    color: STYLE_PALETTE.dark_timber.base,
-    roughness: 0.88,
+    color: 0x3a2c20,
+    roughness: 0.9,
   });
-  applyWindSway(trunkMat, { leaves: false, strength: 0.4 });
+  applyWindSway(trunkMat, { leaves: false, strength: 0.3 });
 
-  const canopyGeo1 = new THREE.DodecahedronGeometry(0.75, 1);
-  const canopyGeo2 = new THREE.DodecahedronGeometry(0.6, 1);
-  const canopyGeo3 = new THREE.DodecahedronGeometry(0.45, 1);
+  // Fluffy outward-normal lobe geometries
+  const lobeGeo1 = new THREE.IcosahedronGeometry(0.72, 2);
+  const lobeGeo2 = new THREE.IcosahedronGeometry(0.58, 2);
+  const lobeGeo3 = new THREE.IcosahedronGeometry(0.48, 2);
 
-  const foliageMat1 = getStyleMaterial('foliage', {
-    color: STYLE_PALETTE.foliage_pine.mid,
-    roughness: 0.88,
-  });
-  const foliageMat2 = getStyleMaterial('foliage', {
-    color: STYLE_PALETTE.foliage_pine.top,
-    roughness: 0.85,
-  });
+  // Varied foliage materials: spring lime, blossom pink, lush green
+  const matLimeTop = getStyleMaterial('foliage', { color: FOLIAGE_THEMES[0].top, roughness: 0.82 });
+  const matLimeMid = getStyleMaterial('foliage', { color: FOLIAGE_THEMES[0].mid, roughness: 0.85 });
+  const matBlossomTop = getStyleMaterial('foliage', { color: FOLIAGE_THEMES[1].top, roughness: 0.82 });
+  const matLushTop = getStyleMaterial('foliage', { color: FOLIAGE_THEMES[3].top, roughness: 0.82 });
 
-  applyWindSway(foliageMat1, { leaves: true, strength: 0.6 });
-  applyWindSway(foliageMat2, { leaves: true, strength: 0.7 });
+  applyWindSway(matLimeTop, { leaves: true, strength: 0.6 });
+  applyWindSway(matLimeMid, { leaves: true, strength: 0.5 });
+  applyWindSway(matBlossomTop, { leaves: true, strength: 0.6 });
+  applyWindSway(matLushTop, { leaves: true, strength: 0.6 });
 
   const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, totalTrees);
-  const cluster1Inst = new THREE.InstancedMesh(canopyGeo1, foliageMat1, totalTrees);
-  const cluster2Inst = new THREE.InstancedMesh(canopyGeo2, foliageMat1, totalTrees);
-  const cluster3Inst = new THREE.InstancedMesh(canopyGeo3, foliageMat2, totalTrees);
+  const cluster1Inst = new THREE.InstancedMesh(lobeGeo1, matLimeTop, totalTrees);
+  const cluster2Inst = new THREE.InstancedMesh(lobeGeo2, matLimeMid, totalTrees);
+  const cluster3Inst = new THREE.InstancedMesh(lobeGeo3, matLushTop, totalTrees);
 
   [trunkInst, cluster1Inst, cluster2Inst, cluster3Inst].forEach((m) => {
     m.receiveShadow = true;
@@ -95,21 +96,21 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
       if (treeIndex >= totalTrees) return;
       const x = startX + rng() * w;
       const z = startZ + rng() * d;
-      const scale = 0.75 + rng() * 0.8;
+      const scale = 0.8 + rng() * 0.7;
       const rotY = rng() * Math.PI * 2;
       const tilt = (rng() - 0.5) * 0.1;
       quaternion.setFromEuler(new THREE.Euler(tilt, rotY, tilt * 0.5));
 
-      const setPart = (mesh, yOff) => {
-        position.set(x, yOff * scale, z);
+      const setPart = (mesh, yOff, xOff = 0, zOff = 0) => {
+        position.set(x + xOff * scale, yOff * scale, z + zOff * scale);
         scaleVec.set(scale, scale, scale);
         matrix.compose(position, quaternion, scaleVec);
         mesh.setMatrixAt(treeIndex, matrix);
       };
-      setPart(trunkInst, 0.8);
-      setPart(cluster1Inst, 1.7);
-      setPart(cluster2Inst, 2.4);
-      setPart(cluster3Inst, 3.1);
+      setPart(trunkInst, 0.9);
+      setPart(cluster1Inst, 1.9, 0.05, 0.05);
+      setPart(cluster2Inst, 2.5, -0.1, -0.08);
+      setPart(cluster3Inst, 3.1, 0.08, -0.05);
       treeIndex++;
     }
   };

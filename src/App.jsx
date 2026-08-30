@@ -770,6 +770,8 @@ function AppRuntime() {
         onDuplicateWorld={handleDuplicateWorld}
         onExportWorld={handleExportWorld}
         onDeleteWorld={handleDeleteWorld}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={(tier) => { setGraphicsQuality(tier); saveSettings({ graphicsQuality: tier }); }}
         frameLimit={frameLimit}
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
