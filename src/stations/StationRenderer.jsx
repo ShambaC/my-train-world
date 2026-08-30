@@ -3,12 +3,38 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useStationPlacement } from '../hooks/useStationPlacement';
 import { buildStation, STATION_GHOST_WIDTH, PLATFORM_HEIGHT, easeOutBack } from './StationBuilder';
+import { MAX_STATION_LATERAL } from './StationManager';
 import { stripStation, rebuildStation } from '../utils/editActions';
 import { trainAudio } from '../audio/trainAudio';
 
 const GHOST_GREEN = 0x00ff00;
 const GHOST_RED = 0xff0000;
 const POP_DURATION = 0.45;
+
+function StationZoneGizmo({ station }) {
+  const platformLen = station.lengthCells * 0.5;
+  const totalLength = platformLen + 2.0;
+  const totalWidth = MAX_STATION_LATERAL * 2;
+  const totalHeight = 1.6;
+
+  const yaw = Math.atan2(station.dir.x, station.dir.z);
+  const midX = station.startWorld.x + station.dir.x * (platformLen / 2);
+  const midZ = station.startWorld.z + station.dir.z * (platformLen / 2);
+  const midY = station.groundY;
+
+  return (
+    <group position={[midX, midY, midZ]} rotation={[0, yaw, 0]}>
+      <lineSegments>
+        <edgesGeometry args={[new THREE.BoxGeometry(totalWidth, totalHeight, totalLength)]} />
+        <lineBasicMaterial color={0x00e5ff} transparent opacity={0.65} toneMapped={false} />
+      </lineSegments>
+      <mesh position={[0, -totalHeight / 2 + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[totalWidth, totalLength]} />
+        <meshBasicMaterial color={0x00e5ff} transparent opacity={0.08} depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
 
 function makeGhostBox(width, height, depth, color) {
   const mesh = new THREE.Mesh(
@@ -39,6 +65,7 @@ export default function StationRenderer({
   history,
   trackManager,
   roadManager,
+  showDebug = false,
 }) {
   const [stations, setStations] = useState([]);
   const mouseDownPosRef = useRef(null);
@@ -220,6 +247,10 @@ export default function StationRenderer({
           <primitive key={`${station.id}-${station.group.uuid}`} object={station.group} />
         ) : null
       )}
+      {showDebug &&
+        stations.map((station) => (
+          <StationZoneGizmo key={`debug-zone-${station.id}`} station={station} />
+        ))}
       {ghostMeshes?.map((m, i) => (
         <primitive key={i} object={m} />
       ))}

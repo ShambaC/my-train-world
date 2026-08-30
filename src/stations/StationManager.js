@@ -3,6 +3,8 @@
  */
 import { DEFAULT_ROLE } from './stationRoles';
 
+export const MAX_STATION_LATERAL = 3.0; // Detect tracks up to 3 blocks away from platform
+
 export class StationManager {
   constructor() {
     this.stations = new Map();
@@ -112,7 +114,7 @@ export class StationManager {
         const dy = Math.abs(track.position.y - station.groundY);
         if (dy > 0.8) continue;
         if (t < -1.0 || t > along + 1.0) continue;
-        if (lateral > 2.2) continue; // Detect tracks up to 3-4 blocks away
+        if (lateral > MAX_STATION_LATERAL) continue;
         this.trackBindings.set(track.id, station.id);
       }
     }
@@ -126,7 +128,7 @@ export class StationManager {
   /**
    * Find any station located within proximity of a world position (up to 3 blocks).
    */
-  getStationNearPosition(pos, maxDist = 2.0) {
+  getStationNearPosition(pos, maxDist = MAX_STATION_LATERAL) {
     for (const station of this.stations.values()) {
       const platformLen = station.lengthCells * 0.5;
       const dx = pos.x - station.startWorld.x;

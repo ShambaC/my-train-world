@@ -90,6 +90,7 @@ function Scene({
   trainsVersion,
   stationsScatterVersion,
   showAxes,
+  showDebug = false,
   graphicsQuality = 'medium',
 }) {
   const qualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
@@ -372,6 +373,7 @@ function Scene({
           history={history}
           trackManager={trackManager}
           roadManager={roadManager}
+          showDebug={showDebug}
         />
       )}
 
@@ -824,6 +826,7 @@ export default function GameScene({
           trainsVersion={trainsVersion}
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
+           showDebug={showDebug}
            graphicsQuality={graphicsQuality}
          />
         {/* Final color pass always mounted: vanilla now shares the miniature
@@ -894,6 +897,7 @@ export default function GameScene({
             <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
             {selectedTool && <div className="border-t border-gray-600 pt-2"><div>Tool: {selectedTool.name}</div>{selectedTool.type === 'station' ? <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div> : <div>Rotation: {rotation}°</div>}{heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}</div>}
           </>}
+          <TrainTelemetryOverlay trainManager={trainManager} />
         </div>
       )}
     </div>
@@ -935,4 +939,45 @@ function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
   });
 
   return null;
+}
+
+function TrainTelemetryOverlay({ trainManager }) {
+  const [trains, setTrains] = useState([]);
+
+  useEffect(() => {
+    const update = () => {
+      const all = trainManager?.getAllTrains() || [];
+      setTrains(all.map((t) => ({ id: t.id, active: t.active, debug: t.debug })));
+    };
+    const interval = setInterval(update, 100);
+    update();
+    return () => clearInterval(interval);
+  }, [trainManager]);
+
+  if (!trains.length) return null;
+
+  return (
+    <div className="border-t border-gray-600 pt-2 text-xs space-y-1.5">
+      <div className="font-bold text-cyan-300">Active Trains Station Telemetry:</div>
+      {trains.map((t) => {
+        const d = t.debug;
+        if (!d) return <div key={t.id} className="text-gray-400">{t.id}: telemetry initializing...</div>;
+        return (
+          <div key={t.id} className="rounded bg-black/50 p-1.5 border border-white/10 font-mono text-[11px] leading-tight space-y-0.5">
+            <div className="text-yellow-300 font-semibold">{t.id} ({t.active ? 'Running' : 'Parked'}, Track: {d.currentTrackId})</div>
+            <div className="text-gray-300">Bound: <span className="text-white">{d.stationBound || 'none'}</span> | Near: <span className="text-white">{d.stationNear || 'none'}</span></div>
+            <div className="text-gray-300">Axial: <span className="text-white">{d.axial}u</span> | Lat: <span className="text-white">{d.lateral}u</span> | dY: <span className="text-white">{d.dy}u</span></div>
+            <div className="text-gray-300">Zone: <span className={d.insideStationZone ? 'text-green-400 font-bold' : 'text-red-400'}>{d.insideStationZone ? 'INSIDE' : 'OUTSIDE'}</span> | CD: <span className="text-white">{d.cooldownRemaining}s</span></div>
+            {d.dwellState ? (
+              <div className="text-green-300 font-bold bg-green-950/70 px-1 py-0.5 rounded border border-green-700/50">
+                DWELLING at {d.dwellState.stationId} ({d.dwellState.remaining}s left)
+              </div>
+            ) : (
+              <div className="text-gray-400">Dwell: None | Spd: {d.speed} (Tgt: {d.speedTarget})</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
