@@ -5,16 +5,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { HorizontalTiltShiftShader } from 'three/addons/shaders/HorizontalTiltShiftShader.js';
-import { VerticalTiltShiftShader } from 'three/addons/shaders/VerticalTiltShiftShader.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
-// Tilt-shift settings (see tilt-shift-guide.md):
-//   r  — normalized screen Y of the sharp focus strip
-//   h/v — blur footprint = blurStrength / physical render size.
-// A larger blurStrength both narrows the effective sharp band (steeper
-// ramp away from the focus line) and blurs the rest more.
-const FOCUS_Y = 0.65;
-const BLUR_STRENGTH = 3.7;
+const DOF_APERTURE = 0.0032;
+const DOF_MAX_BLUR = 0.026;
 
 // ─── Final Color Pass: applies ACES tone mapping + sRGB encoding exactly once,
 // plus a light saturation/vignette lift for the miniature look.
@@ -24,10 +18,10 @@ const BLUR_STRENGTH = 3.7;
 const FinalShader = {
   uniforms: {
     tDiffuse: { value: null },
-    exposure: { value: 1.0 },
-    saturation: { value: 1.0 },
-    contrast: { value: 1.01 },
-    vignette: { value: 0.1 },
+    exposure: { value: 1.08 },
+    saturation: { value: 1.04 },
+    contrast: { value: 1.0 },
+    vignette: { value: 0.04 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -126,18 +120,17 @@ const CelShader = {
 
 // ─── Effects Component ────────────────────────────────────────────────────
 // Only mount when (tiltShiftEnabled || celShadingEnabled) — see GameScene.jsx
-export default function Effects({ tiltShiftEnabled, celShadingEnabled, graphicsQuality = 'medium', visualFocusRef }) {
+export default function Effects({ tiltShiftEnabled, celShadingEnabled, graphicsQuality = 'medium', visualFocusRef, lighting }) {
   const { gl, scene, camera, size } = useThree();
   const composerRef = useRef();
-  const tiltPassRef = useRef();
+  const bokehPassRef = useRef();
   const celPassRef = useRef();
   const bloomPassRef = useRef();
   const finalPassRef = useRef();
+
   useEffect(() => {
     const composer = new EffectComposer(gl);
-    if (import.meta.env.DEV) window.__mtw.composer = composer;
     composerRef.current = composer;
-
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
@@ -146,75 +139,46 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, graphicsQ
     celPassRef.current = celPass;
     composer.addPass(celPass);
 
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(size.width, size.height),
-      0.25,
-      0.65,
-      1.35,
-    );
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.25, 0.65, 1.35);
     bloomPass.enabled = graphicsQuality !== 'low';
     bloomPassRef.current = bloomPass;
     composer.addPass(bloomPass);
 
-    const tiltHPass = new ShaderPass(HorizontalTiltShiftShader);
-    const tiltVPass = new ShaderPass(VerticalTiltShiftShader);
-    tiltHPass.enabled = tiltShiftEnabled;
-    tiltVPass.enabled = tiltShiftEnabled;
-    tiltPassRef.current = [tiltHPass, tiltVPass];
-    composer.addPass(tiltHPass);
-    composer.addPass(tiltVPass);
+    const bokehPass = new BokehPass(scene, camera, {
+      focus: visualFocusRef?.current?.distance ?? 12,
+      aperture: DOF_APERTURE,
+      maxblur: DOF_MAX_BLUR,
+    });
+    bokehPass.enabled = tiltShiftEnabled;
+    bokehPassRef.current = bokehPass;
+    composer.addPass(bokehPass);
+
     const finalPass = new ShaderPass(FinalShader);
     finalPassRef.current = finalPass;
     composer.addPass(finalPass);
     composer.setSize(size.width, size.height);
     composer.setPixelRatio(gl.getPixelRatio());
+    if (import.meta.env.DEV) window.__mtw.composer = composer;
 
     return () => {
       composer.dispose();
       composerRef.current = null;
+      bokehPassRef.current = null;
     };
   }, [gl, scene, camera]);
 
-  // The composer's final pass does tone mapping + sRGB conversion itself.
-  // R3F defaults (ACES + sRGB output) would apply them a second time in the
-  // RenderPass, washing colors out, crushing blacks and turning bright
-  // transparent surfaces white/black. Switch them off while mounted.
   useEffect(() => {
-    const prevToneMapping = gl.toneMapping;
-    const prevOutputColorSpace = gl.outputColorSpace;
-    gl.toneMapping = THREE.NoToneMapping;
-    gl.outputColorSpace = THREE.LinearSRGBColorSpace;
-    return () => {
-      gl.toneMapping = prevToneMapping;
-      gl.outputColorSpace = prevOutputColorSpace;
-    };
-  }, [gl]);
-
-  // Update pass enabled states
-  useEffect(() => {
-    const passes = tiltPassRef.current;
-    if (passes) {
-      passes[0].enabled = tiltShiftEnabled;
-      passes[1].enabled = tiltShiftEnabled;
-    }
+    if (bokehPassRef.current) bokehPassRef.current.enabled = tiltShiftEnabled;
     if (celPassRef.current) celPassRef.current.enabled = celShadingEnabled;
     if (bloomPassRef.current) bloomPassRef.current.enabled = graphicsQuality !== 'low';
   }, [tiltShiftEnabled, celShadingEnabled, graphicsQuality]);
 
-  // Update tilt-shift focus + blur footprint (physical render pixels) on resize
   useEffect(() => {
     const pixelRatio = gl.getPixelRatio();
-    const renderW = size.width * pixelRatio;
-    const renderH = size.height * pixelRatio;
-    if (celPassRef.current) {
-      celPassRef.current.uniforms.resolution.value.set(size.width, size.height);
-    }
-    const passes = tiltPassRef.current;
-    if (passes) {
-      passes[0].uniforms.h.value = BLUR_STRENGTH / renderW;
-      passes[0].uniforms.r.value = FOCUS_Y;
-      passes[1].uniforms.v.value = BLUR_STRENGTH / renderH;
-      passes[1].uniforms.r.value = FOCUS_Y;
+    if (celPassRef.current) celPassRef.current.uniforms.resolution.value.set(size.width, size.height);
+    if (bokehPassRef.current) {
+      bokehPassRef.current.setSize(size.width * pixelRatio, size.height * pixelRatio);
+      bokehPassRef.current.uniforms.aspect.value = size.width / Math.max(size.height, 1);
     }
     if (bloomPassRef.current) {
       bloomPassRef.current.resolution.set(
@@ -223,29 +187,33 @@ export default function Effects({ tiltShiftEnabled, celShadingEnabled, graphicsQ
       );
       bloomPassRef.current.threshold = graphicsQuality === 'high' ? 1.15 : 1.35;
     }
-    if (composerRef.current) {
-      composerRef.current.setSize(size.width, size.height);
-    }
-  }, [size, gl]);
+    composerRef.current?.setSize(size.width, size.height);
+  }, [size, gl, graphicsQuality]);
 
-  // Render takeover (priority 1 disables R3F default render)
   useFrame(() => {
-    if (composerRef.current) {
-      composerRef.current.render();
+    const bokeh = bokehPassRef.current;
+    if (lighting) {
+      const finalPass = finalPassRef.current;
+      if (finalPass) {
+        finalPass.uniforms.exposure.value = lighting.exposure;
+        finalPass.uniforms.saturation.value = lighting.saturation;
+        finalPass.uniforms.contrast.value = lighting.contrast;
+      }
+      const bloom = bloomPassRef.current;
+      if (bloom) {
+        bloom.strength = lighting.bloomStrength;
+        bloom.threshold = lighting.bloomThreshold;
+      }
     }
-    // Tilt-shift blur scales with camera-to-focus distance.
-    const passes = tiltPassRef.current;
-    if (passes && passes[0].enabled && composerRef.current) {
-      const pixelRatio = gl.getPixelRatio();
-      const renderW = size.width * pixelRatio;
-      const renderH = size.height * pixelRatio;
+    if (bokeh) {
       const focusDistance = visualFocusRef?.current?.distance ?? camera.position.length();
-      const dist = THREE.MathUtils.clamp(focusDistance / 30, 0.4, 1.5);
-      passes[0].uniforms.h.value = (BLUR_STRENGTH * dist) / renderW;
-      passes[0].uniforms.r.value = FOCUS_Y;
-      passes[1].uniforms.v.value = (BLUR_STRENGTH * dist) / renderH;
-      passes[1].uniforms.r.value = FOCUS_Y;
+      bokeh.uniforms.focus.value = Math.max(camera.near + 0.1, focusDistance);
+      bokeh.uniforms.aperture.value = visualFocusRef?.current?.mode === 'overview'
+        ? DOF_APERTURE * 1.7
+        : DOF_APERTURE;
+      bokeh.uniforms.maxblur.value = graphicsQuality === 'low' ? 0.008 : DOF_MAX_BLUR;
     }
+    composerRef.current?.render();
   }, 1);
 
   return null;

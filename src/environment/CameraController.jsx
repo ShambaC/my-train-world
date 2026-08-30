@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -15,6 +15,11 @@ function isKeyDown(code) {
  */
 export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false }) {
   const { camera } = useThree();
+  const moveRef = useRef(new THREE.Vector3());
+  const forwardRef = useRef(new THREE.Vector3());
+  const rightRef = useRef(new THREE.Vector3());
+  const directionRef = useRef(new THREE.Vector3());
+  const upRef = useRef(new THREE.Vector3(0, 1, 0));
 
   useEffect(() => {
     if (!enabled) return;
@@ -39,12 +44,12 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
   useFrame((state, delta) => {
     if (!enabled) return;
 
-    const move = new THREE.Vector3();
-    const forward = new THREE.Vector3();
+    const move = moveRef.current.set(0, 0, 0);
+    const forward = forwardRef.current;
     camera.getWorldDirection(forward);
     forward.y = 0;
     if (forward.lengthSq() > 0) forward.normalize();
-    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+    const right = rightRef.current.crossVectors(forward, upRef.current);
 
     if (isKeyDown('w')) move.add(forward);
     if (isKeyDown('s')) move.sub(forward);
@@ -73,8 +78,8 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
     if (!followActive && controls && rotating) {
       const distance = camera.position.distanceTo(controls.target);
       if (distance > 1e-4) {
-        const direction = controls.target.clone().sub(camera.position).normalize();
-        direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotateY * 1.8 * Math.min(delta, 0.05));
+        const direction = directionRef.current.copy(controls.target).sub(camera.position).normalize();
+        direction.applyAxisAngle(upRef.current, rotateY * 1.8 * Math.min(delta, 0.05));
 
         const pitch = THREE.MathUtils.clamp(
           Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1)) + rotateX * 1.8 * Math.min(delta, 0.05),

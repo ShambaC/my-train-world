@@ -736,9 +736,13 @@ function buildBike(variant = 'bike_blue') {
   return g;
 }
 
-// ── Master Factory Function ─────────────────────────────────────────────
+const VEHICLE_TEMPLATES = new Map();
+
 export function createVehicle(type = 'car', variant) {
   const chosenVariant = variant || getRandomVehicleVariant(type);
+  const key = `${type}:${chosenVariant}`;
+  const cached = VEHICLE_TEMPLATES.get(key);
+  if (cached) return cached.clone(true);
 
   let vehicle;
   switch (type) {
@@ -770,6 +774,6 @@ export function createVehicle(type = 'car', variant) {
   vehicle.userData.type = type;
   vehicle.userData.variant = chosenVariant;
   vehicle.userData.headlampX = HEADLAMP_X[type] || 0.19;
-
-  return vehicle;
+  VEHICLE_TEMPLATES.set(key, vehicle);
+  return vehicle.clone(true);
 }

@@ -53,17 +53,25 @@ function pathOf(waypoints) {
 }
 
 /** Position + yaw at distance s along the path (clamped to ends). */
-export function atDistance(path, s) {
+export function atDistance(path, s, out = {}) {
   const { pts, segs } = path;
   if (s <= 0) {
     const a = pts[0];
     const b = pts[1] || pts[0];
-    return { x: a.x, y: a.y, z: a.z, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
+    out.x = a.x;
+    out.y = a.y;
+    out.z = a.z;
+    out.yaw = Math.atan2(b.x - a.x, b.z - a.z);
+    return out;
   }
   if (s >= path.total) {
     const a = pts[pts.length - 2] || pts[pts.length - 1];
     const b = pts[pts.length - 1];
-    return { x: b.x, y: b.y, z: b.z, yaw: Math.atan2(b.x - a.x, b.z - a.z) };
+    out.x = b.x;
+    out.y = b.y;
+    out.z = b.z;
+    out.yaw = Math.atan2(b.x - a.x, b.z - a.z);
+    return out;
   }
   let rem = s;
   for (let i = 0; i < segs.length; i++) {
@@ -72,17 +80,20 @@ export function atDistance(path, s) {
       const t = rem / Math.max(len, 0.001);
       const ax = pts[i];
       const bx = pts[i + 1];
-      return {
-        x: ax.x + (bx.x - ax.x) * t,
-        y: ax.y + (bx.y - ax.y) * t,
-        z: ax.z + (bx.z - ax.z) * t,
-        yaw: Math.atan2(bx.x - ax.x, bx.z - ax.z),
-      };
+      out.x = ax.x + (bx.x - ax.x) * t;
+      out.y = ax.y + (bx.y - ax.y) * t;
+      out.z = ax.z + (bx.z - ax.z) * t;
+      out.yaw = Math.atan2(bx.x - ax.x, bx.z - ax.z);
+      return out;
     }
     rem -= len;
   }
   const b = pts[pts.length - 1];
-  return { x: b.x, y: b.y, z: b.z, yaw: 0 };
+  out.x = b.x;
+  out.y = b.y;
+  out.z = b.z;
+  out.yaw = 0;
+  return out;
 }
 
 /**

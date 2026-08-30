@@ -151,10 +151,10 @@ export default function SkyAtmosphere({ timeOfDay = 'day', cloudLayers = 2, ligh
 
 export function getLightingForTime(timeOfDay) {
   const presets = {
-    dawn: { ambient: { intensity: 0.55, color: 0x9db8d8 }, directional: { intensity: 0.9, color: 0xffa05a, position: [40, 14, 32] }, fog: { color: 0xffc9a3, density: 0.012 }, skyTint: 0xffc9a0, sunTint: 0xff9a56, waterDeep: 0x16537e, waterShallow: 0x4699c4, waterFoam: 0xfff3e0, waterSand: 0xc9a06a, nightness: 0.15, shadowRadius: 6 },
-    day: { ambient: { intensity: 0.7, color: 0xdfeefc }, directional: { intensity: 1.15, color: 0xfff4e0, position: [50, 60, 30] }, fog: { color: 0xd4e8f7, density: 0.008 }, skyTint: 0x87ceeb, sunTint: 0xfff8e0, waterDeep: 0x245f77, waterShallow: 0x68a8ae, waterFoam: 0xe8f8ff, waterSand: 0xd9b878, nightness: 0, shadowRadius: 4 },
-    dusk: { ambient: { intensity: 0.42, color: 0x6b6bd6 }, directional: { intensity: 0.75, color: 0xff6a2a, position: [28, 10, -38] }, fog: { color: 0xff8c6e, density: 0.014 }, skyTint: 0xff9777, sunTint: 0xff8c47, waterDeep: 0x1e4d80, waterShallow: 0x4d7fae, waterFoam: 0xffd9c2, waterSand: 0xb58a60, nightness: 0.45, shadowRadius: 5 },
-    night: { ambient: { intensity: 0.4, color: 0x41618f }, directional: { intensity: 0.3, color: 0x9fb8ff, position: [-25, 35, -20] }, fog: { color: 0x1b2745, density: 0.02 }, skyTint: 0x2b3a5f, sunTint: 0xa8c0ff, waterDeep: 0x0d2440, waterShallow: 0x1f3f66, waterFoam: 0x9fc0e8, waterSand: 0x4a5a76, nightness: 1, shadowRadius: 2 },
+    dawn: { ambient: { intensity: 0.68, color: 0x9db8d8 }, directional: { intensity: 1.1, color: 0xffa05a, position: [40, 14, 32] }, fog: { color: 0xffc9a3, density: 0.009 }, skyTint: 0xffc9a0, sunTint: 0xff9a56, waterDeep: 0x1f6f82, waterShallow: 0x5ba9ad, waterFoam: 0xd1ebe0, waterSand: 0xb99b68, nightness: 0.15, shadowRadius: 6 },
+    day: { ambient: { intensity: 0.84, color: 0xdfeefc }, directional: { intensity: 1.45, color: 0xfff4e0, position: [50, 60, 30] }, fog: { color: 0xd4e8f7, density: 0.005 }, skyTint: 0x87ceeb, sunTint: 0xfff8e0, waterDeep: 0x145b70, waterShallow: 0x347f8d, waterFoam: 0xaed6d4, waterSand: 0x9c8354, nightness: 0, shadowRadius: 4 },
+    dusk: { ambient: { intensity: 0.56, color: 0x6b6bd6 }, directional: { intensity: 1.0, color: 0xff6a2a, position: [28, 10, -38] }, fog: { color: 0xff8c6e, density: 0.01 }, skyTint: 0xff9777, sunTint: 0xff8c47, waterDeep: 0x1e5e82, waterShallow: 0x4d88ac, waterFoam: 0xc7d9dc, waterSand: 0x9f805c, nightness: 0.45, shadowRadius: 5 },
+    night: { ambient: { intensity: 0.58, color: 0x41618f }, directional: { intensity: 0.4, color: 0x9fb8ff, position: [-25, 35, -20] }, fog: { color: 0x1b2745, density: 0.014 }, skyTint: 0x2b3a5f, sunTint: 0xa8c0ff, waterDeep: 0x153f66, waterShallow: 0x3f7196, waterFoam: 0x94b8db, waterSand: 0x445875, nightness: 1, shadowRadius: 2 },
   };
   return presets[timeOfDay] || presets.day;
 }

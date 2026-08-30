@@ -11,9 +11,6 @@ export const WATER_LEVEL = 2.0;
 // Voxel index at/under which columns are submerged (top of index 3 = 1.75 < 2.0)
 export const WATER_LEVEL_VOXEL = 3;
 
-// Spatial instance regions. Keeps original voxel boxes intact while giving
-// renderer frustum culling useful bounds instead of one bound for whole map.
-const TERRAIN_CHUNK_SIZE = 64;
 
 // Deterministic biome ids (shared with ScatterProps for prop selection)
 export const BIOME = {
@@ -28,20 +25,20 @@ export const BIOME = {
 // Terrain colors based on height + biome
 const TERRAIN_COLORS = {
   water: 0x4a90e2,
-  sand: 0xd9b878, // warm sand — shallow water reads warm near the shore
-  grass: 0x549e54, // slightly muted so the textured meadow reads, not glows
-  rock: 0x808080,
+  sand: 0xd9b878,
+  grass: 0x79b85f,
+  rock: 0x948a7c,
   snow: 0xffffff,
-  dirt: 0x6a4d33, // darker vertical dirt faces — more depth contrast
+  dirt: 0x8f694d,
   // Biome surface colors
-  forest: 0x4d9444, // darker ground under forest
-  highland: 0x7a7a7a, // rock grey
-  wetland: 0x8a7358, // mud
-  industrial: 0x8f8b84, // gravel
+  forest: 0x64975e,
+  highland: 0x8d8a83,
+  wetland: 0x9a8060,
+  industrial: 0x9a9489,
   // Vegetation colors
-  treeLeaf: 0x2d5a2d,
-  treeTrunk: 0x8b4513,
-  bush: 0x3a7a7a,
+  treeLeaf: 0x4d7c48,
+  treeTrunk: 0x8b5a3c,
+  bush: 0x5f9654,
 };
 
 /**
@@ -92,12 +89,26 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
   const minSpacing = 3;
   const placedVegetation = [];
   const trunkGeo = new THREE.CylinderGeometry(0.045, 0.075, 0.55, 6);
-  const foliageGeo = new THREE.SphereGeometry(0.42, 8, 5);
-  const bushGeo = new THREE.SphereGeometry(0.3, 8, 5);
+  const foliageGeo = new THREE.IcosahedronGeometry(0.42, 1);
+  const bushGeo = new THREE.IcosahedronGeometry(0.3, 1);
+  foliageGeo.translate(0, 0.02, 0);
+  bushGeo.translate(0, 0.02, 0);
+  for (const geometry of [foliageGeo, bushGeo]) {
+    const position = geometry.attributes.position;
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i);
+      const y = position.getY(i);
+      const z = position.getZ(i);
+      const wobble = 1 + 0.12 * Math.sin(x * 17.0 + z * 11.0 + y * 7.0);
+      position.setXYZ(i, x * wobble, y * (0.94 + 0.08 * Math.cos(x * 13.0 - z * 9.0)), z * wobble);
+    }
+    position.needsUpdate = true;
+    geometry.computeVertexNormals();
+  }
   const trunkMat = makeStyleMaterial('bark', { color: 0x684c3c, roughness: 0.95 });
-  const deciduousMat = makeStyleMaterial('leaf_light', { color: 0x78985f, roughness: 0.92 });
-  const pineMat = makeStyleMaterial('leaf_dark', { color: 0x4f725d, roughness: 0.94 });
-  const bushMat = makeStyleMaterial('bush', { color: 0x668558, roughness: 0.94 });
+  const deciduousMat = makeStyleMaterial('leaf_light', { color: 0x9cbd76, roughness: 0.92, emissive: 0x2d5c27, emissiveIntensity: 0.3 });
+  const pineMat = makeStyleMaterial('leaf_dark', { color: 0x78a964, roughness: 0.94, emissive: 0x275022, emissiveIntensity: 0.25 });
+  const bushMat = makeStyleMaterial('bush', { color: 0x91bd70, roughness: 0.94, emissive: 0x397033, emissiveIntensity: 0.5 });
   applyWindSway(trunkMat, { leaves: false, strength: 0.45 });
   applyWindSway(deciduousMat, { strength: 0.9 });
   applyWindSway(pineMat, { strength: 0.75 });
@@ -122,16 +133,27 @@ function generateVegetation(terrain, heightMap, biomeMask, plateaus, length, bre
       const isBush = biome === BIOME.wetland || biome === BIOME.highland ||
         vegetationNoise < threshold + (1 - threshold) * 0.5;
       if (isBush) {
-        bushes.push({ x: worldX, y: worldY + 0.14, z: worldZ, scale: 0.75 + rng() * 0.45 });
+        const bushScale = 0.72 + rng() * 0.38;
+        for (let cluster = 0; cluster < 3; cluster += 1) {
+          const angle = rng() * Math.PI * 2;
+          const radius = cluster === 0 ? 0.02 : 0.12 + rng() * 0.18;
+          bushes.push({
+            x: worldX + Math.cos(angle) * radius,
+            y: worldY + 0.14 + (cluster % 2) * 0.06,
+            z: worldZ + Math.sin(angle) * radius,
+            scale: bushScale * (0.78 + rng() * 0.3),
+            rotation: rng() * Math.PI * 2,
+          });
+        }
       } else {
         trunks.push({ x: worldX, y: worldY + 0.25, z: worldZ, scale: 0.85 + rng() * 0.25 });
         const isPine = biome === BIOME.forest && rng() > 0.42;
         const clusters = 5 + Math.floor(rng() * 5);
         for (let cluster = 0; cluster < clusters; cluster += 1) {
           const angle = rng() * Math.PI * 2;
-          const radius = cluster === 0 ? 0.05 : 0.16 + rng() * 0.28;
-          const y = 0.38 + (cluster % 3) * 0.22 + rng() * 0.15;
-          const scale = 0.65 + rng() * 0.42;
+          const radius = cluster === 0 ? 0.05 : 0.2 + rng() * 0.42;
+          const y = 0.34 + (cluster % 4) * 0.2 + rng() * 0.16;
+          const scale = 0.58 + rng() * 0.38;
           (isPine ? pineClusters : deciduousClusters).push({
             x: worldX + Math.cos(angle) * radius,
             y: worldY + y,
@@ -758,21 +780,6 @@ function buildWorld(length, breadth, seed, attempt, riverPlan) {
   return { heightMap, plateaus, biomeMask: biome.mask, zones: biome.zones, blend: biome.blend, diagnostics };
 }
 
-/**
- * Patch a textured terrain material so every instanced voxel samples the
- * atlas cell at a per-instance random offset. The shared BoxGeometry would
- * otherwise stamp the identical crop onto every voxel face, making cliffs
- * read as a checkerboard of repeated tiles.
- */
-function patchTerrainUVOffset(material) {
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = 'attribute vec2 aUvOffset;\n' + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      '#include <map_vertex>',
-      '#include <map_vertex>\n\tvMapUv += aUvOffset;'
-    );
-  };
-}
 
 function createTerrainSurfaceShell(heightMap, biomeMask, blend, length, breadth, surfaceColor, sideColor) {
   const positions = [];
@@ -869,114 +876,21 @@ export function generateTerrain(length, breadth, seed = 1337) {
   }
 
   const { heightMap, biomeMask, plateaus, blend } = best;
-  const voxelGeometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-  const voxelChunks = new Map();
-
-  // Precomputed meadow→forest gradient (avoids per-voxel color math).
-  // Quantized to 16 buckets so the textured material cache stays small.
-  const grassColor = new THREE.Color(TERRAIN_COLORS.grass);
-  const forestColor = new THREE.Color(TERRAIN_COLORS.forest);
-  const forestLerp = new Array(256);
-  for (let b = 0; b < 256; b++) {
-    const q = Math.min(255, Math.floor(b / 16) * 16);
-    forestLerp[b] = grassColor.clone().lerp(forestColor, q / 255).getHex();
-  }
-
-  const surfaceColor = (biome, b) => {
+  const surfaceColor = (biome) => {
     switch (biome) {
       case BIOME.forest: return TERRAIN_COLORS.forest;
       case BIOME.highland: return TERRAIN_COLORS.highland;
       case BIOME.wetland: return TERRAIN_COLORS.wetland;
       case BIOME.industrial: return TERRAIN_COLORS.industrial;
-      default: return forestLerp[b];
+      default: return TERRAIN_COLORS.grass;
     }
   };
   const sideColor = (biome) => {
     if (biome === BIOME.highland) return TERRAIN_COLORS.rock;
     if (biome === BIOME.industrial) return TERRAIN_COLORS.industrial;
-    return TERRAIN_COLORS.dirt; // darker dirt on vertical/cut faces
+    return TERRAIN_COLORS.dirt;
   };
 
-  // Textured material per terrain color — keeps the biome palette tint on
-  // top of the sheet detail. Repeat 0.5: each 0.5-unit voxel face shows half
-  // the tile (≈1 unit tile) so the stylized blobs read without stamping.
-  const TERRAIN_TEXTURE_REPEAT = [0.5, 0.5];
-  const makeTerrainMaterial = (color) => {
-    if (color === TERRAIN_COLORS.sand) return makeStyleMaterial('sand', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.rock) return makeStyleMaterial('rock', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.dirt) return makeStyleMaterial('dirt', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.forest) return makeStyleMaterial('forest', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.highland) return makeStyleMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.wetland) return makeStyleMaterial('wetland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    if (color === TERRAIN_COLORS.industrial) return makeStyleMaterial('highland', { repeat: TERRAIN_TEXTURE_REPEAT });
-    return makeStyleMaterial('grass', { repeat: TERRAIN_TEXTURE_REPEAT });
-  };
-
-  // =================================================================
-  // OPTIMIZATION PHASE 2: Iterate again and generate ONLY visible voxels.
-  // A voxel is visible if any of its 6 faces is exposed to air.
-  // =================================================================
-  for (let x = 0; x < length; x++) {
-    for (let z = 0; z < breadth; z++) {
-      const height = heightMap[x][z];
-      const biome = biomeMask[x * breadth + z];
-
-      // Get heights of neighbours, handling edges of the map.
-      const h_neg_x = (x > 0) ? heightMap[x - 1][z] : -1;
-      const h_pos_x = (x < length - 1) ? heightMap[x + 1][z] : -1;
-      const h_neg_z = (z > 0) ? heightMap[x][z - 1] : -1;
-      const h_pos_z = (z < breadth - 1) ? heightMap[x][z + 1] : -1;
-
-      // Stack voxels from bottom to top for this (x, z) column
-      for (let y = 0; y <= height; y++) {
-        const isExposed =
-          y === height ||
-          y > h_neg_x ||
-          y > h_pos_x ||
-          y > h_neg_z ||
-          y > h_pos_z;
-
-        if (!isExposed) continue;
-
-        const worldX = (x - length / 2) * VOXEL_SIZE;
-        const worldY = y * VOXEL_SIZE;
-        const worldZ = (z - breadth / 2) * VOXEL_SIZE;
-
-        let color;
-        if (y <= waterLevel) {
-          color = TERRAIN_COLORS.sand; // Lakebed: sand underwater
-        } else if (y <= waterLevel + 1) {
-          color = TERRAIN_COLORS.sand; // shoreline shelf
-        } else if (y < height) { // A side-block
-          color = sideColor(biome);
-        } else { // The top-most block — biome surface, rock on steep drops
-          const slope = Math.max(
-            Math.abs(height - h_neg_x),
-            Math.abs(height - h_pos_x),
-            Math.abs(height - h_neg_z),
-            Math.abs(height - h_pos_z)
-          );
-          color = slope >= 3 ? TERRAIN_COLORS.rock : surfaceColor(biome, blend ? blend[x * breadth + z] : 0);
-        }
-
-        const chunkX = Math.floor(x / TERRAIN_CHUNK_SIZE);
-        const chunkZ = Math.floor(z / TERRAIN_CHUNK_SIZE);
-        const chunkKey = `${chunkX},${chunkZ}`;
-        let chunk = voxelChunks.get(chunkKey);
-        if (!chunk) {
-          chunk = new Map();
-          voxelChunks.set(chunkKey, chunk);
-        }
-        const colorKey = color.toString();
-        let instances = chunk.get(colorKey);
-        if (!instances) {
-          instances = [];
-          chunk.set(colorKey, instances);
-        }
-        instances.push({ worldX, worldY, worldZ });
-      }
-    }
-  }
 
   // Generate trees and bushes on the now-generated terrain surface
   generateVegetation(terrain, heightMap, biomeMask, plateaus, length, breadth, seed, waterLevel);
@@ -995,66 +909,6 @@ export function generateTerrain(length, breadth, seed = 1337) {
     diagnostics: best.diagnostics,
   };
 
-  // Create spatially bounded instanced meshes. Original BoxGeometry,
-  // per-color Lambert materials and shadow behavior remain unchanged.
-  const matrix = new THREE.Matrix4();
-  const materials = new Map();
-
-  voxelChunks.forEach((colorChunks, chunkKey) => {
-    colorChunks.forEach((instances, colorKey) => {
-      let material = materials.get(colorKey);
-      if (!material) {
-        material = makeTerrainMaterial(parseInt(colorKey));
-        patchTerrainUVOffset(material);
-        materials.set(colorKey, material);
-      }
-
-      // Per-instance random atlas offset (deterministic per chunk+color so
-      // a fixed seed always rebuilds an identical world).
-      const geo = voxelGeometry.clone();
-      const offsets = new Float32Array(instances.length * 2);
-      const hash =
-        ((seed * 131071) ^ (parseInt(colorKey) * 7919) ^
-          chunkKey.split(',').reduce((a, b) => ((a * 31 + parseInt(b)) >>> 0), 0)) >>> 0;
-      const rng = mulberry32(hash);
-      for (let i = 0; i < instances.length; i++) {
-        offsets[i * 2] = rng();
-        offsets[i * 2 + 1] = rng();
-      }
-      geo.setAttribute('aUvOffset', new THREE.InstancedBufferAttribute(offsets, 2));
-
-      const instancedMesh = new THREE.InstancedMesh(
-        geo,
-        material,
-        instances.length
-      );
-
-      instances.forEach((instance, index) => {
-        matrix.setPosition(instance.worldX, instance.worldY, instance.worldZ);
-        instancedMesh.setMatrixAt(index, matrix);
-      });
-
-      instancedMesh.instanceMatrix.needsUpdate = true;
-      instancedMesh.receiveShadow = true; // terrain receives but never casts
-      instancedMesh.frustumCulled = true;
-      instancedMesh.name = `terrainChunk_${chunkKey}_${colorKey}`;
-      // InstancedMesh bounds are not inferred reliably until explicitly built.
-      instancedMesh.computeBoundingBox();
-      instancedMesh.computeBoundingSphere();
-
-      terrain.add(instancedMesh);
-    });
-  });
-  for (const child of [...terrain.children]) {
-    if (!child.name.startsWith('terrainChunk_')) continue;
-    terrain.remove(child);
-    child.geometry?.dispose();
-    const chunkMaterials = Array.isArray(child.material) ? child.material : [child.material];
-    chunkMaterials.forEach((material) => {
-      material.map?.dispose();
-      material.dispose();
-    });
-  }
   terrain.add(createTerrainSurfaceShell(heightMap, biomeMask, blend, length, breadth, surfaceColor, sideColor));
   // Exact gameplay proxy. Visual voxels remain visible but never intercept
   // placement or selection raycasts.

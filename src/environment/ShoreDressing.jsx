@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { VOXEL_SIZE, WATER_LEVEL } from '../terrain.js';
 import { cellKey, collectExclusionSets } from './instanceExclusion.js';
@@ -39,9 +39,9 @@ export default function ShoreDressing({ terrainData, trackManager, stationManage
 
   const meshes = useMemo(() => {
     if (!dressing) return null;
-    const reedMaterial = makeStyleMaterial('leaf_light', { color: 0x819b63, roughness: 0.96, side: THREE.DoubleSide });
-    const stoneMaterial = makeStyleMaterial('warm_rock', { color: 0xaa9178, roughness: 0.98 });
-    const fringeMaterial = makeStyleMaterial('forest_ground', { color: 0x5f7b59, roughness: 1 });
+    const reedMaterial = makeStyleMaterial('leaf_light', { color: 0x9dbd75, roughness: 0.96, side: THREE.DoubleSide });
+    const stoneMaterial = makeStyleMaterial('warm_rock', { color: 0xb39878, roughness: 0.98, emissive: 0x3b2d25, emissiveIntensity: 0.18 });
+    const fringeMaterial = makeStyleMaterial('forest_ground', { color: 0x6f955f, roughness: 1 });
     const reedGeometry = new THREE.ConeGeometry(0.025, 0.38, 5);
     const stoneGeometry = new THREE.IcosahedronGeometry(0.18, 0);
     const fringeGeometry = new THREE.CircleGeometry(0.22, 8);
@@ -73,6 +73,12 @@ export default function ShoreDressing({ terrainData, trackManager, stationManage
       fringe: makeInstances(fringeGeometry, fringeMaterial, dressing.wetFringe, 'shoreWetFringe'),
     };
   }, [dressing]);
+  useEffect(() => () => {
+    for (const mesh of Object.values(meshes || {})) {
+      mesh?.geometry?.dispose();
+      mesh?.material?.dispose();
+    }
+  }, [meshes]);
 
   if (!meshes) return null;
   return (

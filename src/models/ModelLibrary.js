@@ -85,6 +85,10 @@ function styleLoadedMaterial(material, category, geometry) {
     roughness: category === 'trains' ? 0.72 : 0.9,
     metalness: category === 'trains' || category === 'rocks' ? 0.18 : 0.04,
     vertexColors: Boolean(geometry.attributes.color),
+    // Protected GLBs use vertex colors but no UV channel. Sample their
+    // painterly family through stable object/world-space projections instead
+    // of letting a missing UV silently select a pale atlas corner.
+    triplanar: !geometry.attributes.uv,
   });
   if (source?.emissive) styled.emissive.copy(source.emissive);
   if (source?.emissiveIntensity) styled.emissiveIntensity = source.emissiveIntensity;

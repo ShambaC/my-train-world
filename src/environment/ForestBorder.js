@@ -41,31 +41,43 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
 
   // --- 2. Estimate total trees for InstancedMesh allocation ---
   let totalTrees = 0;
-  const baseDensity = 3.0; // trees per sq world unit
+  const baseDensity = 1.5; // trees per sq world unit
   for (let r = 0; r < rows; r++) {
-    const offset = 0.3 + r * rowSpacing; // start 0.3 outside terrain edge
+    const offset = 0.3 + r * rowSpacing;
     const density = baseDensity * (1 - (r / rows) * 0.6);
-    // Perimeter of ring at this offset
     const perimL = worldL + offset * 2;
     const perimB = worldB + offset * 2;
-    const area = (perimL * perimB) - (worldL * worldB); // ring area
+    const area = (perimL * perimB) - (worldL * worldB);
     totalTrees += Math.floor(area * density);
   }
-  totalTrees = Math.min(totalTrees, 20000);
+  totalTrees = Math.min(totalTrees, 10000);
 
-  // --- 3. Instanced meshes ---
+  // Low-poly irregular blobs keep the border soft without perfect spheres.
+  const foliageGeo = new THREE.IcosahedronGeometry(0.72, 1);
+  const foliagePositions = foliageGeo.attributes.position;
+  for (let i = 0; i < foliagePositions.count; i += 1) {
+    const x = foliagePositions.getX(i);
+    const y = foliagePositions.getY(i);
+    const z = foliagePositions.getZ(i);
+    const wobble = 1 + 0.1 * Math.sin(x * 13 + y * 7 - z * 11);
+    foliagePositions.setXYZ(i, x * wobble, y * (0.92 + 0.09 * Math.cos(z * 17)), z * wobble);
+  }
+  foliagePositions.needsUpdate = true;
+  foliageGeo.computeVertexNormals();
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.2, 2, 6);
   const trunkMat = new THREE.MeshStandardMaterial({
-    color: 0x4a3728,
+    color: 0x5c4637,
     map: makeStyleTexture('bark'),
+    roughness: 0.95,
   });
   applyWindSway(trunkMat, { leaves: false, strength: 0.6 });
-  const foliageGeo = new THREE.SphereGeometry(0.72, 8, 5);
   const foliageMat = new THREE.MeshStandardMaterial({
-    color: 0x52765b,
+    color: 0x86aa68,
     roughness: 0.94,
     flatShading: true,
-    map: makeStyleTexture('leaf_dark'),
+    emissive: 0x1e3c1d,
+    emissiveIntensity: 0.16,
+    map: makeStyleTexture('leaf_light'),
   });
   applyWindSway(foliageMat, { strength: 0.75 });
 

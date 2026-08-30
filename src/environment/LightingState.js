@@ -58,7 +58,7 @@ export default class LightingState {
       ambientIntensity: p.ambient.intensity,
       hemisphereSky: new THREE.Color(style.hemisphereSky),
       hemisphereGround: new THREE.Color(style.hemisphereGround),
-      hemisphereIntensity: p.ambient.intensity,
+      hemisphereIntensity: Math.min(1.7, p.ambient.intensity * 2.1),
       sunColor: new THREE.Color(p.directional.color),
       sunIntensity: p.directional.intensity,
       sunPosition: new THREE.Vector3(...p.directional.position),

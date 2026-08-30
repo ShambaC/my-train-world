@@ -108,8 +108,8 @@ const WaterShader = {
 
       // --- Depth-based color: deep = dark saturated, shallow = bright,
       // shallowest = warm sand/mud showing through ---
-      float shallowMix = 1.0 - smoothstep(0.25, 1.2, depth);
-      float sandMix = (1.0 - smoothstep(0.1, 0.6, depth)) * 0.55;
+      float shallowMix = 1.0 - smoothstep(0.3, 1.35, depth);
+      float sandMix = (1.0 - smoothstep(0.08, 0.55, depth)) * 0.28;
       vec3 col = mix(uColorDeep, uColorShallow, shallowMix);
       col = mix(col, uColorSand, sandMix);
 
@@ -143,18 +143,17 @@ const WaterShader = {
       float rippleDist = length(rippleCenter);
       float ripple = sin(rippleDist * 14.0 - uTime * 2.2);
       ripple = smoothstep(0.5, 1.0, ripple * 0.5 + 0.5);
-      col = mix(col, uColorFoam, ripple * 0.09 * pond * (0.4 + shallowMix));
+      col = mix(col, uColorFoam, ripple * 0.035 * pond * (0.4 + shallowMix));
 
-      // --- Shore foam: constrained to actual shore cells ---
+      // Keep shoreline accents narrow and translucent in color, never chalky.
       float foamBand = 1.0 - smoothstep(0.03, 0.3, depth);
       float shoreFoam = foamBand * (0.5 + 0.5 * noise(vWorldPos.xz * 8.0 + uTime * 0.8));
-      col = mix(col, uColorFoam, shoreFoam * 0.5);
+      col = mix(col, uColorFoam, shoreFoam * 0.14);
 
-      // --- Animated near-shore ripple ---
       float rippleMask = 1.0 - smoothstep(0.0, 0.7, depth);
       float shoreRipple = sin(depth * 60.0 - uTime * 3.0 + noise(vWorldPos.xz * 2.0) * 3.0);
       shoreRipple = smoothstep(0.4, 1.0, shoreRipple * 0.5 + 0.5) * rippleMask;
-      col = mix(col, uColorFoam, shoreRipple * 0.18);
+      col = mix(col, uColorFoam, shoreRipple * 0.045);
 
       // Interactive foam rings around supports/objects crossing water. Points
       // are supplied from live track/train layout; no foam meshes needed.
@@ -177,14 +176,19 @@ const WaterShader = {
       caustic = smoothstep(0.45, 0.9, caustic * 0.5 + 0.5);
       col += uSunColor * caustic * shallowMix * 0.055 * (1.0 - uNightness);
 
+      // Low-frequency normal response gives water a broad painterly sheen.
+      vec2 waveUv = vWorldPos.xz * 0.18;
+      float waveA = sin(waveUv.x + uTime * 0.42);
+      float waveB = cos(waveUv.y * 1.2 - uTime * 0.31);
+      float waveLight = 0.5 + 0.5 * waveA * waveB;
+      col += uSunColor * waveLight * 0.08 * (0.55 + shallowMix * 0.45);
+
       // --- Broad Fresnel reflection, roughness keeps it calm ---
       vec3 viewDir = normalize(uCameraPos - vWorldPos);
       float fresnel = pow(1.0 - max(dot(viewDir, vec3(0.0, 1.0, 0.0)), 0.0), 2.5);
       col = mix(col, uSkyColor, fresnel * uReflectivity * (1.0 - uRoughness * 0.35));
 
-      float alpha = 0.75;
-
-      gl_FragColor = vec4(col, alpha);
+      gl_FragColor = vec4(col, 1.0);
     }
   `,
 };
@@ -220,6 +224,7 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
     tex.needsUpdate = true;
     return tex;
   }, [heightData]);
+  useEffect(() => () => heightTexture?.dispose(), [heightTexture]);
 
   // River flows along the map's longer axis (directional streaks)
   const flowDir = useMemo(() => {
@@ -228,10 +233,15 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
     }
     return new THREE.Vector2(0, 1);
   }, [heightData]);
+  const terrainSizeVec = useMemo(
+    () => new THREE.Vector2(terrainSize.length, terrainSize.breadth),
+    [terrainSize.length, terrainSize.breadth],
+  );
 
   useFrame((state, delta) => {
     const mat = materialRef.current;
     if (!mat) return;
+    mat.uniforms.uCameraPos.value.copy(state.camera.position);
     mat.uniforms.uTime.value += delta;
     if (lighting) {
       mat.uniforms.uColorDeep.value.copy(lighting.waterDeep);
@@ -321,11 +331,10 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
       <shaderMaterial
         ref={materialRef}
         args={[WaterShader]}
-        transparent
-        depthWrite={false}
+        depthWrite
         side={THREE.DoubleSide}
         uniforms-uHeightMap-value={heightTexture}
-        uniforms-uTerrainSize-value={new THREE.Vector2(terrainSize.length, terrainSize.breadth)}
+        uniforms-uTerrainSize-value={terrainSizeVec}
         uniforms-uWaterY-value={2.0}
         uniforms-uFlowDir-value={flowDir}
         uniforms-uFoamPoints-value={foamPoints}

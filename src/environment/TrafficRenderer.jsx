@@ -17,6 +17,7 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
   const poolRef = useRef(new Map()); // actorId -> THREE.Group
   const enabledRef = useRef(enabled);
   const lastResetRef = useRef(-1);
+  const positionRef = useRef({ x: 0, y: 0, z: 0, yaw: 0 });
   const [poolTick, setPoolTick] = useState(0);
   enabledRef.current = enabled;
 
@@ -98,6 +99,7 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
     if (lastResetRef.current !== trafficManager.resetCount) return; // pool stale
 
     trafficManager.update(delta, state.camera.position, crossingManager);
+    const position = positionRef.current;
     const t = state.clock.elapsedTime;
     const nightness = lighting ? lighting.nightness : 0.6;
     const headGlow = 0.04 + nightness * 0.8;
@@ -118,7 +120,7 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       node.traverse((child) => {
         if (child.userData?.headlamp) child.material.opacity = headGlow;
       });
-      const pos = atDistance(v.path, v.s);
+      const pos = atDistance(v.path, v.s, position);
       node.position.set(pos.x, pos.y + 0.03, pos.z);
       // Models are long along local X — align with actual travel direction.
       node.rotation.y = pos.yaw - Math.PI / 2 + (v.dir < 0 ? Math.PI : 0);
@@ -143,7 +145,7 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       const { light, target } = headlightPool[i];
       const hit = nearest[i];
       if (hit) {
-        const pos = atDistance(hit.v.path, hit.v.s);
+        const pos = atDistance(hit.v.path, hit.v.s, position);
         const fx = Math.sin(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
         const fz = Math.cos(pos.yaw) * (hit.v.dir > 0 ? 1 : -1);
         const hx = hit.node.children[0]?.userData?.headlampX || 0.19;
@@ -159,19 +161,14 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
       const node = poolRef.current.get(w.id);
       if (!node) continue;
 
-      // Respawned walker may have a different variant — swap model
+      // Keep pooled pedestrian geometry stable across respawns. Variant is
+      // simulation metadata; rebuilding a detailed character here caused
+      // unbounded GPU geometry churn on short scenery roads.
       if (node.userData.variant !== w.variant) {
-        for (const child of [...node.children]) {
-          node.remove(child);
-        }
-        const person = createPedestrian(w.variant);
-        person.userData.bobPhase = w.phase;
-        node.add(person);
         node.userData.variant = w.variant;
-        node.userData.animNodes = person.userData.animNodes;
       }
 
-      const pos = atDistance(w.path, w.s);
+      const pos = atDistance(w.path, w.s, position);
       // Sideways offset: perpendicular to the walking direction.
       const perpX = -Math.cos(pos.yaw);
       const perpZ = Math.sin(pos.yaw);

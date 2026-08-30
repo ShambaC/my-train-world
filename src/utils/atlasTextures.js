@@ -59,17 +59,20 @@ const STYLE_SOURCES = Object.freeze({
   soil: soilUrl,
   rock: warmRockUrl,
   warm_rock: warmRockUrl,
+  cool_rock: coolRockUrl,
   'cream-plaster': creamPlasterUrl,
   plaster: creamPlasterUrl,
-  foliage: foliageUrl,
+  foliage: meadowUrl,
+  bush: meadowUrl,
+  asphalt: asphaltUrl,
+  shoulder: roadShoulderUrl,
   road_dirt: dirtRoadUrl,
   deck: platformDeckUrl,
   edge: platformEdgeUrl,
   ballast: ballastUrl,
   bark: warmTimberUrl,
-  leaf_dark: foliageUrl,
-  leaf_light: foliageUrl,
-  bush: shrubUrl,
+  leaf_dark: meadowUrl,
+  leaf_light: meadowUrl,
   planks: sleepersUrl,
   beam: beamUrl,
   wood_deck: bridgeDeckUrl,
@@ -138,15 +141,15 @@ const STYLE_ENTRY_KEYS = Object.freeze({
   cool_rock: 'style-cool-rock',
   'cream-plaster': 'style-cream-plaster',
   plaster: 'style-cream-plaster',
-  foliage: 'style-foliage-variation',
+  foliage: 'style-meadow',
+  bush: 'style-meadow',
+  asphalt: 'style-asphalt',
+  shoulder: 'style-road-shoulder',
   road_dirt: 'style-dirt-road',
-  deck: 'style-platform-deck',
   edge: 'style-platform-edge-stone',
   ballast: 'style-ballast',
-  bark: 'style-warm-timber',
-  leaf_dark: 'style-foliage-variation',
-  leaf_light: 'style-foliage-variation',
-  bush: 'style-shrub-clump-a',
+  leaf_dark: 'style-meadow',
+  leaf_light: 'style-meadow',
   planks: 'style-sleeper-planks',
   beam: 'style-structural-beam',
   wood_deck: 'style-bridge-deck',
@@ -179,7 +182,11 @@ function styleEntry(name) {
 }
 
 function configureAtlasTexture(texture, entry) {
-  texture.colorSpace = entry?.colorSpace === 'linear' ? THREE.NoColorSpace : THREE.SRGBColorSpace;
+  // Atlas encoder stores RGB values as linear; compressed textures must not
+  // receive a second sRGB decode. Source PNGs remain correctly tagged sRGB.
+  texture.colorSpace = entry?.colorSpace === 'linear' || texture.isCompressedTexture
+    ? THREE.NoColorSpace
+    : THREE.SRGBColorSpace;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.magFilter = THREE.LinearFilter;
@@ -197,6 +204,8 @@ function createStyleMap(name, opts = {}) {
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.repeat.set(entry.uv.width, entry.uv.height);
+    // Manifest UVs use WebGL's bottom-left origin. Do not invert again:
+    // double inversion selects a different atlas tile (often pale/blank).
     texture.offset.set(entry.uv.x, entry.uv.y);
   } else {
     texture.repeat.set(opts.repeat?.[0] ?? 1, opts.repeat?.[1] ?? 1);
@@ -231,13 +240,25 @@ export function initializeStyleKTX2(renderer) {
     .detectSupport(renderer);
   ktx2Ready = Promise.all(Object.entries(STYLE_ATLAS_URLS).map(async ([name, url]) => {
     const texture = await ktx2Loader.loadAsync(url);
-    configureAtlasTexture(texture, { colorSpace: name.endsWith('Color') ? 'srgb' : 'linear' });
+    const isLinear = name === 'waterData' || name === 'weatheringMask';
+    configureAtlasTexture(texture, { colorSpace: isLinear ? 'linear' : 'srgb' });
     styleAtlases.set(`${name}.ktx2`, texture);
   })).then(() => {
     for (const [material, binding] of materialBindings) {
       const next = createStyleMap(binding.name, binding.opts);
-      material.map?.dispose();
-      material.map = next;
+      if (material.userData.styleTriplanar) {
+        material.userData.styleTexture?.dispose();
+        material.userData.styleTexture = next;
+        const shader = material.userData.styleShader;
+        if (shader) {
+          shader.uniforms.styleTexture.value = next;
+          shader.uniforms.styleRepeat.value.copy(next.repeat);
+          shader.uniforms.styleOffset.value.copy(next.offset);
+        }
+      } else {
+        material.map?.dispose();
+        material.map = next;
+      }
       material.needsUpdate = true;
     }
     for (const [texture, binding] of textureBindings) {

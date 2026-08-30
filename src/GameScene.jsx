@@ -99,6 +99,15 @@ function Scene({
   const visualFocus = visualFocusRef || { current: { point: new THREE.Vector3(), distance: 0, mode: 'orbit' } };
   const focusTargetRef = useRef(new THREE.Vector3());
   const desiredCameraRef = useRef(new THREE.Vector3());
+  const grid = useMemo(
+    () => createGrid(Math.max(terrainSize.length, terrainSize.breadth)),
+    [terrainSize.length, terrainSize.breadth],
+  );
+  useEffect(() => () => {
+    grid.geometry?.dispose();
+    const materials = Array.isArray(grid.material) ? grid.material : [grid.material];
+    materials.forEach((material) => material?.dispose());
+  }, [grid]);
   const { camera, scene, gl } = useThree();
   const [terrain, setTerrain] = useState(null);
   const [forestBorder, setForestBorder] = useState(null);
@@ -185,6 +194,25 @@ function Scene({
 
     lighting.update(delta);
     advanceWind(delta);
+    const hemi = scene.getObjectByName('hemisphereLight');
+    if (hemi) {
+      hemi.color.copy(lighting.hemisphereSky);
+      hemi.groundColor.copy(lighting.hemisphereGround);
+      hemi.intensity = lighting.hemisphereIntensity;
+    }
+    const dir = scene.getObjectByName('directionalLight');
+    if (dir) {
+      dir.color.copy(lighting.sun.color);
+      dir.intensity = lighting.sun.intensity;
+      dir.position.copy(lighting.sun.position);
+    }
+    if (fogEnabled) {
+      if (!scene.fog) scene.fog = new THREE.FogExp2(lighting.fog.color.getHex(), lighting.fog.density);
+      scene.fog.color.copy(lighting.fog.color);
+      scene.fog.density = fogDensity != null ? fogDensity : lighting.fog.density;
+    } else if (scene.fog) {
+      scene.fog = null;
+    }
     const controls = orbitRef.current;
     const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
     const focusTarget = focusTargetRef.current;
@@ -224,30 +252,6 @@ function Scene({
       visualFocus.current.point.copy(controls.target);
       visualFocus.current.distance = distance;
       if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
-    }
-    const hemi = scene.getObjectByName('hemisphereLight');
-    if (hemi) {
-      hemi.color.copy(lighting.hemisphereSky);
-      hemi.groundColor.copy(lighting.hemisphereGround);
-      hemi.intensity = lighting.hemisphereIntensity;
-    }
-
-
-    const dir = scene.getObjectByName('directionalLight');
-    if (dir) {
-      dir.color.copy(lighting.sun.color);
-      dir.intensity = lighting.sun.intensity;
-      dir.position.copy(lighting.sun.position);
-    }
-
-    if (fogEnabled) {
-      if (!scene.fog) {
-        scene.fog = new THREE.FogExp2(lighting.fog.color.getHex(), lighting.fog.density);
-      }
-      scene.fog.color.copy(lighting.fog.color);
-      scene.fog.density = fogDensity != null ? fogDensity : lighting.fog.density;
-    } else if (scene.fog) {
-      scene.fog = null;
     }
   });
 
@@ -503,7 +507,14 @@ function Scene({
       />
       
       {/* Grid helper */}
-      <primitive object={createGrid(Math.max(terrainSize.length, terrainSize.breadth))} />
+      <primitive object={grid} />
+      <Effects
+        tiltShiftEnabled={tiltShiftEnabled}
+        celShadingEnabled={celShadingEnabled}
+        graphicsQuality={graphicsQuality}
+        visualFocusRef={visualFocusRef}
+        lighting={lighting}
+      />
       
       {/* Camera controls */}
       <OrbitControls
@@ -805,7 +816,7 @@ export default function GameScene({
         dpr={[1, getGraphicsQuality(graphicsQuality).dprCap]}
         shadows
         frameloop="never"
-        gl={{ antialias: true, preserveDrawingBuffer: true }}
+        gl={{ antialias: true }}
         onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
       >
         <RenderScheduler frameLimit={frameLimit} vsync={vsync} paused={paused} />
@@ -860,10 +871,6 @@ export default function GameScene({
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
          />
-        {/* Final color pass always mounted: vanilla now shares the miniature
-            mode's vibrant grading (exposure/saturation/vignette); the tilt
-            blur and cel passes stay opt-in toggles. */}
-        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} graphicsQuality={graphicsQuality} visualFocusRef={visualFocusRef} />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
 
