@@ -187,9 +187,11 @@ export class TrainManager {
       const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
 
       // Speed target: ease down near a station far end and near track ends
+      // Speed target: ease down near a station far end and near track ends
       // (dead ends / reversals), otherwise the user-set global speed.
       let speedTarget = train.speedMax;
-      let station = this.stationManager?.getStationForTrack(currentTrack.id);
+      let station = this.stationManager?.getStationForTrack(currentTrack.id) ||
+                    this.stationManager?.getStationNearPosition(train.position, 2.2);
       if (station) {
         const axial =
           (train.position.x - station.startWorld.x) * station.dir.x +
@@ -200,15 +202,20 @@ export class TrainManager {
           (train.position.z - station.startWorld.z) * station.dir.x
         );
         const inside =
-          axial >= -0.75 &&
-          axial <= platformLen + 0.75 &&
-          lateral <= 1.0 &&
-          Math.abs(train.position.y - station.groundY) <= 0.5;
+          axial >= -1.0 &&
+          axial <= platformLen + 1.0 &&
+          lateral <= 2.2 &&
+          Math.abs(train.position.y - station.groundY) <= 0.8;
         if (inside) {
-          const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
-          const distToStop = towardEnd > 0 ? platformLen - 0.4 - axial : axial - 0.4;
-          if (distToStop > 0 && distToStop < 1.0) {
-            speedTarget = Math.min(speedTarget, Math.max(0.03, distToStop * 0.6));
+          const lastDepart = train.cooldowns.get(station.id);
+          const ready = lastDepart === undefined || (this.time - lastDepart) > this.STOP_COOLDOWN;
+          if (ready) {
+            const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
+            const stopAxial = towardEnd >= 0 ? platformLen - 0.5 : 0.5;
+            const distToStop = towardEnd >= 0 ? stopAxial - axial : axial - stopAxial;
+            if (distToStop > 0 && distToStop < 1.5) {
+              speedTarget = Math.min(speedTarget, Math.max(0.04, distToStop * 0.7));
+            }
           }
         }
       }
@@ -234,7 +241,8 @@ export class TrainManager {
       // calculating tangent/position; using old track for one frame makes
       // train appear to teleport backward at every connection.
       currentTrack = this.trackManager.tracks.get(train.currentTrackId) || currentTrack;
-      station = this.stationManager?.getStationForTrack(currentTrack.id);
+      station = this.stationManager?.getStationForTrack(currentTrack.id) ||
+                this.stationManager?.getStationNearPosition(train.position, 2.2);
 
       // NO clamp here — it resets accumulation before the boundary is crossed.
 
@@ -264,9 +272,7 @@ export class TrainManager {
       // engine leaves the station-bound tracks).
       this.updateCoaches(train);
 
-      // Station stop detection: only on tracks bound to a station. The train
-      // stops at the FAR end of the platform — the end opposite the one it
-      // enters from — never at the building/center.
+      // Station stop detection: triggers at the far end of the station platform.
       if (!station) continue;
 
       const axial =
@@ -278,27 +284,23 @@ export class TrainManager {
         (train.position.z - station.startWorld.z) * station.dir.x
       );
       const inside =
-        axial >= -0.75 &&
-        axial <= platformLen + 0.75 &&
-        lateral <= 1.0 &&
-        Math.abs(train.position.y - station.groundY) <= 0.5;
+        axial >= -1.0 &&
+        axial <= platformLen + 1.0 &&
+        lateral <= 2.2 &&
+        Math.abs(train.position.y - station.groundY) <= 0.8;
 
       if (inside) {
-        // Re-stop only once the departure cooldown has expired — a dead-end
-        // reversal or short loop right after the station must not trigger a
-        // second 5s stop.
         const lastDepart = train.cooldowns.get(station.id);
         const ready = lastDepart === undefined || (this.time - lastDepart) > this.STOP_COOLDOWN;
         if (ready) {
           const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
-          const atFarEnd = towardEnd > 0 ? axial >= platformLen - 0.4 : axial <= 0.4;
+          const atFarEnd = towardEnd >= 0 ? axial >= platformLen - 0.75 : axial <= 0.75;
           if (atFarEnd) {
             train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
+            train.cooldowns.set(station.id, this.time);
           }
         }
       } else if (train.cooldowns.has(station.id)) {
-        // Forget the cooldown only after it has expired, so a train that
-        // quickly returns (dead-end just outside) cannot re-stop.
         const lastDepart = train.cooldowns.get(station.id);
         if (this.time - lastDepart > this.STOP_COOLDOWN) {
           train.cooldowns.delete(station.id);

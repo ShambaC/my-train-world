@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import menuArt from '../assets/ui/ui-menu-key-art.png';
 import { UI_ICONS } from './iconRegistry';
 import { QUALITY_OPTIONS, CustomGraphicsControls } from './PerformanceSettings.jsx';
+import { dofState, updateDof, subscribeDof } from '../postprocessing/dofState.js';
 
 const SIZE_PRESETS = [
   { key: 'small', label: 'Small', size: { length: 100, breadth: 100 }, hint: 'Quick build' },
@@ -221,6 +222,11 @@ export default function MainMenu({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [deleteTarget, renameTarget, showNewWorld, view]);
+
+  const [dofTunerEnabled, setDofTunerEnabled] = useState(() => dofState.showTuner ?? false);
+  useEffect(() => {
+    return subscribeDof((s) => setDofTunerEnabled(s.showTuner ?? false));
+  }, []);
 
   const volume = (key, label) => (
     <label className="block text-sm font-semibold text-[#c5d0df]">
@@ -461,13 +467,24 @@ export default function MainMenu({
                 </div>
               </div>
               <div className={`${settingsTab === 'developer' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
-                <div className="text-sm font-semibold text-[#c5d0df]">Developer tools</div>
                 <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>
                     <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
                     <span className="mt-0.5 block text-xs text-[#aebbd0]">Show FPS, WebGL, world, and interaction values in gameplay.</span>
                   </span>
                   <input type="checkbox" checked={showDebug} onChange={(event) => onToggleDebug(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#e5a94f]" />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                  <span>
+                    <span className="block text-sm font-semibold text-[#c5d0df]">Miniature Bokeh Tuner panel</span>
+                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the live interactive bokeh tuning overlay when Miniature Mode is active.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={dofTunerEnabled}
+                    onChange={(event) => updateDof({ showTuner: event.target.checked })}
+                    className="h-5 w-5 shrink-0 accent-[#e5a94f]"
+                  />
                 </label>
                 <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>

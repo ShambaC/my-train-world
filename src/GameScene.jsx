@@ -20,6 +20,7 @@ import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
 import StationRoleMenu from './ui/StationRoleMenu';
 import EngineMenu from './ui/EngineMenu';
+import DofDebugPanel from './ui/DofDebugPanel';
 import RenderScheduler from './render/RenderScheduler';
 import { ActivityManager } from './ambient/ActivityManager';
 import ActivityRenderer from './ambient/ActivityRenderer';
@@ -835,6 +836,9 @@ export default function GameScene({
         />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
+
+      {/* Real-time DoF Tuning Slider Overlay */}
+      <DofDebugPanel tiltShiftEnabled={tiltShiftEnabled} />
 
       {/* Radial engine picker */}
       {engineMenu && (

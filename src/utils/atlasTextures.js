@@ -171,6 +171,9 @@ export function makeAtlasMaterial(name, opts = {}) {
     metalness: opts.metalness ?? 0.08,
     flatShading: opts.flatShading ?? false,
     dithering: true,
+    polygonOffset: opts.polygonOffset ?? false,
+    polygonOffsetFactor: opts.polygonOffsetFactor ?? 0,
+    polygonOffsetUnits: opts.polygonOffsetUnits ?? 0,
   });
 
   const base = getStyleTexture(name, opts);

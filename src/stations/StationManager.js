@@ -97,11 +97,11 @@ export class StationManager {
 
   /**
    * Recompute which tracks run beside a station (a stop happens there).
-   * Detect tracks one or two blocks from the station marker, axially
-   * overlapping, and at the station ground height (bridges excluded).
+   * Detects tracks up to 3 blocks away from the station marker.
    */
   rebuildBindings(trackManager) {
     this.trackBindings.clear();
+    if (!trackManager) return;
     for (const station of this.stations.values()) {
       const along = station.lengthCells * 0.5;
       for (const track of trackManager.getAllTracks()) {
@@ -109,9 +109,10 @@ export class StationManager {
         const dz = track.position.z - station.startWorld.z;
         const t = dx * station.dir.x + dz * station.dir.z;
         const lateral = Math.abs(dx * station.dir.z - dz * station.dir.x);
-        if (Math.abs(track.position.y - station.groundY) > 0.3) continue;
-        if (Math.abs(t) > along + 0.75) continue;
-        if (lateral < 0.5 || lateral > 1.0) continue;
+        const dy = Math.abs(track.position.y - station.groundY);
+        if (dy > 0.8) continue;
+        if (t < -1.0 || t > along + 1.0) continue;
+        if (lateral > 2.2) continue; // Detect tracks up to 3-4 blocks away
         this.trackBindings.set(track.id, station.id);
       }
     }
@@ -120,5 +121,23 @@ export class StationManager {
   getStationForTrack(trackId) {
     const stationId = this.trackBindings.get(trackId);
     return stationId ? this.stations.get(stationId) : null;
+  }
+
+  /**
+   * Find any station located within proximity of a world position (up to 3 blocks).
+   */
+  getStationNearPosition(pos, maxDist = 2.0) {
+    for (const station of this.stations.values()) {
+      const platformLen = station.lengthCells * 0.5;
+      const dx = pos.x - station.startWorld.x;
+      const dz = pos.z - station.startWorld.z;
+      const axial = dx * station.dir.x + dz * station.dir.z;
+      const lateral = Math.abs(dx * station.dir.z - dz * station.dir.x);
+      const dy = Math.abs(pos.y - station.groundY);
+      if (axial >= -1.0 && axial <= platformLen + 1.0 && lateral <= maxDist && dy <= 0.8) {
+        return station;
+      }
+    }
+    return null;
   }
 }
