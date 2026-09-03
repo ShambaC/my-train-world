@@ -36,9 +36,9 @@ function getGantryTemplate() {
   if (gantryTemplate) return gantryTemplate;
   gantryTemplate = new THREE.Group();
 
-  const postMat = makeAtlasMaterial('steel_beam', { color: COLORS.post });
-  const beamMat = makeAtlasMaterial('steel_beam', { color: COLORS.beam });
-  const insulatorMat = makeAtlasMaterial('insulator', { color: COLORS.insulator });
+  const postMat = makeAtlasMaterial('structural_beam', { color: COLORS.post });
+  const beamMat = makeAtlasMaterial('structural_beam', { color: COLORS.beam });
+  const insulatorMat = makeAtlasMaterial('ceramic_insulator', { color: COLORS.insulator });
 
   const postGeo = new THREE.CylinderGeometry(0.035, 0.045, BEAM_Y, 6);
   for (const side of [-1, 1]) {

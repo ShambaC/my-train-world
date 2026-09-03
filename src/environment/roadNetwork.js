@@ -347,12 +347,30 @@ const GLOW_HALO_GEO = new THREE.SphereGeometry(0.11, 8, 8);
 const SIGN_POST_GEO = new THREE.CylinderGeometry(0.012, 0.016, 0.42, 6);
 const SIGN_BOARD_GEO = new THREE.BoxGeometry(0.15, 0.1, 0.02);
 
-// Road quads span ~0.5-1 world unit each; repeat ~0.35 keeps the texture
-// tile at roughly 1.5-3 units so the pattern reads, not screams.
-const ASPHALT_MAT = makeAtlasMaterial('asphalt', { repeat: [0.35, 0.35] });
-const SHOULDER_MAT = makeAtlasMaterial('shoulder', { repeat: [0.3, 0.3] });
-const DIRT_MAT = makeAtlasMaterial('road_dirt', { repeat: [0.3, 0.3] });
-const POLE_MAT = makeAtlasMaterial('lamp_post');
+// Road quads span ~0.5-1 world unit each; polygon offset ensures roads
+// are always cleanly drawn in front of terrain voxels without moire z-fighting.
+const ASPHALT_MAT = makeAtlasMaterial('asphalt', {
+  repeat: [0.2, 0.2],
+  roughness: 0.88,
+  polygonOffset: true,
+  polygonOffsetFactor: -2.0,
+  polygonOffsetUnits: -4.0,
+});
+const SHOULDER_MAT = makeAtlasMaterial('road_shoulder', {
+  repeat: [0.2, 0.2],
+  roughness: 0.90,
+  polygonOffset: true,
+  polygonOffsetFactor: -1.5,
+  polygonOffsetUnits: -3.0,
+});
+const DIRT_MAT = makeAtlasMaterial('dirt_road', {
+  repeat: [0.2, 0.2],
+  roughness: 0.92,
+  polygonOffset: true,
+  polygonOffsetFactor: -2.0,
+  polygonOffsetUnits: -4.0,
+});
+const POLE_MAT = makeAtlasMaterial('lamp_metal');
 const LAMP_HEAD_MAT = new THREE.MeshLambertMaterial({ color: 0x2c2c2c, flatShading: true });
 const GLOW_CORE_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
@@ -373,7 +391,7 @@ const GLOW_HALO_MAT = new THREE.MeshBasicMaterial({
 });
 GLOW_HALO_MAT.userData = { nightGlow: true, baseOpacity: 0.35 };
 const SIGN_POST_MAT = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true });
-const SIGN_BOARD_MAT = makeAtlasMaterial('green_sign');
+const SIGN_BOARD_MAT = makeAtlasMaterial('sign_green_paint');
 
 const MESH_FLAGS = { castShadow: true, receiveShadow: true };
 

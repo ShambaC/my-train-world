@@ -33,9 +33,9 @@ export default function SelectionPanel({
   const [now, setNow] = useState(Date.now());
   const panelRef = useRef(null);
 
-  // Refresh inspection numbers periodically (trains move, counts change).
+  // Refresh inspection numbers frequently (trains move, dwell timers count down).
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 500);
+    const interval = setInterval(() => setNow(Date.now()), 100);
     return () => clearInterval(interval);
   }, []);
 
@@ -111,13 +111,17 @@ export default function SelectionPanel({
     const comp = connectedComponent(trackManager, train.currentTrackId);
     const stops = stationsAlongComponent(stationManager, trackManager, train.currentTrackId);
     const stop = stationForTrack(stationManager, train.currentTrackId);
+    const dbg = train.debug;
     body = [
-      `${train.active ? 'Moving' : 'Stopped'} • speed ${train.speed.toFixed(2)}`,
+      `${train.active ? (dbg?.dwellState ? `DWELLING (${dbg.dwellState.remaining}s)` : 'Moving') : 'Stopped'} • speed ${train.speed.toFixed(2)}`,
       `Coaches: ${(train.coaches || []).length} • consist ${consistDistance(train).toFixed(1)}u`,
       stop ? `Station stop here: ${stop.role}` : null,
     ].filter(Boolean);
     technicalBody = [
       `Current track: ${train.currentTrackId}`,
+      dbg ? `Station: bound=${dbg.stationBound || 'none'} near=${dbg.stationNear || 'none'}` : null,
+      dbg ? `Zone: ${dbg.insideStationZone ? 'INSIDE' : 'OUTSIDE'} (ax ${dbg.axial}u, lat ${dbg.lateral}u, dy ${dbg.dy}u)` : null,
+      dbg?.dwellState ? `Dwell: ${dbg.dwellState.remaining}s left at ${dbg.dwellState.stationId}` : (dbg?.cooldownRemaining ? `Cooldown: ${dbg.cooldownRemaining}s` : 'Dwell ready'),
       comp.trackCount > 0 ? `Connected tracks: ${comp.trackCount} • route ${comp.distance.toFixed(1)}u • dead ends ${comp.deadEnds}` : null,
       stops.length > 0 ? `Stations reachable: ${stops.length}` : null,
     ].filter(Boolean);

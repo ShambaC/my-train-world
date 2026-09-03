@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import menuArt from '../assets/ui/ui-menu-key-art.png';
 import { UI_ICONS } from './iconRegistry';
+import { QUALITY_OPTIONS, CustomGraphicsControls } from './PerformanceSettings.jsx';
+import { dofState, updateDof, subscribeDof } from '../postprocessing/dofState.js';
 
 const SIZE_PRESETS = [
   { key: 'small', label: 'Small', size: { length: 100, breadth: 100 }, hint: 'Quick build' },
@@ -179,6 +181,8 @@ export default function MainMenu({
   onDuplicateWorld,
   onExportWorld,
   onDeleteWorld,
+  graphicsQuality,
+  onGraphicsQualityChange,
   frameLimit,
   onFrameLimitChange,
   vsync,
@@ -218,6 +222,11 @@ export default function MainMenu({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [deleteTarget, renameTarget, showNewWorld, view]);
+
+  const [dofTunerEnabled, setDofTunerEnabled] = useState(() => dofState.showTuner ?? false);
+  useEffect(() => {
+    return subscribeDof((s) => setDofTunerEnabled(s.showTuner ?? false));
+  }, []);
 
   const volume = (key, label) => (
     <label className="block text-sm font-semibold text-[#c5d0df]">
@@ -337,21 +346,23 @@ export default function MainMenu({
               </div>
               <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
 
-              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5`}>
-                <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {FRAME_LIMIT_OPTIONS.map((option) => (
-                    <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                      {option === 0 ? 'Uncapped' : option}
-                    </button>
-                  ))}
+              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5 space-y-5`}>
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {FRAME_LIMIT_OPTIONS.map((option) => (
+                      <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                        {option === 0 ? 'Uncapped' : option}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <label className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-5 flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]`}>
-                Vsync
-                <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
-              </label>
+                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                  Vsync
+                  <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
+                </label>
+              </div>
 
               <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
                 <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>
@@ -363,6 +374,31 @@ export default function MainMenu({
               </div>
 
               <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                {/* Graphics Quality Preset */}
+                <div>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {QUALITY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateGraphics({ graphicsQuality: opt.value })}
+                        className={`rounded-xl border p-2 text-sm font-semibold transition ${
+                          (globalGraphics.graphicsQuality || 'medium') === opt.value
+                            ? 'border-[#e5a94f] bg-[#244b67] text-white'
+                            : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-[#aebbd0]">
+                    {QUALITY_OPTIONS.find((o) => o.value === (globalGraphics.graphicsQuality || 'medium'))?.desc}
+                  </p>
+                  {(globalGraphics.graphicsQuality === 'custom') && <CustomGraphicsControls />}
+                </div>
+
                 <div>
                   <div className="text-sm font-semibold text-[#c5d0df]">Default environment</div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -431,13 +467,24 @@ export default function MainMenu({
                 </div>
               </div>
               <div className={`${settingsTab === 'developer' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
-                <div className="text-sm font-semibold text-[#c5d0df]">Developer tools</div>
                 <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>
                     <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
                     <span className="mt-0.5 block text-xs text-[#aebbd0]">Show FPS, WebGL, world, and interaction values in gameplay.</span>
                   </span>
                   <input type="checkbox" checked={showDebug} onChange={(event) => onToggleDebug(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#e5a94f]" />
+                </label>
+                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                  <span>
+                    <span className="block text-sm font-semibold text-[#c5d0df]">Miniature Bokeh Tuner panel</span>
+                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the live interactive bokeh tuning overlay when Miniature Mode is active.</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={dofTunerEnabled}
+                    onChange={(event) => updateDof({ showTuner: event.target.checked })}
+                    className="h-5 w-5 shrink-0 accent-[#e5a94f]"
+                  />
                 </label>
                 <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
                   <span>

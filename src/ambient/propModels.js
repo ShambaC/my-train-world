@@ -29,11 +29,11 @@ const SHIRT_MATS = SHIRT_COLORS.map((c) => new THREE.MeshLambertMaterial({ color
 const PANTS_MATS = PANTS_COLORS.map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const SKIN_MATS = SKIN_COLORS.map((c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }));
 const HEAD_MAT = new THREE.MeshLambertMaterial({ color: 0x2b2b2b, flatShading: true }); // hat/cap
-const CRATE_MAT = makeAtlasMaterial('crate', { color: 0x8a6a3f });
-const SACK_MAT = makeAtlasMaterial('sack', { color: 0xc9a86a });
-const COAL_MAT = makeAtlasMaterial('coal', { color: 0x2a2a2a });
-const CONTAINER_MAT = makeAtlasMaterial('container', { color: 0xd65b20 });
-const TANKER_MAT = makeAtlasMaterial('tanker', { color: 0xb9c2c9 });
+const CRATE_MAT = makeAtlasMaterial('woven_cargo', { color: 0x8a6a3f });
+const SACK_MAT = makeAtlasMaterial('fabric_variation', { color: 0xc9a86a });
+const COAL_MAT = makeAtlasMaterial('boiler_chassis_metal', { color: 0x2a2a2a });
+const CONTAINER_MAT = makeAtlasMaterial('cargo_variation', { color: 0xd65b20 });
+const TANKER_MAT = makeAtlasMaterial('galvanized_steel', { color: 0xb9c2c9 });
 
 const randOf = (arr) => arr[Math.floor(Math.random() * arr.length)];
 

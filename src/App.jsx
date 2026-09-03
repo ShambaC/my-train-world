@@ -130,6 +130,7 @@ function loadGlobalGraphicsDefaults() {
     soundsEnabled: defaults.soundsEnabled ?? true,
     trafficEnabled: defaults.trafficEnabled ?? true,
     signalsEnabled: defaults.signalsEnabled ?? true,
+    graphicsQuality: defaults.graphicsQuality ?? 'medium',
   };
 }
 
@@ -168,6 +169,9 @@ function AppRuntime() {
   const [vsync, setVsync] = useState(() => {
     const v = loadSettings().vsync;
     return v === undefined || v === null ? true : v;
+  });
+  const [graphicsQuality, setGraphicsQuality] = useState(() => {
+    return loadSettings().graphicsQuality || 'medium';
   });
   const [tracksVersion, setTracksVersion] = useState(0);
   const [trainDirection, setTrainDirection] = useState(1); // 1=forward, -1=backward
@@ -767,6 +771,8 @@ function AppRuntime() {
         onDuplicateWorld={handleDuplicateWorld}
         onExportWorld={handleExportWorld}
         onDeleteWorld={handleDeleteWorld}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={(tier) => { setGraphicsQuality(tier); saveSettings({ graphicsQuality: tier }); }}
         frameLimit={frameLimit}
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
@@ -834,6 +840,7 @@ function AppRuntime() {
         selectedTrainId={selection?.kind === 'train' ? selection.id : null}
         roadManager={roadManagerRef.current}
         signalManager={signalManagerRef.current}
+        graphicsQuality={graphicsQuality}
         onCanvasReady={(canvas) => { canvasRef.current = canvas; }}
       />
       
@@ -876,6 +883,8 @@ function AppRuntime() {
         onFrameLimitChange={setFrameLimit}
         vsync={vsync}
         onVsyncChange={setVsync}
+        graphicsQuality={graphicsQuality}
+        onGraphicsQualityChange={(tier) => { setGraphicsQuality(tier); saveSettings({ graphicsQuality: tier }); }}
         ambientEnabled={ambientEnabled}
         onAmbientChange={setAmbientEnabled}
         soundsEnabled={soundsEnabled}

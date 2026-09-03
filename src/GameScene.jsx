@@ -20,6 +20,7 @@ import StationRenderer from './stations/StationRenderer';
 import CoachMenu from './ui/CoachMenu';
 import StationRoleMenu from './ui/StationRoleMenu';
 import EngineMenu from './ui/EngineMenu';
+import DofDebugPanel from './ui/DofDebugPanel';
 import RenderScheduler from './render/RenderScheduler';
 import { ActivityManager } from './ambient/ActivityManager';
 import ActivityRenderer from './ambient/ActivityRenderer';
@@ -36,6 +37,9 @@ import { cameraBus } from './utils/cameraBus';
 import { clone } from './utils/editActions';
 import CameraCollision, { constrainCamera } from './environment/cameraCollision';
 import PracticalLights from './environment/PracticalLights';
+import ShoreDressing from './environment/ShoreDressing.jsx';
+import VisualReviewHarness from './render/VisualReviewHarness.jsx';
+import { getQualityPreset } from './render/graphicsQuality.js';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -86,7 +90,10 @@ function Scene({
   trainsVersion,
   stationsScatterVersion,
   showAxes,
+  showDebug = false,
+  graphicsQuality = 'medium',
 }) {
+  const qualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const terrainRef = useRef();
   const waterRef = useRef();
   const orbitRef = useRef(null);
@@ -202,10 +209,11 @@ function Scene({
       if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
     }
 
-    const amb = scene.getObjectByName('ambientLight');
-    if (amb) {
-      amb.color.copy(lighting.ambient.color);
-      amb.intensity = lighting.ambient.intensity;
+    const hemi = scene.getObjectByName('hemisphereLight');
+    if (hemi) {
+      hemi.color.copy(lighting.hemisphereSky);
+      hemi.groundColor.copy(lighting.hemisphereGround);
+      hemi.intensity = lighting.ambient.intensity;
     }
 
     const dir = scene.getObjectByName('directionalLight');
@@ -234,7 +242,7 @@ function Scene({
     sceneReadyRef.current = false;
     onSceneProgress?.(0.2);
 
-    const border = createForestBorder(terrainSize, terrainSeed);
+    const border = createForestBorder(terrainSize, terrainSeed, 10, 1.1, newTerrain.userData);
     setForestBorder(border);
 
     if (onTerrainGenerated) {
@@ -265,18 +273,21 @@ function Scene({
 
   return (
     <>
-      <Skybox timeOfDay={timeOfDay} />
+      <Skybox timeOfDay={timeOfDay} lighting={lighting} />
       <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} />
       
-      {/* Lighting */}
-      <ambientLight name="ambientLight" intensity={0.5} />
+      {/* Hemisphere Lighting */}
+      <hemisphereLight
+        name="hemisphereLight"
+        args={[0xaad4f5, 0x526b48, 0.75]}
+      />
       <directionalLight
         name="directionalLight"
         position={[50, 60, 30]}
         intensity={1.15}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={qualityPreset.shadowMapSize || 2048}
+        shadow-mapSize-height={qualityPreset.shadowMapSize || 2048}
         shadow-camera-far={200}
         shadow-camera-left={-shadowHalf}
         shadow-camera-right={shadowHalf}
@@ -300,7 +311,13 @@ function Scene({
          lighting={lighting}
          trackManager={trackManager}
          trainManager={trainManager}
+         quality={qualityPreset}
        />
+
+      {/* Shoreline Dressing */}
+      {terrain && (
+        <ShoreDressing terrainData={terrain?.userData} lighting={lighting} />
+      )}
 
       {/* Forest Border */}
       {forestBorder && (
@@ -356,6 +373,7 @@ function Scene({
           history={history}
           trackManager={trackManager}
           roadManager={roadManager}
+          showDebug={showDebug}
         />
       )}
 
@@ -401,6 +419,7 @@ function Scene({
           stationsVersion={stationsScatterVersion}
           roadManager={roadManager}
           lighting={lighting}
+          quality={qualityPreset}
         />
       )}
 
@@ -485,6 +504,9 @@ function Scene({
 
       {/* Axis indicator gizmo */}
       <AxisGizmo visible={showAxes} />
+
+      {/* Visual Review Dev Harness */}
+      <VisualReviewHarness camera={camera} orbitRef={orbitRef} />
     </>
   );
 }
@@ -531,7 +553,9 @@ export default function GameScene({
   paused = false,
   debugDetail = 'compact',
   debugPosition = 'top-left',
+  graphicsQuality = 'medium',
 }) {
+  const rootQualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const [sceneStats, setSceneStats] = useState({
     voxelCount: 0,
     genTimeMs: 0,
@@ -748,6 +772,7 @@ export default function GameScene({
       <Canvas
         camera={{ position: [20, 15, 20], fov: 60 }}
         shadows
+        dpr={[1, rootQualityPreset.dprCap || 2]}
         frameloop="never"
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         onCreated={({ gl }) => onCanvasReady?.(gl.domElement)}
@@ -801,13 +826,22 @@ export default function GameScene({
           trainsVersion={trainsVersion}
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
+           showDebug={showDebug}
+           graphicsQuality={graphicsQuality}
          />
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt
             blur and cel passes stay opt-in toggles. */}
-        <Effects tiltShiftEnabled={tiltShiftEnabled} celShadingEnabled={celShadingEnabled} />
+        <Effects 
+          tiltShiftEnabled={tiltShiftEnabled} 
+          celShadingEnabled={celShadingEnabled}
+          graphicsQuality={graphicsQuality}
+        />
         <FPSTracker show={showDebug} onFpsUpdate={setFps} onMemoryUpdate={setMemStats} />
       </Canvas>
+
+      {/* Real-time DoF Tuning Slider Overlay */}
+      <DofDebugPanel tiltShiftEnabled={tiltShiftEnabled} />
 
       {/* Radial engine picker */}
       {engineMenu && (
@@ -863,6 +897,7 @@ export default function GameScene({
             <div>Frame limit: {frameLimit === 0 ? 'Uncapped' : frameLimit} • Vsync: {vsync ? 'On' : 'Off'}</div>
             {selectedTool && <div className="border-t border-gray-600 pt-2"><div>Tool: {selectedTool.name}</div>{selectedTool.type === 'station' ? <div>Orientation: {stationOrientation === 'vertical' ? 'Vertical (R to flip)' : 'Horizontal (R to flip)'}</div> : <div>Rotation: {rotation}°</div>}{heightOffset !== 0 && <div>Height: {heightOffset.toFixed(1)}</div>}</div>}
           </>}
+          <TrainTelemetryOverlay trainManager={trainManager} />
         </div>
       )}
     </div>
@@ -904,4 +939,45 @@ function FPSTracker({ show, onFpsUpdate, onMemoryUpdate }) {
   });
 
   return null;
+}
+
+function TrainTelemetryOverlay({ trainManager }) {
+  const [trains, setTrains] = useState([]);
+
+  useEffect(() => {
+    const update = () => {
+      const all = trainManager?.getAllTrains() || [];
+      setTrains(all.map((t) => ({ id: t.id, active: t.active, debug: t.debug })));
+    };
+    const interval = setInterval(update, 100);
+    update();
+    return () => clearInterval(interval);
+  }, [trainManager]);
+
+  if (!trains.length) return null;
+
+  return (
+    <div className="border-t border-gray-600 pt-2 text-xs space-y-1.5">
+      <div className="font-bold text-cyan-300">Active Trains Station Telemetry:</div>
+      {trains.map((t) => {
+        const d = t.debug;
+        if (!d) return <div key={t.id} className="text-gray-400">{t.id}: telemetry initializing...</div>;
+        return (
+          <div key={t.id} className="rounded bg-black/50 p-1.5 border border-white/10 font-mono text-[11px] leading-tight space-y-0.5">
+            <div className="text-yellow-300 font-semibold">{t.id} ({t.active ? 'Running' : 'Parked'}, Track: {d.currentTrackId})</div>
+            <div className="text-gray-300">Bound: <span className="text-white">{d.stationBound || 'none'}</span> | Near: <span className="text-white">{d.stationNear || 'none'}</span></div>
+            <div className="text-gray-300">Axial: <span className="text-white">{d.axial}u</span> | Lat: <span className="text-white">{d.lateral}u</span> | dY: <span className="text-white">{d.dy}u</span></div>
+            <div className="text-gray-300">Zone: <span className={d.insideStationZone ? 'text-green-400 font-bold' : 'text-red-400'}>{d.insideStationZone ? 'INSIDE' : 'OUTSIDE'}</span> | CD: <span className="text-white">{d.cooldownRemaining}s</span></div>
+            {d.dwellState ? (
+              <div className="text-green-300 font-bold bg-green-950/70 px-1 py-0.5 rounded border border-green-700/50">
+                DWELLING at {d.dwellState.stationId} ({d.dwellState.remaining}s left)
+              </div>
+            ) : (
+              <div className="text-gray-400">Dwell: None | Spd: {d.speed} (Tgt: {d.speedTarget})</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

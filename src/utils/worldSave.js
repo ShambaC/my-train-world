@@ -397,6 +397,7 @@ export function applyWorld(data, { trackManager, stationManager, trainManager, r
       station.group = group;
       stationManager.restoreStation(station);
     }
+    stationManager?.rebuildBindings?.(trackManager);
 
     trainManager.clear();
     trainManager.nextId = data.trains?.nextId ?? 0;

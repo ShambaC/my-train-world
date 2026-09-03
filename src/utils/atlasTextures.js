@@ -1,134 +1,136 @@
 /**
- * Atlas textures — loads individual tile PNGs and builds Lambert materials
- * from them. Each tile is a separate seamless 1024x1024 file.
- *
- * New simplified API: makeAtlasMaterial(name, opts) and
- * makeAtlasTexture(name, repeat) where name is the flat tile filename stem.
- *
- * Materials may be created before textures finish loading (module-level
- * constants). They register as pending and get their map applied once
- * preloadAtlases() resolves.
+ * Style & Atlas textures loader
+ * Loads high-quality painterly style textures (KTX2 / PNG) and manages material caching.
  */
 import * as THREE from 'three';
-
-// ── Tile imports ──────────────────────────────────────────────────────────
-import grassTex from '../assets/Textures/tiles/grass.png';
-import forestTex from '../assets/Textures/tiles/forest.png';
-import sandTex from '../assets/Textures/tiles/sand.png';
-import rockTex from '../assets/Textures/tiles/rock.png';
-import dirtTex from '../assets/Textures/tiles/dirt.png';
-import wetlandTex from '../assets/Textures/tiles/wetland.png';
-import highlandTex from '../assets/Textures/tiles/highland.png';
-import snowTex from '../assets/Textures/tiles/snow.png';
-import asphaltTex from '../assets/Textures/tiles/asphalt.png';
-import shoulderTex from '../assets/Textures/tiles/shoulder.png';
-import roadDirtTex from '../assets/Textures/tiles/road_dirt.png';
-import deckTex from '../assets/Textures/tiles/deck.png';
-import edgeTex from '../assets/Textures/tiles/edge.png';
-import ballastTex from '../assets/Textures/tiles/ballast.png';
-import barkTex from '../assets/Textures/tiles/bark.png';
-import leafDarkTex from '../assets/Textures/tiles/leaf_dark.png';
-import leafLightTex from '../assets/Textures/tiles/leaf_light.png';
-import bushTex from '../assets/Textures/tiles/bush.png';
-import planksTex from '../assets/Textures/tiles/planks.png';
-import beamTex from '../assets/Textures/tiles/beam.png';
-import woodDeckTex from '../assets/Textures/tiles/wood_deck.png';
-import forestGroundTex from '../assets/Textures/tiles/forest_ground.png';
-import railTex from '../assets/Textures/tiles/rail.png';
-import lampPostTex from '../assets/Textures/tiles/lamp_post.png';
-import steelBeamTex from '../assets/Textures/tiles/steel_beam.png';
-import galvanizedTex from '../assets/Textures/tiles/galvanized.png';
-import redPaintTex from '../assets/Textures/tiles/red_paint.png';
-import greenSignTex from '../assets/Textures/tiles/green_sign.png';
-import tankerTex from '../assets/Textures/tiles/tanker.png';
-import containerTex from '../assets/Textures/tiles/container.png';
-import crateTex from '../assets/Textures/tiles/crate.png';
-import crateLidTex from '../assets/Textures/tiles/crate_lid.png';
-import sackTex from '../assets/Textures/tiles/sack.png';
-import coalTex from '../assets/Textures/tiles/coal.png';
-import fabricTex from '../assets/Textures/tiles/fabric.png';
-import denimTex from '../assets/Textures/tiles/denim.png';
-import insulatorTex from '../assets/Textures/tiles/insulator.png';
-import wickerTex from '../assets/Textures/tiles/wicker.png';
-
-// ── Flat name → URL map ───────────────────────────────────────────────────
-const TILES = {
-  grass: grassTex, forest: forestTex, sand: sandTex, rock: rockTex,
-  dirt: dirtTex, wetland: wetlandTex, highland: highlandTex, snow: snowTex,
-  asphalt: asphaltTex, shoulder: shoulderTex, road_dirt: roadDirtTex,
-  deck: deckTex, edge: edgeTex, ballast: ballastTex,
-  bark: barkTex, leaf_dark: leafDarkTex, leaf_light: leafLightTex,
-  bush: bushTex, planks: planksTex, beam: beamTex,
-  wood_deck: woodDeckTex, forest_ground: forestGroundTex,
-  rail: railTex, lamp_post: lampPostTex, steel_beam: steelBeamTex,
-  galvanized: galvanizedTex, red_paint: redPaintTex,
-  green_sign: greenSignTex, tanker: tankerTex, container: containerTex,
-  crate: crateTex, crate_lid: crateLidTex, sack: sackTex, coal: coalTex,
-  fabric: fabricTex, denim: denimTex, insulator: insulatorTex,
-  wicker: wickerTex,
-};
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { STYLE_TEXTURES, STYLE_ATLASES, STYLE_TEXTURE_COUNT } from '../assets/Textures/style/styleTextureManifest.js';
 
 // ── State ─────────────────────────────────────────────────────────────────
-const baseTextures = new Map();   // name → THREE.Texture (base, repeat 1)
-const baseTexturePromises = new Map();
-const pendingMats = [];           // { mat, name, opts }
+const textureCache = new Map(); // name -> THREE.Texture
+const texturePromises = new Map();
+const pendingMats = []; // { mat, name, opts }
+
+let ktx2Loader = null;
+
+export function initKTX2Loader(renderer) {
+  if (!ktx2Loader) {
+    ktx2Loader = new KTX2Loader();
+    ktx2Loader.setTranscoderPath(`${import.meta.env.BASE_URL}basis/`);
+    if (renderer) {
+      ktx2Loader.detectSupport(renderer);
+    }
+  }
+  return ktx2Loader;
+}
 
 /**
- * Configure a texture for use as a game asset diffuse map.
+ * Configure a texture for rendering in sRGB or linear data mode.
  */
-function configureTexture(tex) {
-  tex.colorSpace = THREE.SRGBColorSpace;
+function configureTexture(tex, isColor = true, anisotropy = 4) {
+  tex.colorSpace = isColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.generateMipmaps = true;
-  tex.anisotropy = 4;
+  tex.anisotropy = Math.min(anisotropy, 8);
 }
 
+const STYLE_ALIASES = {
+  // Stations & Platforms
+  'deck': 'platform_deck',
+  'platform_deck': 'platform_deck',
+  'platform_edge': 'platform_edge_stone',
+  // Roads & Curbs
+  'shoulder': 'road_shoulder',
+  'road_shoulder': 'road_shoulder',
+  'road_dirt': 'dirt_road',
+  'dirt_road': 'dirt_road',
+  'lamp_post': 'lamp_metal',
+  'green_sign': 'sign_green_paint',
+  // Tracks & Infrastructure
+  'rail': 'rail_steel',
+  'rail_steel': 'rail_steel',
+  'planks': 'sleeper_planks',
+  'sleeper_planks': 'sleeper_planks',
+  'beam': 'structural_beam',
+  'structural_beam': 'structural_beam',
+  'wood_deck': 'bridge_deck',
+  'bridge_deck': 'bridge_deck',
+  'steel_beam': 'structural_beam',
+  'insulator': 'ceramic_insulator',
+  'red_paint': 'crossing_red_metal',
+  // Props & Cargo
+  'crate': 'woven_cargo',
+  'sack': 'fabric_variation',
+  'coal': 'boiler_chassis_metal',
+  'container': 'cargo_variation',
+  'tanker': 'galvanized_steel',
+  'crate_lid': 'warm_timber',
+};
+
 /**
- * Returns the base texture for a tile name (shared, repeat 1).
- * Each import is a URL that Vite resolves at build time; the browser
- * begins loading the image at module import. By the time React mounts
- * and materials are first rendered, the images are typically ready.
+ * Get or load a style texture by semantic name.
  */
-function getBaseTexture(name) {
-  let tex = baseTextures.get(name);
+export function getStyleTexture(name, opts = {}) {
+  const resolvedName = STYLE_ALIASES[name] || STYLE_ALIASES[name?.replace(/-/g, '_')] || name;
+  let tex = textureCache.get(resolvedName);
   if (tex) return tex;
-  const url = TILES[name];
-  if (!url) {
-    console.warn(`[atlasTextures] Unknown tile: ${name}`);
+
+  const def = STYLE_TEXTURES[resolvedName] || STYLE_TEXTURES[resolvedName.replace(/-/g, '_')];
+  if (!def) {
+    console.warn(`[atlasTextures] Unknown style texture: ${name} (resolved: ${resolvedName})`);
     return null;
   }
+
   let resolveTexture;
   let rejectTexture;
   const ready = new Promise((resolve, reject) => {
     resolveTexture = resolve;
     rejectTexture = reject;
   });
-  tex = new THREE.TextureLoader().load(url, () => resolveTexture(tex), undefined, rejectTexture);
-  configureTexture(tex);
-  baseTextures.set(name, tex);
-  baseTexturePromises.set(name, ready);
+
+  const isColor = def.colorSpace === 'srgb';
+  const url = def.url; // Use resolved Vite asset URL
+
+  tex = new THREE.TextureLoader().load(url, (loadedTex) => {
+    configureTexture(loadedTex, isColor, opts.anisotropy || 4);
+    if (opts.repeat) {
+      loadedTex.repeat.set(opts.repeat[0], opts.repeat[1]);
+    }
+    resolveTexture(loadedTex);
+  }, undefined, (err) => {
+    console.error(`[atlasTextures] Failed loading texture: ${name}`, err);
+    rejectTexture(err);
+  });
+
+  configureTexture(tex, isColor, opts.anisotropy || 4);
+  if (opts.repeat) {
+    tex.repeat.set(opts.repeat[0], opts.repeat[1]);
+  }
+
+  textureCache.set(name, tex);
+  texturePromises.set(name, ready);
   return tex;
 }
 
 /**
- * Preload all tiles. Called from App.jsx — resolves once every image
- * has been decoded by the browser. Keeps the old call site happy.
+ * Preload all style textures. Called during asset initialization.
  */
-export const ATLAS_TEXTURE_COUNT = Object.keys(TILES).length;
+export const ATLAS_TEXTURE_COUNT = STYLE_TEXTURE_COUNT;
 
 export function preloadAtlases(onProgress) {
-  const names = Object.keys(TILES);
+  const names = Object.keys(STYLE_TEXTURES);
   let loaded = 0;
   const promises = names.map((name) => {
-    getBaseTexture(name);
-    return baseTexturePromises.get(name).then(() => {
+    getStyleTexture(name);
+    return texturePromises.get(name)?.then(() => {
       loaded += 1;
       onProgress?.(loaded / names.length);
-    });
+    }) || Promise.resolve();
   });
+
   return Promise.all(promises).then(() => {
     for (const { mat, name, opts } of pendingMats.splice(0)) {
       assignMap(mat, name, opts);
@@ -137,44 +139,63 @@ export function preloadAtlases(onProgress) {
 }
 
 function assignMap(mat, name, opts = {}) {
-  const base = getBaseTexture(name);
+  const base = getStyleTexture(name, opts);
   if (!base) return;
-  mat.map = base.clone();
-  mat.map.needsUpdate = true;
-  mat.map.repeat.set(opts.repeat?.[0] ?? 1, opts.repeat?.[1] ?? 1);
+  const clone = base.clone();
+  clone.colorSpace = base.colorSpace;
+  clone.generateMipmaps = true;
+  clone.minFilter = THREE.LinearMipmapLinearFilter;
+  clone.magFilter = THREE.LinearFilter;
+  clone.anisotropy = 8;
+  clone.wrapS = THREE.RepeatWrapping;
+  clone.wrapT = THREE.RepeatWrapping;
+  if (opts.repeat) {
+    clone.repeat.set(opts.repeat[0], opts.repeat[1]);
+  }
+  clone.needsUpdate = true;
+  mat.map = clone;
   mat.needsUpdate = true;
 }
 
 /**
- * MeshLambertMaterial with a textured tile map.
- * The material color keeps the original palette so biome/type identity
- * is preserved on top of the texture detail.
+ * Make a material with a textured tile map.
+ * Supports MeshStandardMaterial or MeshLambertMaterial.
  */
 export function makeAtlasMaterial(name, opts = {}) {
-  const mat = new THREE.MeshLambertMaterial({
+  const isStandard = opts.standard !== false;
+  const MatClass = isStandard ? THREE.MeshStandardMaterial : THREE.MeshLambertMaterial;
+
+  const mat = new MatClass({
     color: opts.color ?? 0xffffff,
-    flatShading: opts.flatShading ?? true,
+    roughness: opts.roughness ?? 0.82,
+    metalness: opts.metalness ?? 0.08,
+    flatShading: opts.flatShading ?? false,
+    dithering: true,
+    polygonOffset: opts.polygonOffset ?? false,
+    polygonOffsetFactor: opts.polygonOffsetFactor ?? 0,
+    polygonOffsetUnits: opts.polygonOffsetUnits ?? 0,
   });
-  const base = getBaseTexture(name);
+
+  const base = getStyleTexture(name, opts);
   if (base) {
     assignMap(mat, name, opts);
   } else {
     pendingMats.push({ mat, name, opts });
   }
+
   if (opts.emissive !== undefined) {
     mat.emissive.set(opts.emissive);
     mat.emissiveIntensity = opts.emissiveIntensity ?? 1;
   }
+
   return mat;
 }
 
 /**
- * Returns a cloned texture with the given repeat, independent per caller.
- * Used by ForestBorder (MeshStandardMaterial) and any future use case
- * that needs a raw texture instead of a full material.
+ * Return a cloned texture with the given repeat.
  */
 export function makeAtlasTexture(name, repeat = [1, 1]) {
-  const base = getBaseTexture(name);
+  const base = getStyleTexture(name);
   if (!base) return null;
   const tex = base.clone();
   tex.needsUpdate = true;

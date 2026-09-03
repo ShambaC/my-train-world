@@ -7,8 +7,8 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // Treat GLB models as static assets (import gives URL)
-  assetsInclude: ["**/*.glb"],
+  // Treat GLB models and KTX2 textures as static assets (import gives URL)
+  assetsInclude: ["**/*.glb", "**/*.ktx2"],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

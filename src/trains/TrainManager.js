@@ -7,6 +7,7 @@
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
 import { COACH_LENGTH } from './coachTypes.js';
 import { DEFAULT_ENGINE } from './engineTypes.js';
+import { MAX_STATION_LATERAL } from '../stations/StationManager.js';
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -162,21 +163,124 @@ export class TrainManager {
         continue;
       }
 
-      // Coaches trail even while the engine is parked (active = false)
-      if (!train.active) {
-        this.updateCoaches(train);
-        continue;
-      }
-
-      // Station dwell: hold position until the stop time is over
-      if (train.dwell) {
-        if (this.time < train.dwell.until) {
-          train.speed += (0 - train.speed) * (1 - Math.exp(-6 * deltaTime));
-          this.updateCoaches(train);
+      // Update cooldown exit state across all stations for this train
+      for (const [sId, record] of Array.from(train.cooldowns.entries())) {
+        const s = this.stationManager?.getStation(sId);
+        const departTime = typeof record === 'number' ? record : record?.departTime;
+        if (!s) {
+          train.cooldowns.delete(sId);
           continue;
         }
-        train.cooldowns.set(train.dwell.stationId, this.time);
+        const platformLen = s.lengthCells * 0.5;
+        const dx = train.position.x - s.startWorld.x;
+        const dz = train.position.z - s.startWorld.z;
+        const a = dx * s.dir.x + dz * s.dir.z;
+        const lat = Math.abs(dx * s.dir.z - dz * s.dir.x);
+        const dy = Math.abs(train.position.y - s.groundY);
+        const inZone = a >= -1.0 && a <= platformLen + 1.0 && lat <= MAX_STATION_LATERAL && dy <= 0.8;
+        if (!inZone) {
+          if (typeof record === 'object' && record) record.hasExited = true;
+          if (departTime === undefined || this.time - departTime > 2.0) {
+            train.cooldowns.delete(sId);
+          }
+        }
+      }
+
+      // Station dwell check: hold position and 0 speed until dwell duration completes
+      if (train.dwell) {
+        if (this.time < train.dwell.until) {
+          train.speed = 0;
+          this.updateCoaches(train);
+          const dwellStation = this.stationManager?.getStation(train.dwell.stationId);
+          let dwellAxial = 0, dwellLateral = 0, dwellDy = 0;
+          if (dwellStation) {
+            const dx = train.position.x - dwellStation.startWorld.x;
+            const dz = train.position.z - dwellStation.startWorld.z;
+            dwellAxial = dx * dwellStation.dir.x + dz * dwellStation.dir.z;
+            dwellLateral = Math.abs(dx * dwellStation.dir.z - dz * dwellStation.dir.x);
+            dwellDy = Math.abs(train.position.y - dwellStation.groundY);
+          }
+          train.debug = {
+            currentTrackId: train.currentTrackId,
+            stationBound: this.stationManager?.getStationForTrack(currentTrack.id)?.id || null,
+            stationNear: this.stationManager?.getStationNearPosition(train.position, MAX_STATION_LATERAL)?.id || null,
+            activeStationId: train.dwell.stationId,
+            axial: Number(dwellAxial.toFixed(2)),
+            lateral: Number(dwellLateral.toFixed(2)),
+            dy: Number(dwellDy.toFixed(2)),
+            insideStationZone: true,
+            cooldownRemaining: 0,
+            dwellState: {
+              stationId: train.dwell.stationId,
+              remaining: Number(Math.max(0, train.dwell.until - this.time).toFixed(1)),
+            },
+            speed: 0,
+            speedTarget: 0,
+          };
+          continue;
+        }
+        train.cooldowns.set(train.dwell.stationId, { departTime: this.time, hasExited: false });
         train.dwell = null;
+      }
+
+      // Station lookup (bound track or proximity)
+      const stationBound = this.stationManager?.getStationForTrack(currentTrack.id);
+      const stationNear = this.stationManager?.getStationNearPosition(train.position, MAX_STATION_LATERAL);
+      let station = stationBound || stationNear;
+
+      let axial = 0;
+      let lateral = 0;
+      let dy = 0;
+      let inside = false;
+      let ready = false;
+      let towardEnd = 1;
+      let stopAxial = 0;
+
+      if (station) {
+        const platformLen = station.lengthCells * 0.5;
+        const dx = train.position.x - station.startWorld.x;
+        const dz = train.position.z - station.startWorld.z;
+        axial = dx * station.dir.x + dz * station.dir.z;
+        lateral = Math.abs(dx * station.dir.z - dz * station.dir.x);
+        dy = Math.abs(train.position.y - station.groundY);
+        inside =
+          axial >= -1.0 &&
+          axial <= platformLen + 1.0 &&
+          lateral <= MAX_STATION_LATERAL &&
+          dy <= 0.8;
+
+        if (inside) {
+          const cd = train.cooldowns.get(station.id);
+          const departTime = typeof cd === 'number' ? cd : cd?.departTime;
+          const hasExited = typeof cd === 'object' ? cd?.hasExited : (departTime ? (this.time - departTime) > this.STOP_COOLDOWN : true);
+          ready = departTime === undefined || (hasExited && (this.time - departTime) > 2.0);
+
+          towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
+          stopAxial = towardEnd >= 0 ? platformLen - 0.75 : 0.75;
+        }
+      }
+
+      // If parked / inactive, populate telemetry and skip movement
+      if (!train.active) {
+        this.updateCoaches(train);
+        const currentCd = station ? train.cooldowns.get(station.id) : null;
+        const cdTime = typeof currentCd === 'number' ? currentCd : currentCd?.departTime;
+        const cooldownRemaining = cdTime ? Math.max(0, (cdTime + this.STOP_COOLDOWN) - this.time) : 0;
+        train.debug = {
+          currentTrackId: train.currentTrackId,
+          stationBound: stationBound?.id || null,
+          stationNear: stationNear?.id || null,
+          activeStationId: station?.id || null,
+          axial: Number(axial.toFixed(2)),
+          lateral: Number(lateral.toFixed(2)),
+          dy: Number(dy.toFixed(2)),
+          insideStationZone: inside,
+          cooldownRemaining: Number(cooldownRemaining.toFixed(1)),
+          dwellState: null,
+          speed: 0,
+          speedTarget: 0,
+        };
+        continue;
       }
 
       // Movement sign from heading vs track tangent
@@ -186,41 +290,23 @@ export class TrainManager {
       );
       const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
 
-      // Speed target: ease down near a station far end and near track ends
-      // (dead ends / reversals), otherwise the user-set global speed.
+      // Active Train Movement: Speed Target & Deceleration
       let speedTarget = train.speedMax;
-      let station = this.stationManager?.getStationForTrack(currentTrack.id);
-      if (station) {
-        const axial =
-          (train.position.x - station.startWorld.x) * station.dir.x +
-          (train.position.z - station.startWorld.z) * station.dir.z;
-        const platformLen = station.lengthCells * 0.5;
-        const lateral = Math.abs(
-          (train.position.x - station.startWorld.x) * station.dir.z -
-          (train.position.z - station.startWorld.z) * station.dir.x
-        );
-        const inside =
-          axial >= -0.75 &&
-          axial <= platformLen + 0.75 &&
-          lateral <= 1.0 &&
-          Math.abs(train.position.y - station.groundY) <= 0.5;
-        if (inside) {
-          const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
-          const distToStop = towardEnd > 0 ? platformLen - 0.4 - axial : axial - 0.4;
-          if (distToStop > 0 && distToStop < 1.0) {
-            speedTarget = Math.min(speedTarget, Math.max(0.03, distToStop * 0.6));
-          }
+      if (station && inside && ready) {
+        const distToStop = towardEnd >= 0 ? stopAxial - axial : axial - stopAxial;
+        if (distToStop > 0 && distToStop < 2.0) {
+          speedTarget = Math.min(speedTarget, Math.max(0.04, distToStop * 0.6));
         }
       }
+
       const trackLen = this.trackLength(currentTrack);
       const distToBoundary = sign > 0 ? (1 - train.progress) * trackLen : train.progress * trackLen;
-      // Ease down ONLY at true dead ends — interior track joins must not
-      // slow the train (it would crawl across every segment boundary).
+      // Ease down ONLY at true dead ends
       const endId = sign > 0 ? currentTrack.connections.front : currentTrack.connections.back;
       if (!endId && distToBoundary < 0.12) {
         speedTarget = Math.min(speedTarget, Math.max(0.02, distToBoundary * 1.2));
       }
-      train.speed += (speedTarget - train.speed) * (1 - Math.exp(-2.0 * deltaTime));
+      train.speed += (speedTarget - train.speed) * (1 - Math.exp(-2.5 * deltaTime));
 
       train.progress += train.speed * deltaTime * sign;
 
@@ -230,13 +316,10 @@ export class TrainManager {
         this.transition(train, currentTrack, 'back');
       }
 
-      // Transition may switch train.currentTrackId. Refresh track before
-      // calculating tangent/position; using old track for one frame makes
-      // train appear to teleport backward at every connection.
       currentTrack = this.trackManager.tracks.get(train.currentTrackId) || currentTrack;
-      station = this.stationManager?.getStationForTrack(currentTrack.id);
-
-      // NO clamp here — it resets accumulation before the boundary is crossed.
+      const updatedBound = this.stationManager?.getStationForTrack(currentTrack.id);
+      const updatedNear = this.stationManager?.getStationNearPosition(train.position, MAX_STATION_LATERAL);
+      station = updatedBound || updatedNear;
 
       // Follow tangent so facing = motion, smooth through curves
       const newTangent = rotLocalToWorld(
@@ -246,7 +329,7 @@ export class TrainManager {
       const newSign = (newTangent.x * train.heading.x + newTangent.z * train.heading.z) >= 0 ? 1 : -1;
       train.heading = { x: newTangent.x * newSign, z: newTangent.z * newSign };
 
-      // Curve banking — presentation only, eased so it never snaps.
+      // Curve banking
       let bankTarget = 0;
       if (currentTrack.type === 'curved') {
         const tA = tangentOnTrack('curved', train.progress);
@@ -258,52 +341,63 @@ export class TrainManager {
       train.bank += (bankTarget - train.bank) * (1 - Math.exp(-5 * deltaTime));
 
       this.updateTrainPosition(train, currentTrack);
-
-      // Coaches trail the engine along the track path — ALWAYS, independent
-      // of station detection (which would otherwise freeze them once the
-      // engine leaves the station-bound tracks).
       this.updateCoaches(train);
 
-      // Station stop detection: only on tracks bound to a station. The train
-      // stops at the FAR end of the platform — the end opposite the one it
-      // enters from — never at the building/center.
-      if (!station) continue;
+      // Station stop detection: triggers when train reaches or crosses stop threshold
+      if (station) {
+        const platformLen = station.lengthCells * 0.5;
+        const dx = train.position.x - station.startWorld.x;
+        const dz = train.position.z - station.startWorld.z;
+        axial = dx * station.dir.x + dz * station.dir.z;
+        lateral = Math.abs(dx * station.dir.z - dz * station.dir.x);
+        dy = Math.abs(train.position.y - station.groundY);
+        inside =
+          axial >= -1.0 &&
+          axial <= platformLen + 1.0 &&
+          lateral <= MAX_STATION_LATERAL &&
+          dy <= 0.8;
 
-      const axial =
-        (train.position.x - station.startWorld.x) * station.dir.x +
-        (train.position.z - station.startWorld.z) * station.dir.z;
-      const platformLen = station.lengthCells * 0.5;
-      const lateral = Math.abs(
-        (train.position.x - station.startWorld.x) * station.dir.z -
-        (train.position.z - station.startWorld.z) * station.dir.x
-      );
-      const inside =
-        axial >= -0.75 &&
-        axial <= platformLen + 0.75 &&
-        lateral <= 1.0 &&
-        Math.abs(train.position.y - station.groundY) <= 0.5;
+        if (inside) {
+          const cd = train.cooldowns.get(station.id);
+          const departTime = typeof cd === 'number' ? cd : cd?.departTime;
+          const hasExited = typeof cd === 'object' ? cd?.hasExited : (departTime ? (this.time - departTime) > this.STOP_COOLDOWN : true);
+          ready = departTime === undefined || (hasExited && (this.time - departTime) > 2.0);
 
-      if (inside) {
-        // Re-stop only once the departure cooldown has expired — a dead-end
-        // reversal or short loop right after the station must not trigger a
-        // second 5s stop.
-        const lastDepart = train.cooldowns.get(station.id);
-        const ready = lastDepart === undefined || (this.time - lastDepart) > this.STOP_COOLDOWN;
-        if (ready) {
-          const towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
-          const atFarEnd = towardEnd > 0 ? axial >= platformLen - 0.4 : axial <= 0.4;
-          if (atFarEnd) {
-            train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
+          if (ready) {
+            towardEnd = train.heading.x * station.dir.x + train.heading.z * station.dir.z;
+            stopAxial = towardEnd >= 0 ? platformLen - 0.75 : 0.75;
+            const atFarEnd = towardEnd >= 0 ? axial >= stopAxial : axial <= stopAxial;
+            if (atFarEnd) {
+              train.dwell = { stationId: station.id, until: this.time + this.STOP_DURATION };
+              train.speed = 0;
+              train.cooldowns.set(station.id, { departTime: this.time, hasExited: false });
+            }
           }
         }
-      } else if (train.cooldowns.has(station.id)) {
-        // Forget the cooldown only after it has expired, so a train that
-        // quickly returns (dead-end just outside) cannot re-stop.
-        const lastDepart = train.cooldowns.get(station.id);
-        if (this.time - lastDepart > this.STOP_COOLDOWN) {
-          train.cooldowns.delete(station.id);
-        }
       }
+
+      // Telemetry object for debug HUD and selection inspection
+      const currentCd = station ? train.cooldowns.get(station.id) : null;
+      const cdTime = typeof currentCd === 'number' ? currentCd : currentCd?.departTime;
+      const cooldownRemaining = cdTime ? Math.max(0, (cdTime + this.STOP_COOLDOWN) - this.time) : 0;
+
+      train.debug = {
+        currentTrackId: train.currentTrackId,
+        stationBound: updatedBound?.id || stationBound?.id || null,
+        stationNear: updatedNear?.id || stationNear?.id || null,
+        activeStationId: station?.id || null,
+        axial: Number(axial.toFixed(2)),
+        lateral: Number(lateral.toFixed(2)),
+        dy: Number(dy.toFixed(2)),
+        insideStationZone: inside,
+        cooldownRemaining: Number(cooldownRemaining.toFixed(1)),
+        dwellState: train.dwell ? {
+          stationId: train.dwell.stationId,
+          remaining: Number(Math.max(0, train.dwell.until - this.time).toFixed(1)),
+        } : null,
+        speed: Number(train.speed.toFixed(2)),
+        speedTarget: Number(speedTarget.toFixed(2)),
+      };
     }
   }
 

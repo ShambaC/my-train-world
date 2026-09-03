@@ -17,7 +17,7 @@ export const MIN_STATION_LENGTH = 8; // voxels
 export const MAX_STATION_LENGTH = 40; // voxels
 
 const VOXEL = 0.5;
-const STATION_DECK_MAT = makeAtlasMaterial('deck', { repeat: [1, 0.33] });
+const STATION_DECK_MAT = makeAtlasMaterial('platform_deck', { repeat: [1, 0.33] });
 const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEIGHT, VOXEL);
 
 // Shared practical-light materials (additive, toneMapped off — cheap glow
