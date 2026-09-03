@@ -728,6 +728,12 @@ function AppRuntime() {
         else if (trainControlsOpen) setTrainControlsOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
       }
+      if (e.key === 'F9') {
+        if (!showDebug || appView !== 'gameplay' || !sceneReady) return;
+        e.preventDefault();
+        setDebugOverlayVisible((value) => !value);
+        return;
+      }
       // Q/E adjust track bridge height in fixed half-unit steps.
       if (selectedTool?.type === 'track' && (e.key.toLowerCase() === 'q' || e.key.toLowerCase() === 'e')) {
         if (e.repeat) return;

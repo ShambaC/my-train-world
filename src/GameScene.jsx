@@ -445,6 +445,7 @@ function Scene({
       {terrain && trafficEnabled && (
         <TrafficRenderer
           trafficManager={trafficManager}
+          lighting={lighting}
           roadManager={roadManager}
           crossingManager={crossingManager}
           enabled={trafficEnabled && ambientEnabled}
