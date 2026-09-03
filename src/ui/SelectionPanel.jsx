@@ -113,8 +113,8 @@ export default function SelectionPanel({
     const stop = stationForTrack(stationManager, train.currentTrackId);
     const dbg = train.debug;
     body = [
-      `${train.active ? (dbg?.dwellState ? `DWELLING (${dbg.dwellState.remaining}s)` : 'Moving') : 'Stopped'} • speed ${train.speed.toFixed(2)}`,
-      `Coaches: ${(train.coaches || []).length} • consist ${consistDistance(train).toFixed(1)}u`,
+      `${train.active ? (dbg?.dwellState ? `DWELLING (${dbg.dwellState.remaining}s)` : 'Moving') : 'Stopped'} • current speed ${train.speed.toFixed(2)}`,
+      showTechnicalInfo ? `Target speed ${Number(train.speedMax ?? 0.5).toFixed(2)}` : null,
       stop ? `Station stop here: ${stop.role}` : null,
     ].filter(Boolean);
     technicalBody = [

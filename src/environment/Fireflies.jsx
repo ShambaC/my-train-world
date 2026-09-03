@@ -9,12 +9,11 @@ const FLIES_PER_CENTER = FLY_COUNT / CENTER_COUNT;
 
 /**
  * Fireflies at night, placed in more numerous loose clusters. Half the
- * clusters hover over water, the rest gather on land near trees (forest
  * biome) and random meadow spots. Instanced additive spheres with per-point
  * drift; opacity follows LightingState.nightness so they fade out entirely
  * during day. Deterministic placement from the world seed.
  */
-export default function Fireflies({ terrainData, lighting }) {
+export default function Fireflies({ terrainData, lighting, simulationPaused = false }) {
   const meshRef = useRef();
 
   const { positions, phases, base } = useMemo(() => {
@@ -107,7 +106,7 @@ export default function Fireflies({ terrainData, lighting }) {
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   useFrame((state) => {
-    if (!meshRef.current) return;
+    if (simulationPaused) return;
     const t = state.clock.elapsedTime;
     for (let i = 0; i < FLY_COUNT; i++) {
       const b = base[i];

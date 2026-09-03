@@ -3,6 +3,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WATER_LEVEL } from '../terrain.js';
 import { COACH_LENGTH, DEFAULT_COACH } from '../trains/coachTypes.js';
+import { classifyTrackRoadContact, CROSSING_CONTACT } from '../crossings/crossingGeometry.js';
 
 // Water plane sits at WATER_LEVEL but the shader waves crest ~0.08 above.
 // Tracks placed at exact WATER_LEVEL get partially submerged by wave peaks.
@@ -273,14 +274,31 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
       let valid = true;
       let reason = null;
       if (selectedToolRef.current.type === 'track') {
-        valid = trackManager.isValidPlacement(
-          snapped,
-          selectedToolRef.current.trackType,
+        const candidateTrack = {
+          type: selectedToolRef.current.trackType,
+          position: { x: snapped.x, y: snapped.y, z: snapped.z },
           rotation,
-          point.y,
-          isWater ? null : groundHit.faceNormal
-        );
-        if (!valid) {
+        };
+        if (roadManager) {
+          const contact = classifyTrackRoadContact(candidateTrack, roadManager.getSegments());
+          if (contact.kind === CROSSING_CONTACT.PARALLEL) {
+            valid = false;
+            reason = 'track and road must cross at 90°';
+          } else if (contact.kind === CROSSING_CONTACT.CURVED) {
+            valid = false;
+            reason = 'roads cannot overlap curved track';
+          }
+        }
+        if (valid) {
+          valid = trackManager.isValidPlacement(
+            snapped,
+            selectedToolRef.current.trackType,
+            rotation,
+            point.y,
+            isWater ? null : groundHit.faceNormal
+          );
+        }
+        if (!valid && !reason) {
           reason = (point.y < WATER_LEVEL && snapped.y < WATER_LEVEL + 0.15) ? 'water' : 'occupied or invalid spot';
         }
 
@@ -291,9 +309,18 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
         }, valid, reason);
         return;
       } else if (selectedToolRef.current.type === 'road') {
-        // Roads stay permissive: allow track overlap/crossings, reject only
-        // water, duplicate same-axis road tiles, and stations.
         valid = point.y >= WATER_LEVEL && roadManager?.isRoadPlacementValid(snapped, rotation) !== false;
+        if (valid && roadManager && trackManager) {
+          const candidateSegments = roadManager.getCandidateSegments(snapped, rotation);
+          const contacts = trackManager.getAllTracks().map((track) => classifyTrackRoadContact(track, candidateSegments));
+          if (contacts.some((result) => result.kind === CROSSING_CONTACT.PARALLEL)) {
+            valid = false;
+            reason = 'track and road must cross at 90°';
+          } else if (contacts.some((result) => result.kind === CROSSING_CONTACT.CURVED)) {
+            valid = false;
+            reason = 'roads cannot overlap curved track';
+          }
+        }
         if (valid && stationManager) {
           const st = stationManager.getStationAtPosition(snapped, 0);
           if (st) { valid = false; reason = 'station here'; }
@@ -303,7 +330,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
 
       publish({
         ...snapped,
-        rotation: rotation,
+        rotation,
         type: selectedToolRef.current.type === 'road' ? 'road' : selectedToolRef.current.trackType,
       }, valid, reason);
     } else {

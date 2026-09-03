@@ -234,7 +234,8 @@ export default function StationRenderer({
       station.group.traverse((child) => {
         const mat = child.material;
         if (mat?.userData?.nightGlow) {
-          mat.opacity = mat.userData.baseOpacity * (0.03 + nightness * 0.97);
+          mat.opacity = mat.userData.baseOpacity * nightness;
+
         }
       });
     }

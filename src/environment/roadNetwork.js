@@ -375,7 +375,8 @@ const LAMP_HEAD_MAT = new THREE.MeshLambertMaterial({ color: 0x2c2c2c, flatShadi
 const GLOW_CORE_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
   transparent: true,
-  opacity: 0.85,
+  opacity: 0,
+
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,
@@ -384,7 +385,8 @@ GLOW_CORE_MAT.userData = { nightGlow: true, baseOpacity: 0.85 };
 const GLOW_HALO_MAT = new THREE.MeshBasicMaterial({
   color: 0xffb86a,
   transparent: true,
-  opacity: 0.35,
+  opacity: 0,
+
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,
@@ -853,5 +855,21 @@ export class RoadManager {
       }
     }
     return out;
+  }
+  /**
+   * Return prospective world-space segments for one snapped user road tile.
+   * Does not mutate layout; used by placement validation.
+   */
+  getCandidateSegments(position, rotation) {
+    const dirX = Math.abs(Math.sin(rotation)) > 0.5 ? 1 : 0;
+    const dirZ = Math.abs(Math.cos(rotation)) > 0.5 ? 1 : 0;
+    const y = position.y - 0.005;
+    const half = ROAD_TILE_LENGTH / 2;
+    return [{
+      a: { x: position.x - dirX * half, y, z: position.z - dirZ * half },
+      b: { x: position.x + dirX * half, y, z: position.z + dirZ * half },
+      roadId: '__candidate__',
+      type: 'branch',
+    }];
   }
 }

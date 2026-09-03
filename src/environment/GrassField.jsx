@@ -140,7 +140,7 @@ FLOWER_GEO.translate(0, 0.5, 0);
  * hidden (zero-scaled) under tracks, stations, roads and scattered buildings,
  * exactly like ScatterProps. Deterministic per terrain seed.
  */
-export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting, quality }) {
+export default function GrassField({ terrainData, trackManager, stationManager, trackCount, stationsVersion, roadManager, lighting, quality, simulationPaused = false }) {
   const groupRef = useRef(new THREE.Group());
   const layoutRef = useRef([]);
   const layoutByCellRef = useRef(new Map());
@@ -447,7 +447,10 @@ export default function GrassField({ terrainData, trackManager, stationManager, 
   // translucency, and a night dim on brightness.
   useFrame(() => {
     const s = bladeUniforms;
-    s.uTime.value = windTime.value;
+    if (!simulationPaused) {
+      s.uTime.value = windTime.value;
+    }
+    if (simulationPaused) return;
     s.uSunDir.value.copy(lighting.sun.position).normalize();
     s.uSunColor.value.copy(lighting.sun.color).multiplyScalar(lighting.sun.intensity);
     s.uBrightness.value = 0.85 * (1 - 0.7 * lighting.nightness);

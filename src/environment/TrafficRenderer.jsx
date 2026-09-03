@@ -12,7 +12,7 @@ import { createVehicle } from './vehicleModels.js';
  * the pool is rebuilt then. Per-frame motion is applied imperatively —
  * no React reconciliation, no re-renders.
  */
-export default function TrafficRenderer({ trafficManager, roadManager, crossingManager, lighting, enabled = true }) {
+export default function TrafficRenderer({ trafficManager, roadManager, crossingManager, lighting, enabled = true, simulationPaused = false }) {
   const rootRef = useRef();
   const poolRef = useRef(new Map()); // actorId -> THREE.Group
   const enabledRef = useRef(enabled);
@@ -97,10 +97,11 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
     if (!enabledRef.current) return;
     if (lastResetRef.current !== trafficManager.resetCount) return; // pool stale
 
-    trafficManager.update(delta, state.camera.position, crossingManager);
+    if (!simulationPaused) trafficManager.update(delta, state.camera.position, crossingManager);
     const t = state.clock.elapsedTime;
     const nightness = lighting ? lighting.nightness : 0.6;
-    const headGlow = 0.04 + nightness * 0.8;
+    const headGlow = nightness * 0.8;
+
 
     for (const v of trafficManager.getVehicles()) {
       const node = poolRef.current.get(v.id);
@@ -150,6 +151,7 @@ export default function TrafficRenderer({ trafficManager, roadManager, crossingM
         light.position.set(hit.node.position.x + fx * (hx + 0.1), hit.node.position.y + 0.15, hit.node.position.z + fz * (hx + 0.1));
         target.position.set(hit.node.position.x + fx * 2.5, hit.node.position.y + 0.15, hit.node.position.z + fz * 2.5);
         light.intensity = nightness * 6;
+
       } else {
         light.intensity = 0;
       }

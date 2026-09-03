@@ -58,7 +58,7 @@ function disposeTrainNode(node) {
  * imperatively to cached Object3D groups in useFrame, so moving trains and
  * coaches never trigger React re-renders.
  */
-export default function TrainRenderer({ trainManager, lighting, selectedTrainId, trainsVersion = 0 }) {
+export default function TrainRenderer({ trainManager, lighting, selectedTrainId, trainsVersion = 0, simulationPaused = false }) {
   const rootRef = useRef();
   const trainNodesRef = useRef(new Map()); // trainId -> THREE.Group (world)
   const coachNodesRef = useRef(new Map()); // coachId -> THREE.Group (world)
@@ -107,7 +107,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
 
   // Animate trains imperatively — no React state involved.
   useFrame((state, delta) => {
-    trainManager.update(delta);
+    if (!simulationPaused) trainManager.update(delta);
     const t = state.clock.elapsedTime;
     const liveTrainIds = new Set();
 
@@ -118,7 +118,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
       if (node) {
         // Small idle motion while parked (stopped at a station or inactive)
         const parked = !train.active || !!train.dwell;
-        const bobY = parked ? Math.sin(t * 2.2 + train.id.length) * 0.012 : 0;
+        const bobY = simulationPaused ? 0 : (parked ? Math.sin(t * 2.2 + train.id.length) * 0.012 : 0);
         node.position.set(train.position.x, train.position.y + 0.1 + bobY, train.position.z);
         node.rotation.y = train.rotation;
         node.rotation.x = train.pitch || 0;
@@ -128,7 +128,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
         const cnode = coachNodesRef.current.get(coach.id);
         if (cnode && coach.position) {
           const parked = !train.active || !!train.dwell;
-          const bobY = parked ? Math.sin(t * 2.2 + coach.id.length) * 0.01 : 0;
+          const bobY = simulationPaused ? 0 : (parked ? Math.sin(t * 2.2 + coach.id.length) * 0.01 : 0);
           cnode.position.set(coach.position.x, coach.position.y + 0.1 + bobY, coach.position.z);
           cnode.rotation.y = coach.rotation;
           cnode.rotation.x = coach.pitch || 0;
@@ -151,8 +151,9 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
         if (!kind) return;
         const mat = child.material;
         if (!mat) return;
-        if (kind === 'glow') mat.opacity = 0.04 + nightness * 0.31;
-        else mat.opacity = 0.02 + nightness * 0.18;
+        if (kind === 'glow') mat.opacity = nightness * 0.31;
+        else mat.opacity = nightness * 0.18;
+
       });
     }
     // Coach window warmth at night (materials flagged windowGlow)
@@ -285,6 +286,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
               trainId={train.id}
               engineType={engineType}
               kind="smoke"
+              simulationPaused={simulationPaused}
             />
             <SmokeParticles
               key={`${train.id}_dust`}
@@ -293,6 +295,7 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
               trainManager={trainManager}
               trainId={train.id}
               engineType={engineType}
+              simulationPaused={simulationPaused}
             />
           </group>
         );

@@ -11,11 +11,12 @@ import { PLATFORM_HEIGHT } from '../stations/StationBuilder';
  * item motion is applied imperatively to cached THREE.Groups, matching the
  * TrainRenderer performance pattern.
  */
-export default function ActivityRenderer({ activityManager, stationManager, trainManager, enabled }) {
-  const nodesRef = useRef(new Map()); // itemId -> { group, type }
+export default function ActivityRenderer({ activityManager, stationManager, trainManager, enabled = true, simulationPaused = false }) {
   const enabledRef = useRef(true);
   const [snapshot, setSnapshot] = useState(null);
   const lastSigRef = useRef('');
+  const nodesRef = useRef(new Map()); // activityId -> THREE.Group
+
   enabledRef.current = enabled;
 
   // Topology poll — state updates only when the item set changes.
@@ -36,9 +37,10 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
   // Animate imperatively — no React state involved.
   useFrame((state, delta) => {
     if (!enabledRef.current) return;
-    activityManager.update(delta);
+    if (!simulationPaused) activityManager.update(delta);
 
     const stations = stationManager.getAllStations();
+
     const stationById = new Map(stations.map((s) => [s.id, s]));
 
     for (const item of activityManager.getAllItems()) {
@@ -70,7 +72,7 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
             const sin = Math.sin(coach.rotation);
             g.position.set(
               coach.position.x + off.z * sin,
-              coach.position.y + 0.1 + off.y + Math.sin(state.clock.elapsedTime * 2 + item.phase) * 0.008,
+              coach.position.y + 0.1 + off.y + (simulationPaused ? 0 : Math.sin(state.clock.elapsedTime * 2 + item.phase) * 0.008),
               coach.position.z + off.z * cos
             );
             g.rotation.y = coach.rotation;
@@ -82,7 +84,7 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
         const perp = { x: -station.dir.z, z: station.dir.x };
         const bob =
           item.type === 'passenger'
-            ? Math.sin(state.clock.elapsedTime * 1.4 + item.phase) * 0.008
+            ? (simulationPaused ? 0 : Math.sin(state.clock.elapsedTime * 1.4 + item.phase) * 0.008)
             : 0;
         g.position.set(
           station.startWorld.x + station.dir.x * item.axial + perp.x * item.side,

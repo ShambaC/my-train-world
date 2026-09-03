@@ -68,8 +68,9 @@ export default function Roads({ terrainData, roadManager, lighting, enabled = tr
     if (!groupRef.current) return;
     const nightness = lighting ? lighting.nightness : 0.6;
     const g = groupRef.current.userData;
-    if (g.glowCore) g.glowCore.material.opacity = 0.04 + nightness * 0.81;
-    if (g.glowHalo) g.glowHalo.material.opacity = 0.02 + nightness * 0.33;
+    if (g.glowCore) g.glowCore.material.opacity = nightness * 0.81;
+    if (g.glowHalo) g.glowHalo.material.opacity = nightness * 0.33;
+
 
     const cam = state.camera.position;
     const lamps = roadManager?.layout?.lamps || [];

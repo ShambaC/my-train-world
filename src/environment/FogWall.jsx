@@ -60,7 +60,7 @@ const FogWallShader = {
  * Fog wall — a truncated cone ring that follows the camera,
  * creating an infinite-looking fog/cloud boundary.
  */
-export default function FogWall({ terrainSize, fogColor = 0xd4e8f7 }) {
+export default function FogWall({ terrainSize, fogColor = 0xd4e8f7, simulationPaused = false }) {
   const groupRef = useRef();
   const materialRef = useRef();
   const { camera } = useThree();
@@ -80,7 +80,7 @@ export default function FogWall({ terrainSize, fogColor = 0xd4e8f7 }) {
 
   useFrame((state, delta) => {
     if (materialRef.current) {
-      materialRef.current.uniforms.uTime.value += delta;
+      if (!simulationPaused) materialRef.current.uniforms.uTime.value += delta;
       materialRef.current.uniforms.uColor.value.copy(color);
     }
     if (groupRef.current) {

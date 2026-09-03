@@ -26,27 +26,29 @@ const STATION_DECK_GEO = new THREE.BoxGeometry(STATION_WIDTH_WORLD, PLATFORM_HEI
 const LAMP_GLOW_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
   transparent: true,
-  opacity: 0.95,
+  opacity: 0,
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,
 });
+
 LAMP_GLOW_MAT.userData = { nightGlow: true, baseOpacity: 0.95 };
 
 const LAMP_HALO_MAT = new THREE.MeshBasicMaterial({
   color: 0xffb86a,
   transparent: true,
-  opacity: 0.4,
+  opacity: 0,
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,
 });
+
 LAMP_HALO_MAT.userData = { nightGlow: true, baseOpacity: 0.4 };
 
 const WINDOW_GLOW_MAT = new THREE.MeshBasicMaterial({
   color: 0xffd9a0,
   transparent: true,
-  opacity: 0.65,
+  opacity: 0,
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   side: THREE.DoubleSide,

@@ -21,6 +21,7 @@ import actionFrameRailway from '../assets/ui/ui-crop-actions-frame-railway.png';
 import actionHelp from '../assets/ui/ui-crop-actions-help.png';
 import actionPause from '../assets/ui/ui-crop-actions-pause.png';
 import actionSettings from '../assets/ui/ui-crop-actions-settings.png';
+const actionCamera = actionFrameRailway;
 import actionBack from '../assets/ui/ui-crop-actions-back.png';
 import actionClose from '../assets/ui/ui-crop-actions-close.png';
 import actionWorldTools from '../assets/ui/ui-crop-actions-world-tools.png';
@@ -83,7 +84,7 @@ export const UI_ICONS = Object.freeze({
     coach: coachHub,
     stationRole: stationRoleHub,
   }),
-  actions: Object.freeze({ save: actionSave, load: actionLoad, recover: actionRecover, undo: actionUndo, redo: actionRedo, resetOverview: actionResetOverview, frameRailway: actionFrameRailway, help: actionHelp, pause: actionPause, settings: actionSettings, back: actionBack, close: actionClose, worldTools: actionWorldTools, randomize: actionRandomize }),
+  actions: Object.freeze({ save: actionSave, load: actionLoad, recover: actionRecover, undo: actionUndo, redo: actionRedo, resetOverview: actionResetOverview, frameRailway: actionFrameRailway, camera: actionCamera, capture: actionCamera, help: actionHelp, pause: actionPause, settings: actionSettings, back: actionBack, close: actionClose, worldTools: actionWorldTools, randomize: actionRandomize }),
   environment: Object.freeze({ dawn: envDawn, day: envDay, dusk: envDusk, night: envNight, fog: envFog, shadowOff: envShadowOff, shadowHard: envShadowHard, shadowSoft: envShadowSoft, miniature: envMiniature, cel: envCel, activity: envActivity, audioTrain: envAudioTrain, audioMaster: envAudioMaster, traffic: envTraffic, signals: envSignals, performance: envPerformance }),
   trainControls: Object.freeze({ start: trainStart, stop: trainStop, reverse: trainReverse, focus: trainFocus, follow: trainFollow, deleteCoach: trainDeleteCoach, speedSlow: trainSpeedSlow, speedFast: trainSpeedFast, entityTrain: trainEntity, entityStation: trainEntityStation, entityTrack: trainEntityTrack }),
   status: Object.freeze({ loading: statusLoading, saving: statusSaving, success: statusSuccess, warning: statusWarning, error: statusError, info: statusInfo, developer: statusDeveloper }),

@@ -136,7 +136,7 @@ const WaterShader = {
   `,
 };
 
-const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager, quality }, ref) {
+const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData, timeOfDay, lighting, trackManager, trainManager, quality, simulationPaused = false }, ref) {
   const materialRef = useRef();
   const meshRef = useRef();
   const { camera } = useThree();
@@ -176,7 +176,7 @@ const WaterSurface = forwardRef(function WaterSurface({ terrainSize, heightData,
   useFrame((state, delta) => {
     const mat = materialRef.current;
     if (!mat) return;
-    mat.uniforms.uTime.value += delta;
+    if (!simulationPaused) mat.uniforms.uTime.value += delta;
     mat.uniforms.uCameraPos.value.copy(camera.position);
 
     if (lighting) {

@@ -297,7 +297,7 @@ export default function MainMenu({
             <div className="flex-1 rounded-3xl border border-white/10 bg-[#101a2b]/85 p-4 shadow-2xl backdrop-blur-xl sm:p-5">
               {worlds.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                   {worlds.map((world) => <WorldCard key={world.id} world={world} featured={world.id === lastWorldId} onOpen={onOpenWorld} onRename={setRenameTarget} onDuplicate={onDuplicateWorld} onExport={onExportWorld} onDelete={setDeleteTarget} />)}
+                  {worlds.map((world) => <WorldCard key={world.id} world={world} featured={world.id === lastWorldId} onOpen={onOpenWorld} onRename={setRenameTarget} onDuplicate={onDuplicateWorld} onExport={onExportWorld} onDelete={setDeleteTarget} />)}
                 </div>
               ) : (
                 <div className="flex min-h-64 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-[#18263b]/55 px-5 text-center">
@@ -326,204 +326,203 @@ export default function MainMenu({
             </div>
             <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
               <div className="mx-auto w-full max-w-xl rounded-3xl border border-white/10 bg-[#101a2b]/90 p-5 shadow-2xl backdrop-blur-xl sm:p-7">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#63c9dc]">Global defaults</div>
-                  <h2 className="mt-1 text-2xl font-bold">Settings</h2>
-                </div>
-              </div>
-              <div className="mt-5 grid grid-cols-2 gap-2 border-b border-white/10 pb-3 sm:grid-cols-4">
-                {[
-                  ['graphics', 'Graphics'],
-                  ['audio', 'Audio'],
-                  ['accessibility', 'Accessibility'],
-                  ['developer', 'Developer'],
-                ].map(([key, label]) => (
-                  <button key={key} type="button" onClick={() => setSettingsTab(key)} className={`rounded-xl px-2 py-2 text-xs font-semibold sm:text-sm ${settingsTab === key ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={settingsTab === key}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
-
-              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5 space-y-5`}>
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {FRAME_LIMIT_OPTIONS.map((option) => (
-                      <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                        {option === 0 ? 'Uncapped' : option}
-                      </button>
-                    ))}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[#63c9dc]">Global defaults</div>
+                    <h2 className="mt-1 text-2xl font-bold">Settings</h2>
                   </div>
                 </div>
-
-                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
-                  Vsync
-                  <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
-                </label>
-              </div>
-
-              <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
-                <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>
-                {volume('master', 'Master volume')}
-                {volume('train', 'Train volume')}
-                {volume('ambient', 'Ambient noise volume')}
-                {volume('music', 'Background music volume')}
-                {graphicsToggle('soundsEnabled', 'Train sounds', 'Train, station, tool, and crossing audio')}
-              </div>
-
-              <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
-                {/* Graphics Quality Preset */}
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {QUALITY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => updateGraphics({ graphicsQuality: opt.value })}
-                        className={`rounded-xl border p-2 text-sm font-semibold transition ${
-                          (globalGraphics.graphicsQuality || 'medium') === opt.value
-                            ? 'border-[#e5a94f] bg-[#244b67] text-white'
-                            : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-1 text-xs text-[#aebbd0]">
-                    {QUALITY_OPTIONS.find((o) => o.value === (globalGraphics.graphicsQuality || 'medium'))?.desc}
-                  </p>
-                  {(globalGraphics.graphicsQuality === 'custom') && <CustomGraphicsControls />}
+                <div className="mt-5 grid grid-cols-2 gap-2 border-b border-white/10 pb-3 sm:grid-cols-4">
+                  {[
+                    ['graphics', 'Graphics'],
+                    ['audio', 'Audio'],
+                    ['accessibility', 'Accessibility'],
+                    ['developer', 'Developer'],
+                  ].map(([key, label]) => (
+                    <button key={key} type="button" onClick={() => setSettingsTab(key)} className={`rounded-xl px-2 py-2 text-xs font-semibold sm:text-sm ${settingsTab === key ? 'bg-[#244b67] text-white ring-1 ring-[#e5a94f]' : 'bg-[#18263b] text-[#aebbd0] hover:text-white'}`} aria-pressed={settingsTab === key}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                <p className="mt-4 text-sm leading-6 text-[#aebbd0]">These defaults apply across worlds. Environment and presentation choices saved inside each world remain editable during gameplay.</p>
 
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Default environment</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {TIME_OPTIONS.map((option) => (
-                      <button key={option.value} type="button" onClick={() => updateGraphics({ timeOfDay: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.timeOfDay === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`} style={{ borderLeftColor: option.color, borderLeftWidth: 4 }}>
-                        <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.value]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
-                      </button>
-                    ))}
+                <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 border-t border-white/10 pt-5 space-y-5`}>
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Frame limit</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {FRAME_LIMIT_OPTIONS.map((option) => (
+                        <button key={option} type="button" onClick={() => onFrameLimitChange(option)} className={`rounded-xl border p-2 text-sm font-semibold ${frameLimit === option ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                          {option === 0 ? 'Uncapped' : option}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
-                  Fog
-                  <input type="checkbox" checked={globalGraphics.fogEnabled} onChange={(event) => updateGraphics({ fogEnabled: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
-                </label>
-                {globalGraphics.fogEnabled && (
-                  <label className="block text-sm font-semibold text-[#c5d0df]">
-                    Fog density <span className="float-right font-mono text-xs text-[#aebbd0]">{((globalGraphics.fogDensity ?? 0.012) * 100).toFixed(0)}%</span>
-                    <input type="range" min="0.005" max="0.035" step="0.001" value={globalGraphics.fogDensity ?? 0.012} onChange={(event) => updateGraphics({ fogDensity: Number(event.target.value) })} className="mt-2 w-full accent-[#4b8dff]" />
+                  <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                    Vsync
+                    <input type="checkbox" checked={vsync} onChange={(event) => onVsyncChange(event.target.checked)} className="h-5 w-5 accent-[#4b8dff]" />
                   </label>
-                )}
-
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Realtime shadows</div>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {SHADOW_OPTIONS.map((option) => (
-                      <button key={option.value} type="button" onClick={() => updateGraphics({ shadowMode: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.shadowMode === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                        <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.icon]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
-                {graphicsToggle('tiltShiftEnabled', 'Miniature mode', 'Tilt-shift depth blur')}
-                {graphicsToggle('celShadingEnabled', 'Cel shading', 'Toon-style color bands and edges')}
-                {graphicsToggle('ambientEnabled', 'Ambient activity', 'Grass, pedestrians, and station life')}
-                {graphicsToggle('trafficEnabled', 'Road traffic', 'Cars, carts, bikes, and walkers')}
-                {graphicsToggle('signalsEnabled', 'Signals and crossings', 'Rail signals and road crossings')}
-              </div>
-              <div className={`${settingsTab === 'accessibility' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Interface scale</div>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {[0.9, 1, 1.15].map((value) => (
-                      <button key={value} type="button" onClick={() => onAccessibilityChange({ uiScale: value })} className={`rounded-xl border p-2 text-sm font-semibold ${accessibility.uiScale === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                        {value === 0.9 ? 'Compact' : value === 1 ? 'Default' : 'Large'}
-                      </button>
-                    ))}
+                <div className={`${settingsTab === 'audio' ? '' : 'hidden'} mt-5 space-y-4 border-t border-white/10 pt-5`}>
+                  <div className="text-sm font-semibold text-[#c5d0df]">Audio defaults</div>
+                  {volume('master', 'Master volume')}
+                  {volume('train', 'Train volume')}
+                  {volume('ambient', 'Ambient noise volume')}
+                  {volume('music', 'Background music volume')}
+                  {graphicsToggle('soundsEnabled', 'Train sounds', 'Train, station, tool, and crossing audio')}
+                </div>
+
+                <div className={`${settingsTab === 'graphics' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                  {/* Graphics Quality Preset */}
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Graphics Quality</div>
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {QUALITY_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => updateGraphics({ graphicsQuality: opt.value })}
+                          className={`rounded-xl border p-2 text-sm font-semibold transition ${(globalGraphics.graphicsQuality || 'medium') === opt.value
+                              ? 'border-[#e5a94f] bg-[#244b67] text-white'
+                              : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'
+                            }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-[#aebbd0]">
+                      {QUALITY_OPTIONS.find((o) => o.value === (globalGraphics.graphicsQuality || 'medium'))?.desc}
+                    </p>
+                    {(globalGraphics.graphicsQuality === 'custom') && <CustomGraphicsControls />}
+                  </div>
+
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Default environment</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {TIME_OPTIONS.map((option) => (
+                        <button key={option.value} type="button" onClick={() => updateGraphics({ timeOfDay: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.timeOfDay === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`} style={{ borderLeftColor: option.color, borderLeftWidth: 4 }}>
+                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.value]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                    Fog
+                    <input type="checkbox" checked={globalGraphics.fogEnabled} onChange={(event) => updateGraphics({ fogEnabled: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
+                  </label>
+                  {globalGraphics.fogEnabled && (
+                    <label className="block text-sm font-semibold text-[#c5d0df]">
+                      Fog density <span className="float-right font-mono text-xs text-[#aebbd0]">{((globalGraphics.fogDensity ?? 0.012) * 100).toFixed(0)}%</span>
+                      <input type="range" min="0.005" max="0.035" step="0.001" value={globalGraphics.fogDensity ?? 0.012} onChange={(event) => updateGraphics({ fogDensity: Number(event.target.value) })} className="mt-2 w-full accent-[#4b8dff]" />
+                    </label>
+                  )}
+
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Realtime shadows</div>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {SHADOW_OPTIONS.map((option) => (
+                        <button key={option.value} type="button" onClick={() => updateGraphics({ shadowMode: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.shadowMode === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.icon]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {graphicsToggle('tiltShiftEnabled', 'Miniature mode', 'Tilt-shift depth blur')}
+                  {graphicsToggle('celShadingEnabled', 'Cel shading', 'Toon-style color bands and edges')}
+                  {graphicsToggle('ambientEnabled', 'Ambient activity', 'Grass, pedestrians, and station life')}
+                  {graphicsToggle('trafficEnabled', 'Road traffic', 'Cars, carts, bikes, and walkers')}
+                  {graphicsToggle('signalsEnabled', 'Signals and crossings', 'Rail signals and road crossings')}
+                </div>
+                <div className={`${settingsTab === 'accessibility' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Interface scale</div>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {[0.9, 1, 1.15].map((value) => (
+                        <button key={value} type="button" onClick={() => onAccessibilityChange({ uiScale: value })} className={`rounded-xl border p-2 text-sm font-semibold ${accessibility.uiScale === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
+                          {value === 0.9 ? 'Compact' : value === 1 ? 'Default' : 'Large'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                    High contrast
+                    <input type="checkbox" checked={accessibility.highContrast} onChange={(event) => onAccessibilityChange({ highContrast: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
+                  </label>
+                  <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
+                    Reduced motion
+                    <input type="checkbox" checked={accessibility.reducedMotion} onChange={(event) => onAccessibilityChange({ reducedMotion: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
+                  </label>
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Text size</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {['normal', 'large'].map((value) => (
+                        <button key={value} type="button" onClick={() => onAccessibilityChange({ textSize: value })} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${accessibility.textSize === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
-                  High contrast
-                  <input type="checkbox" checked={accessibility.highContrast} onChange={(event) => onAccessibilityChange({ highContrast: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
-                </label>
-                <label className="flex items-center justify-between rounded-xl border border-white/10 bg-[#18263b] p-3 text-sm font-semibold text-[#c5d0df]">
-                  Reduced motion
-                  <input type="checkbox" checked={accessibility.reducedMotion} onChange={(event) => onAccessibilityChange({ reducedMotion: event.target.checked })} className="h-5 w-5 accent-[#4b8dff]" />
-                </label>
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Text size</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {['normal', 'large'].map((value) => (
-                      <button key={value} type="button" onClick={() => onAccessibilityChange({ textSize: value })} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${accessibility.textSize === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
-                    ))}
+                <div className={`${settingsTab === 'developer' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
+                      <span className="mt-0.5 block text-xs text-[#aebbd0]">Show FPS, WebGL, world, and interaction values in gameplay.</span>
+                    </span>
+                    <input type="checkbox" checked={showDebug} onChange={(event) => onToggleDebug(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#e5a94f]" />
+                  </label>
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-[#c5d0df]">Miniature Bokeh Tuner panel</span>
+                      <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the live interactive bokeh tuning overlay when Miniature Mode is active.</span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={dofTunerEnabled}
+                      onChange={(event) => updateDof({ showTuner: event.target.checked })}
+                      className="h-5 w-5 shrink-0 accent-[#e5a94f]"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-[#c5d0df]">Axis gizmo</span>
+                      <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the world orientation helper during gameplay.</span>
+                    </span>
+                    <input type="checkbox" checked={showAxes} onChange={(event) => onToggleAxes(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
+                  </label>
+                  <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
+                    <span>
+                      <span className="block text-sm font-semibold text-[#c5d0df]">Technical selection details</span>
+                      <span className="mt-0.5 block text-xs text-[#aebbd0]">Show IDs, route measurements, and manager-level values when inspecting objects.</span>
+                    </span>
+                    <input type="checkbox" checked={showTechnicalInfo} onChange={(event) => onToggleTechnicalInfo(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
+                  </label>
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Overlay detail</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {['compact', 'full'].map((value) => (
+                        <button key={value} type="button" onClick={() => onDebugDetailChange(value)} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${debugDetail === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className={`${settingsTab === 'developer' ? '' : 'hidden'} mt-6 space-y-4 border-t border-white/10 pt-5`}>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
-                  <span>
-                    <span className="block text-sm font-semibold text-[#c5d0df]">Debug info window</span>
-                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show FPS, WebGL, world, and interaction values in gameplay.</span>
-                  </span>
-                  <input type="checkbox" checked={showDebug} onChange={(event) => onToggleDebug(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#e5a94f]" />
-                </label>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
-                  <span>
-                    <span className="block text-sm font-semibold text-[#c5d0df]">Miniature Bokeh Tuner panel</span>
-                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the live interactive bokeh tuning overlay when Miniature Mode is active.</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={dofTunerEnabled}
-                    onChange={(event) => updateDof({ showTuner: event.target.checked })}
-                    className="h-5 w-5 shrink-0 accent-[#e5a94f]"
-                  />
-                </label>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
-                  <span>
-                    <span className="block text-sm font-semibold text-[#c5d0df]">Axis gizmo</span>
-                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show the world orientation helper during gameplay.</span>
-                  </span>
-                  <input type="checkbox" checked={showAxes} onChange={(event) => onToggleAxes(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
-                </label>
-                <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
-                  <span>
-                    <span className="block text-sm font-semibold text-[#c5d0df]">Technical selection details</span>
-                    <span className="mt-0.5 block text-xs text-[#aebbd0]">Show IDs, route measurements, and manager-level values when inspecting objects.</span>
-                  </span>
-                  <input type="checkbox" checked={showTechnicalInfo} onChange={(event) => onToggleTechnicalInfo(event.target.checked)} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
-                </label>
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Overlay detail</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {['compact', 'full'].map((value) => (
-                      <button key={value} type="button" onClick={() => onDebugDetailChange(value)} className={`rounded-xl border p-2 text-sm font-semibold capitalize ${debugDetail === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{value}</button>
-                    ))}
+                  <div>
+                    <div className="text-sm font-semibold text-[#c5d0df]">Overlay position</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {[
+                        ['top-left', 'Top left'],
+                        ['top-right', 'Top right'],
+                        ['bottom-left', 'Bottom left'],
+                        ['bottom-right', 'Bottom right'],
+                      ].map(([value, label]) => (
+                        <button key={value} type="button" onClick={() => onDebugPositionChange(value)} className={`rounded-xl border p-2 text-sm font-semibold ${debugPosition === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{label}</button>
+                      ))}
+                    </div>
                   </div>
+                  <button type="button" onClick={onCopyDiagnostics} className="min-h-11 w-full rounded-xl bg-[#22344b] px-4 py-2 text-sm font-semibold text-[#f7f0df] hover:border-[#63c9dc] hover:bg-[#2d4662]">Copy diagnostics</button>
+                  <p className="text-xs leading-5 text-[#aebbd0]">Press F9 during gameplay to show or hide the overlay, or use the pause menu. Diagnostics stay local and never enter world saves.</p>
                 </div>
-                <div>
-                  <div className="text-sm font-semibold text-[#c5d0df]">Overlay position</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {[
-                      ['top-left', 'Top left'],
-                      ['top-right', 'Top right'],
-                      ['bottom-left', 'Bottom left'],
-                      ['bottom-right', 'Bottom right'],
-                    ].map(([value, label]) => (
-                      <button key={value} type="button" onClick={() => onDebugPositionChange(value)} className={`rounded-xl border p-2 text-sm font-semibold ${debugPosition === value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-                <button type="button" onClick={onCopyDiagnostics} className="min-h-11 w-full rounded-xl bg-[#22344b] px-4 py-2 text-sm font-semibold text-[#f7f0df] hover:border-[#63c9dc] hover:bg-[#2d4662]">Copy diagnostics</button>
-                <p className="text-xs leading-5 text-[#aebbd0]">Press F9 during gameplay to show or hide the overlay, or use the pause menu. Diagnostics stay local and never enter world saves.</p>
-              </div>
               </div>
             </div>
           </section>

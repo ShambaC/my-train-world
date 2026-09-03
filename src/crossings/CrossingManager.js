@@ -9,7 +9,8 @@
  *
  * States: open → warning → closing → closed → opening → open.
  */
-import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
+import { tangentOnTrack } from '../tracks/trackGeometry.js';
+import { classifyTrackRoadContact, CROSSING_CONTACT } from './crossingGeometry.js';
 import { distanceAlongTrack, trackPointWorld } from '../tracks/pathDistance.js';
 import { trainAudio } from '../audio/trainAudio.js';
 
@@ -49,87 +50,34 @@ export class CrossingManager {
     const roads = this.roadManager?.ready ? this.roadManager.getSegments() : [];
     if (!roads.length) return;
 
-    const tracks = this.trackManager.getAllTracks();
-    const SAMPLES = 9;
-
-    for (const track of tracks) {
-      const hits = [];
-      for (let i = 0; i < SAMPLES; i++) {
-        const t = i / (SAMPLES - 1);
-        const local = pointOnTrack(track.type, t);
-        const cos = Math.cos(track.rotation);
-        const sin = Math.sin(track.rotation);
-        const px = track.position.x + local.x * cos + local.z * sin;
-        const pz = track.position.z + -local.x * sin + local.z * cos;
-        const py = track.position.y;
-
-      for (const seg of roads) {
-        // Crossing tolerance ≈ road half width + small margin. A track
-        // running BESIDE a road must not create a crossing.
-        const halfW = seg.type === 'main' ? 0.5 : seg.type === 'branch' ? 0.375 : 0.275;
-        const tol = halfW + 0.08;
-        // Distance from sample point to the road segment (XZ + height).
-        const ax = seg.a.x;
-        const az = seg.a.z;
-        const bx = seg.b.x;
-        const bz = seg.b.z;
-        const abx = bx - ax;
-        const abz = bz - az;
-        const len2 = abx * abx + abz * abz;
-        const u = len2 > 0 ? ((px - ax) * abx + (pz - az) * abz) / len2 : 0;
-        const uu = Math.max(0, Math.min(1, u));
-        const cx = ax + abx * uu;
-        const cz = az + abz * uu;
-        const dx = px - cx;
-        const dz = pz - cz;
-        if (dx * dx + dz * dz > tol * tol) continue;
-        const roadY = seg.a.y + (seg.b.y - seg.a.y) * uu;
-        if (Math.abs(py - roadY) > 0.35) continue; // bridge over road — no gate
-        hits.push({ t, px, pz, py, seg, roadY });
-        break;
-      }
-      }
-
-      // Group consecutive hits into one crossing per road intersection.
-      const groups = [];
-      let current = null;
-      let lastT = -Infinity;
-      for (const h of hits) {
-        if (current && h.t - lastT <= 0.4 && h.seg.roadId === current.seg.roadId) {
-          current.hits.push(h);
-          current.sum += h.t;
-        } else {
-          current = { hits: [h], sum: h.t, seg: h.seg };
-          groups.push(current);
-        }
-        lastT = h.t;
-      }
-
-      for (const g of groups) {
-        const progress = g.sum / g.hits.length;
-        const local = pointOnTrack(track.type, progress);
-        const cos = Math.cos(track.rotation);
-        const sin = Math.sin(track.rotation);
-        const x = track.position.x + local.x * cos + local.z * sin;
-        const z = track.position.z + -local.x * sin + local.z * cos;
+    for (const track of this.trackManager.getAllTracks()) {
+      const result = classifyTrackRoadContact(track, roads);
+      // Legacy invalid layouts remain loaded, but never receive gates.
+      for (const contact of result.contacts) {
+        if (contact.kind !== CROSSING_CONTACT.PERPENDICULAR) continue;
+        const progress = contact.progress;
+        const x = contact.point.x;
+        const z = contact.point.z;
         const tan = rotLocalToWorld(tangentOnTrack(track.type, progress), track.rotation);
         const segDir = {
-          x: (g.seg.b.x - g.seg.a.x) / Math.max(0.001, Math.hypot(g.seg.b.x - g.seg.a.x, g.seg.b.z - g.seg.a.z)),
-          z: (g.seg.b.z - g.seg.a.z) / Math.max(0.001, Math.hypot(g.seg.b.x - g.seg.a.x, g.seg.b.z - g.seg.a.z)),
+          x: (contact.segment.b.x - contact.segment.a.x) /
+            Math.max(0.001, Math.hypot(contact.segment.b.x - contact.segment.a.x, contact.segment.b.z - contact.segment.a.z)),
+          z: (contact.segment.b.z - contact.segment.a.z) /
+            Math.max(0.001, Math.hypot(contact.segment.b.x - contact.segment.a.x, contact.segment.b.z - contact.segment.a.z)),
         };
         const id = `crossing_${this.nextId++}`;
         this.crossings.set(id, {
           id,
           trackId: track.id,
           trackRefs: [{ trackId: track.id, progress }],
-          roadId: g.seg.roadId,
+          roadId: contact.segment.roadId,
           progress,
-          roadWidth: 0.75 + (g.seg.type === 'main' ? 0.25 : 0),
-          position: { x, y: track.position.y, z },
+          roadWidth: 0.75 + (contact.segment.type === 'main' ? 0.25 : 0),
+          position: { x, y: contact.point.y, z },
           trackTangent: tan,
           roadTangent: segDir,
           state: 'open',
-          anim: 0, // 0 = open (arms up), 1 = closed (arms down)
+          anim: 0,
           clearTimer: 0,
           lastBell: 0,
           whistlePlayed: false,
@@ -137,9 +85,7 @@ export class CrossingManager {
       }
     }
 
-    // Merge crossings that belong to the same track LINE over the same
-    // road: one continuous multi-track run over a road must yield a single
-    // crossing with one gate pair, not one gate per track piece.
+    // Merge crossings that belong to the same track LINE over the same road.
     this._mergeAdjacent();
   }
 

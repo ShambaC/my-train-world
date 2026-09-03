@@ -196,7 +196,10 @@ export default function TrackRenderer({
               redo: () => roadManagerRef.current.restoreUserRoad(clone(snap)),
               });
             }
-            if (road) trainAudio.roadPlaced();
+            if (road) {
+              trainAudio.roadPlaced();
+              onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks(), 'road-placed');
+            }
         }
       } else if (tool?.type === 'coach') {
         const target = ghostPosition?.target;
@@ -218,7 +221,7 @@ export default function TrackRenderer({
            trainAudio.deleted(target.kind);
           if (target.kind === 'track') {
             setTracks(trackManagerRef.current.getAllTracks());
-            onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
+            onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks(), 'deleted');
           } else if (target.kind === 'station') {
             setTracks(trackManagerRef.current.getAllTracks());
             onStationsChangeRef.current?.();
@@ -236,7 +239,7 @@ export default function TrackRenderer({
             });
           }
           setTracks(trackManagerRef.current.getAllTracks());
-           onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks());
+          onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks(), 'placed');
            trainAudio.trackPlaced(track.type);
          }
         } else if (tool && ghostPosition && !isValidPosition) {

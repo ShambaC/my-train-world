@@ -12,6 +12,7 @@
  * + roads and rebuild themselves, so they are not stored.
  */
 import { buildStation } from '../stations/StationBuilder';
+import { DEFAULT_TRAIN_SPEED } from '../trains/TrainManager.js';
 
 const RECENT_KEY = 'mytrainworld.world.recent';
 const FALLBACK_KEY = 'mytrainworld.world.fallback';
@@ -315,7 +316,12 @@ export function importWorldRecord(data, name, thumbnail = null) {
   if (!data || data.version !== SAVE_VERSION) {
     return { ok: false, error: 'unsupported-world-version' };
   }
-  return createWorldRecord({ name: name || 'Imported Railway', snapshot: data, thumbnail, source: 'imported' });
+  return createWorldRecord({
+    name: name || 'Imported Railway',
+    snapshot: { ...data, tutorial: { step: 'complete', skipped: true } },
+    thumbnail,
+    source: 'imported',
+  });
 }
 
 export function exportWorldRecord(id) {
@@ -336,9 +342,9 @@ export function recoverySnapshotTime() {
 /**
  * Capture the whole creative state as plain JSON-safe data.
  * @param {object} p { terrainSize, terrainSeed, trackManager, stationManager,
- *   trainManager, roadManager, env (plain object), camera (plain) }
+ *   trainManager, roadManager, env (plain object), camera (plain), tutorial }
  */
-export function captureWorld({ terrainSize, terrainSeed, trackManager, stationManager, trainManager, roadManager, env, camera }) {
+export function captureWorld({ terrainSize, terrainSeed, trackManager, stationManager, trainManager, roadManager, env, camera, tutorial }) {
   const trains = trainManager.getAllTrains().map((t) => ({
     id: t.id,
     currentTrackId: t.currentTrackId,
@@ -360,7 +366,8 @@ export function captureWorld({ terrainSize, terrainSeed, trackManager, stationMa
     terrain: { length: terrainSize.length, breadth: terrainSize.breadth, seed: terrainSeed },
     tracks: trackManager.exportData(),
     stations: stationManager.exportData(),
-    trains: { trains, nextId: trainManager.nextId, globalSpeed: trainManager.globalSpeed ?? 0.5 },
+    trains: { trains, nextId: trainManager.nextId },
+    tutorial: tutorial ? { step: tutorial.step, skipped: tutorial.skipped === true } : undefined,
     roads: roadManager?.exportUserData?.() ?? null,
     env: { ...env },
     camera,
@@ -401,16 +408,17 @@ export function applyWorld(data, { trackManager, stationManager, trainManager, r
 
     trainManager.clear();
     trainManager.nextId = data.trains?.nextId ?? 0;
-    trainManager.globalSpeed = data.trains?.globalSpeed ?? 0.5;
+    const legacySpeed = data.trains?.globalSpeed;
     for (const t of data.trains?.trains ?? []) {
+      const speedMax = t.speedMax ?? legacySpeed ?? DEFAULT_TRAIN_SPEED;
       trainManager.restoreTrain({
         ...t,
+        speedMax,
         dwell: null,
         cooldowns: {},
         coaches: (t.coaches || []).map((c) => ({ ...c })),
       });
     }
-    trainManager.setGlobalSpeed(trainManager.globalSpeed);
 
     roadManager?.importUserData?.(data.roads);
     return true;

@@ -79,7 +79,7 @@ const PARTICLE_MATS = Object.fromEntries(
  * imperatively every frame — no React re-renders while trains move. Train
  * state (active/speed) is read straight from the TrainManager.
  */
-export default function SmokeParticles({ target, trainManager, trainId, engineType = 'steam-engine', kind = 'smoke' }) {
+export default function SmokeParticles({ target, trainManager, trainId, engineType = 'steam-engine', kind = 'smoke', simulationPaused = false }) {
   const meshRef = useRef();
   const groupRef = useRef();
 
@@ -130,6 +130,7 @@ export default function SmokeParticles({ target, trainManager, trainId, engineTy
     const train = trainManager?.getTrain?.(trainId);
     const active = !!train?.active;
     const speed = train?.speed ?? 0;
+    if (simulationPaused) return;
 
     // Speed factor: fast trains shed quicker, smaller particles
     const spd = Math.max(0, Math.min(1.5, speed));

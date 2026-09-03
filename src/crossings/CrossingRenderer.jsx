@@ -12,10 +12,11 @@ import { buildCrossingMesh } from './crossingModels.js';
 export default function CrossingRenderer({
   crossingManager,
   trackManager,
-  roadManager,
-  trainManager,
-  lighting,
   enabled = true,
+  simulationPaused = false,
+  trainManager,
+  roadManager,
+  lighting,
 }) {
   const rootRef = useRef();
   const nodesRef = useRef(new Map()); // crossingId -> THREE.Group
@@ -58,7 +59,7 @@ export default function CrossingRenderer({
   // Per-frame animation.
   useFrame((state, delta) => {
     if (!enabledRef.current || !crossingManager) return;
-    crossingManager.update(delta, trainManager);
+    if (!simulationPaused) crossingManager.update(delta, trainManager);
     const nightness = lighting ? lighting.nightness : 0.6;
     const t = state.clock.elapsedTime;
     const blinking = new Set(

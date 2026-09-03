@@ -8,6 +8,9 @@ import Hotbar from "./ui/Hotbar";
 import GameHud from "./ui/GameHud";
 import HelpPanel from "./ui/HelpPanel";
 import ToastRegion from "./ui/ToastRegion";
+import TrainManagerDrawer from "./ui/TrainManagerDrawer";
+import TutorialOverlay from "./ui/TutorialOverlay";
+import PhotoModePanel from "./ui/PhotoModePanel";
 import SelectionPanel from "./ui/SelectionPanel";
 import { TrackManager } from "./tracks/TrackManager";
 import { TrainManager } from "./trains/TrainManager";
@@ -45,76 +48,64 @@ import {
   saveWorldRecord,
   hasRecoverySnapshot,
 } from "./utils/worldSave";
+import { captureCanvasToPng } from "./utils/photoCapture.js";
+import { advanceTutorial, completedTutorialState, initialTutorialState, normalizeTutorialState } from "./utils/tutorial.js";
 
-// Define available tools
-const TOOLS = [
-  { 
-    id: 'hand', 
-    name: 'Hand / Deselect', 
+const TOOL_GROUPS = [
+  {
+    id: 'hand',
+    name: 'Hand / Deselect',
     label: 'Hand',
     iconKey: 'hand',
-    type: 'hand'
+    type: 'hand',
   },
-  { 
-    id: 'straight', 
-    name: 'Straight Track', 
-    label: 'Straight',
+  {
+    id: 'tracks',
+    name: 'Tracks',
+    label: 'Tracks',
     iconKey: 'straight',
-    type: 'track',
-    trackType: 'straight'
+    children: [
+      { id: 'straight', name: 'Straight Track', label: 'Straight', iconKey: 'straight', type: 'track', trackType: 'straight' },
+      { id: 'curved', name: 'Curved Track', label: 'Curved', iconKey: 'curved', type: 'track', trackType: 'curved' },
+      { id: 'ramp', name: 'Ramp Track (45°)', label: 'Ramp', iconKey: 'ramp', type: 'track', trackType: 'ramp' },
+    ],
   },
-  { 
-    id: 'curved', 
-    name: 'Curved Track', 
-    label: 'Curved',
-    iconKey: 'curved',
-    type: 'track',
-    trackType: 'curved'
-  },
-  { 
-    id: 'ramp', 
-    name: 'Ramp Track (45°)', 
-    label: 'Ramp',
-    iconKey: 'ramp',
-    type: 'track',
-    trackType: 'ramp'
-  },
-  { 
-    id: 'road', 
-    name: 'Place Road', 
+  {
+    id: 'road',
+    name: 'Place Road',
     label: 'Road',
     iconKey: 'road',
-    type: 'road'
+    type: 'road',
   },
-  { 
-    id: 'train', 
-    name: 'Place Train', 
-    label: 'Train',
+  {
+    id: 'trains',
+    name: 'Trains',
+    label: 'Trains',
     iconKey: 'train',
-    type: 'train'
+    children: [
+      { id: 'train', name: 'Place Engine', label: 'Engine', iconKey: 'train', type: 'train' },
+      { id: 'coach', name: 'Add Coach', label: 'Coach', iconKey: 'coach', type: 'coach' },
+    ],
   },
-  { 
-    id: 'station', 
-    name: 'Place Station', 
+  {
+    id: 'station',
+    name: 'Place Station',
     label: 'Station',
     iconKey: 'station',
-    type: 'station'
+    type: 'station',
   },
-  { 
-    id: 'coach', 
-    name: 'Add Coach', 
-    label: 'Coach',
-    iconKey: 'coach',
-    type: 'coach'
-  },
-  { 
-    id: 'delete', 
-    name: 'Delete Tool', 
+  {
+    id: 'delete',
+    name: 'Delete Tool',
     label: 'Delete',
     iconKey: 'delete',
-    type: 'delete'
+    type: 'delete',
   },
 ];
+
+const TOOL_LEAVES = Object.fromEntries(
+  TOOL_GROUPS.flatMap((tool) => tool.children || [tool]).map((tool) => [tool.id, tool]),
+);
 
 function loadGlobalGraphicsDefaults() {
   const settings = loadSettings();
@@ -144,8 +135,7 @@ function AppRuntime() {
   const [debugDetail, setDebugDetail] = useState(() => loadSettings().debugDetail ?? 'compact');
   const [debugPosition, setDebugPosition] = useState(() => loadSettings().debugPosition ?? 'top-left');
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedToolIndex, setSelectedToolIndex] = useState(0);
-  const [rotation, setRotation] = useState(0);
+  const [selectedToolId, setSelectedToolId] = useState('hand');
   const [heightOffset, setHeightOffset] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState('day');
   const [fogEnabled, setFogEnabled] = useState(true);
@@ -158,7 +148,7 @@ function AppRuntime() {
   const [trafficEnabled, setTrafficEnabled] = useState(true);
   const [signalsEnabled, setSignalsEnabled] = useState(true);
   const [followTrainId, setFollowTrainId] = useState(null);
-  // Stations have exactly two orientations (horizontal / vertical); R toggles.
+  const [rotation, setRotation] = useState(0);
   const [stationOrientation, setStationOrientation] = useState('horizontal');
   // Render pacing prefs — persisted, never touch world state.
   // Defaults: 120 FPS limit, vsync on (see PerformanceSettings.jsx).
@@ -188,11 +178,24 @@ function AppRuntime() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [trainControlsOpen, setTrainControlsOpen] = useState(false);
+  const handleOpenTrainControls = useCallback(() => {
+    setSelection(null);
+    setIsPaused(false);
+    setTrainControlsOpen(true);
+  }, []);
 
   // QoL state: selection, history, world refresh counter, status, audio.
   const [selection, setSelection] = useState(null);
   const [worldVersion, setWorldVersion] = useState(0);
+  const [photoMode, setPhotoMode] = useState(false);
+  const [photoFov, setPhotoFov] = useState(60);
+  const [cameraFov, setCameraFov] = useState(60);
+  const [photoCapturing, setPhotoCapturing] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState('');
+  const photoSnapshotRef = useRef(null);
   const [worldStatus, setWorldStatus] = useState('');
+  const [tutorialState, setTutorialState] = useState(completedTutorialState);
+  const [tutorialReplayStep, setTutorialReplayStep] = useState(null);
   const canvasRef = useRef(null);
   const [audioVolumes, setAudioVolumes] = useState(() => {
     const v = loadSettings().audioVolumes;
@@ -226,7 +229,6 @@ function AppRuntime() {
   const currentWorldNameRef = useRef('');
   const autosaveTimerRef = useRef(null);
   const statusTimerRef = useRef(null);
-  const selectedTool = TOOLS[selectedToolIndex];
 
   currentWorldIdRef.current = currentWorldId;
   currentWorldNameRef.current = currentWorldName;
@@ -240,7 +242,10 @@ function AppRuntime() {
     frameLimit, vsync, stationOrientation, trainDirection,
   };
 
-  // Preload all GLB models with real progress
+  const selectedTool = TOOL_LEAVES[selectedToolId] || TOOL_LEAVES.hand;
+  const visibleTutorialState = tutorialReplayStep
+    ? { step: tutorialReplayStep, skipped: false }
+    : tutorialState;
   useEffect(() => {
     const counts = {
       models: MODEL_DEFS.length,
@@ -308,13 +313,10 @@ function AppRuntime() {
       const count = trainManagerRef.current.getAllTrains().length;
       setTrainCount(count);
       // Coach tool needs at least one engine in the world
-      setSelectedToolIndex((idx) => {
-        if (TOOLS[idx]?.type === 'coach' && count === 0) return 0;
-        return idx;
-      });
+      if (selectedToolId === 'coach' && count === 0) setSelectedToolId('hand');
     }, 500);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedToolId]);
 
   const setStatus = (msg) => {
     setWorldStatus(msg);
@@ -369,9 +371,6 @@ function AppRuntime() {
       setWorldStatus('Export failed');
     }
   };
-
-  // ── World capture / save / load / recover ──────────────────────────────
-
   const makeWorldPayload = useCallback(() => ({
     terrainSize,
     terrainSeed,
@@ -381,7 +380,8 @@ function AppRuntime() {
     roadManager: roadManagerRef.current,
     env: envRef.current,
     camera: cameraBus.getState(),
-  }), [terrainSize, terrainSeed]);
+    tutorial: tutorialState,
+  }), [terrainSize, terrainSeed, tutorialState]);
 
   // Debounced quiet autosave after meaningful edits (never per-frame).
   const scheduleAutosave = useCallback(() => {
@@ -396,6 +396,80 @@ function AppRuntime() {
       }
     }, 2500);
   }, [makeWorldPayload, refreshLibrary]);
+
+  const handleTutorialAction = useCallback((action) => {
+    if (tutorialReplayStep) {
+      const next = advanceTutorial({ step: tutorialReplayStep, skipped: false }, action);
+      if (next.step === 'complete') setTutorialReplayStep(null);
+      else setTutorialReplayStep(next.step);
+      return;
+    }
+    setTutorialState((current) => {
+      const next = advanceTutorial(current, action);
+      if (next.step !== current.step) scheduleAutosave();
+      return next;
+    });
+  }, [scheduleAutosave, tutorialReplayStep]);
+  const handleTutorialTracksChange = useCallback((tracks, source) => {
+    if (source === 'placed') handleTutorialAction('track');
+    if (source === 'road-placed') handleTutorialAction('road');
+  }, [handleTutorialAction]);
+  const handleSkipTutorial = useCallback(() => {
+    if (tutorialReplayStep) {
+      setTutorialReplayStep(null);
+      return;
+    }
+    setTutorialState((current) => ({ ...current, step: 'complete', skipped: true }));
+    scheduleAutosave();
+  }, [scheduleAutosave, tutorialReplayStep]);
+  const enterPhotoMode = useCallback(() => {
+    if (photoMode || !sceneReady) return;
+    photoSnapshotRef.current = {
+      camera: cameraBus.getState(),
+      cameraFov,
+      timeOfDay,
+      fogEnabled,
+      fogDensity,
+      tiltShiftEnabled,
+      celShadingEnabled,
+      followTrainId,
+    };
+    setPhotoFov(cameraFov);
+    setPhotoStatus('');
+    setTrainControlsOpen(false);
+    setHelpOpen(false);
+    setSelection(null);
+    setFollowTrainId(null);
+    setIsPaused(false);
+    setPhotoMode(true);
+  }, [cameraFov, celShadingEnabled, fogDensity, fogEnabled, followTrainId, photoMode, sceneReady, timeOfDay, tiltShiftEnabled]);
+
+  const exitPhotoMode = useCallback(() => {
+    const snapshot = photoSnapshotRef.current;
+    if (snapshot) {
+      setCameraFov(snapshot.cameraFov);
+      setTimeOfDay(snapshot.timeOfDay);
+      setFogEnabled(snapshot.fogEnabled);
+      setFogDensity(snapshot.fogDensity);
+      setTiltShiftEnabled(snapshot.tiltShiftEnabled);
+      setCelShadingEnabled(snapshot.celShadingEnabled);
+      setFollowTrainId(snapshot.followTrainId);
+      if (snapshot.camera) cameraBus.emit({ type: 'restore', ...snapshot.camera });
+    }
+    photoSnapshotRef.current = null;
+    setPhotoStatus('');
+    setPhotoMode(false);
+  }, []);
+
+  const capturePhoto = useCallback(async () => {
+    if (photoCapturing) return;
+    setPhotoCapturing(true);
+    setPhotoStatus('');
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const result = await captureCanvasToPng(canvasRef.current, currentWorldNameRef.current);
+    setPhotoCapturing(false);
+    setPhotoStatus(result.cancelled ? '' : result.ok ? `Saved ${result.name}` : 'Capture failed');
+  }, [photoCapturing]);
 
   useEffect(() => {
     historyRef.current.onChange = scheduleAutosave;
@@ -470,8 +544,12 @@ function AppRuntime() {
     if (env.vsync !== undefined) setVsync(env.vsync);
     if (env.stationOrientation) setStationOrientation(env.stationOrientation);
     if (env.trainDirection) setTrainDirection(env.trainDirection);
+    setTutorialState(data.tutorial ? normalizeTutorialState(data.tutorial) : completedTutorialState());
+    setTutorialReplayStep(null);
 
     setFollowTrainId(null);
+    setHeightOffset(0);
+
     setSelection(null);
 
     if (sameTerrain && !defer) {
@@ -516,6 +594,11 @@ function AppRuntime() {
     setCurrentWorldId(null);
     setCurrentWorldName(name);
     clearWorld();
+    setHeightOffset(0);
+    setRotation(0);
+    setStationOrientation('horizontal');
+    setTutorialState(initialTutorialState());
+    setTutorialReplayStep(null);
     setSceneReady(false);
     setTerrainSize(size);
     setTerrainSeed(seed);
@@ -606,10 +689,9 @@ function AppRuntime() {
     setTracksVersion(v => v + 1); // Trigger re-render
   };
 
-  const handleToolSelect = (index) => {
-    setSelectedToolIndex(index);
-    // Stations start fresh in horizontal orientation every time.
-    if (TOOLS[index]?.type === 'station') {
+  const handleToolSelect = (id) => {
+    setSelectedToolId(id);
+    if (TOOL_LEAVES[id]?.type === 'station') {
       setStationOrientation('horizontal');
     }
   };
@@ -627,51 +709,43 @@ function AppRuntime() {
   };
 
   const handleHeightChange = (delta) => {
-    setHeightOffset((prev) => Math.max(-2, Math.min(5, prev + delta)));
+    setHeightOffset((prev) => {
+      const next = prev + delta;
+      return Math.max(-2, Math.min(5, Math.round(next * 2) / 2));
+    });
   };
+
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.defaultPrevented) return;
       if (e.key === 'Escape') {
         if (appView !== 'gameplay' || !sceneReady) return;
         e.preventDefault();
-        if (helpOpen) { setHelpOpen(false); setIsPaused(false); }
+        if (photoMode) exitPhotoMode();
+        else if (helpOpen) { setHelpOpen(false); setIsPaused(false); }
         else if (trainControlsOpen) setTrainControlsOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
-        else setIsPaused((value) => !value);
-        return;
       }
-      if (e.key === 'F9') {
-        if (!showDebug || appView !== 'gameplay' || !sceneReady) return;
+      // Q/E adjust track bridge height in fixed half-unit steps.
+      if (selectedTool?.type === 'track' && (e.key.toLowerCase() === 'q' || e.key.toLowerCase() === 'e')) {
+        if (e.repeat) return;
         e.preventDefault();
-        setDebugOverlayVisible((value) => !value);
+        e.stopPropagation();
+        handleHeightChange(e.key.toLowerCase() === 'q' ? -0.5 : 0.5);
         return;
       }
-      if (isPaused) return;
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+      // X resets bridge height.
+      if (selectedTool?.type === 'track' && e.key.toLowerCase() === 'x') {
         e.preventDefault();
-        if (e.key.toLowerCase() === 'z' && e.shiftKey) doRedo();
-        else if (e.key.toLowerCase() === 'z') doUndo();
-        else doRedo();
-        return;
-      }
-      // Q/E for height adjustment
-      if (e.key.toLowerCase() === 'q') {
-        handleHeightChange(-0.5);
-      } else if (e.key.toLowerCase() === 'e') {
-        handleHeightChange(0.5);
-      }
-      // X to reset height
-      else if (e.key.toLowerCase() === 'x') {
+        e.stopPropagation();
         setHeightOffset(0);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [appView, doUndo, doRedo, helpOpen, isPaused, sceneReady, settingsOpen, showDebug, trainControlsOpen]);
+  }, [appView, doUndo, doRedo, exitPhotoMode, helpOpen, isPaused, photoMode, sceneReady, selectedTool?.type, settingsOpen, showDebug, trainControlsOpen]);
 
   const copyDiagnostics = useCallback(async () => {
     const report = [
@@ -804,10 +878,11 @@ function AppRuntime() {
       <GameScene 
         terrainSize={terrainSize} 
         terrainSeed={terrainSeed}
-        showDebug={showDebug && debugOverlayVisible}
+        showDebug={showDebug && debugOverlayVisible && !photoMode}
         debugDetail={debugDetail}
         debugPosition={debugPosition}
         showAxes={showAxes}
+        onTracksChange={handleTutorialTracksChange}
         paused={isPaused}
         trackManager={trackManagerRef.current}
         stationManager={stationManagerRef.current}
@@ -832,6 +907,11 @@ function AppRuntime() {
         followTrainId={followTrainId}
         stationOrientation={stationOrientation}
         history={historyRef.current}
+        onTutorialAction={handleTutorialAction}
+        cameraFov={photoMode ? photoFov : cameraFov}
+        simulationPaused={photoMode}
+        photoMode={photoMode}
+        onCameraInput={() => { if (!photoMode) handleTutorialAction('camera'); }}
         onSelect={setSelection}
         onTerrainReady={handleTerrainReady}
         onSceneProgress={handleSceneProgress}
@@ -845,9 +925,9 @@ function AppRuntime() {
       />
       
       <PauseMenu
-        isPaused={isPaused}
-        helpOpen={helpOpen}
-        settingsOpen={settingsOpen}
+        isPaused={isPaused && !photoMode}
+        helpOpen={helpOpen && !photoMode}
+        settingsOpen={settingsOpen && !photoMode}
         onResume={() => { setSettingsOpen(false); setIsPaused(false); }}
         onOpenSettings={() => setSettingsOpen(true)}
         onCloseSettings={() => setSettingsOpen(false)}
@@ -859,13 +939,7 @@ function AppRuntime() {
         diagnosticsEnabled={showDebug}
         diagnosticsVisible={showDebug && debugOverlayVisible}
         onToggleDiagnostics={() => setDebugOverlayVisible((value) => !value)}
-        trainControlsOpen={trainControlsOpen}
-        onOpenTrainControls={() => setTrainControlsOpen(true)}
-        onCloseTrainControls={() => setTrainControlsOpen(false)}
-        trainManager={trainManagerRef.current}
-        followTrainId={followTrainId}
-        onFollowTrain={setFollowTrainId}
-        history={historyRef.current}
+        onOpenTrainControls={handleOpenTrainControls}
         onExit={() => { saveCurrentWorldLocally(); setSettingsOpen(false); setIsPaused(false); setAppView('menu'); }}
         timeOfDay={timeOfDay}
         onTimeChange={setTimeOfDay}
@@ -897,6 +971,19 @@ function AppRuntime() {
         onAudioVolumeChange={(patch) => setAudioVolumes((v) => ({ ...v, ...patch }))}
         worldStatus={worldStatus}
       />
+      {trainControlsOpen && !isPaused && !helpOpen && !photoMode && (
+        <TrainManagerDrawer
+          trainManager={trainManagerRef.current}
+          followTrainId={followTrainId}
+          onFollowTrain={setFollowTrainId}
+          history={historyRef.current}
+          onClose={() => setTrainControlsOpen(false)}
+          onSpeedChange={scheduleAutosave}
+        />
+      )}
+      {sceneReady && !isPaused && !helpOpen && !trainControlsOpen && !photoMode && (
+        <TutorialOverlay state={visibleTutorialState} onSkip={handleSkipTutorial} />
+      )}
 
       <GameHud
         worldName={currentWorldName}
@@ -907,20 +994,42 @@ function AppRuntime() {
         heightOffset={heightOffset}
         onUndo={doUndo}
         onRedo={doRedo}
-        onHelp={() => { setHelpOpen(true); setIsPaused(true); }}
-        onPause={() => setIsPaused(true)}
-        onTrainManagement={() => setTrainControlsOpen(true)}
+        onHelp={() => { setHelpOpen(true); setTrainControlsOpen(false); setIsPaused(true); }}
+        onPause={() => { setTrainControlsOpen(false); setIsPaused(true); }}
+        onTrainManagement={() => { setSelection(null); setTrainControlsOpen((open) => !open); }}
+        onPhotoMode={enterPhotoMode}
+        visible={!photoMode}
       />
-      {helpOpen && <HelpPanel onClose={() => { setHelpOpen(false); setIsPaused(false); }} />}
-      <ToastRegion message={worldStatus} onDismiss={() => setWorldStatus('')} />
+      {helpOpen && <HelpPanel onClose={() => { setHelpOpen(false); setIsPaused(false); }} onReplayTutorial={() => { setTutorialReplayStep('camera'); setHelpOpen(false); setIsPaused(false); }} />}
+      <ToastRegion message={photoMode ? '' : worldStatus} onDismiss={() => setWorldStatus('')} />
+      {photoMode && (
+        <PhotoModePanel
+          fov={photoFov}
+          onFovChange={setPhotoFov}
+          timeOfDay={timeOfDay}
+          onTimeChange={setTimeOfDay}
+          fogEnabled={fogEnabled}
+          onFogChange={setFogEnabled}
+          tiltShiftEnabled={tiltShiftEnabled}
+          onTiltShiftChange={setTiltShiftEnabled}
+          celShadingEnabled={celShadingEnabled}
+          onCelShadingChange={setCelShadingEnabled}
+          onReset={() => { setPhotoFov(cameraFov); setTimeOfDay('day'); setFogEnabled(true); setTiltShiftEnabled(false); setCelShadingEnabled(false); }}
+          onCapture={capturePhoto}
+          onExit={exitPhotoMode}
+          capturing={photoCapturing}
+          status={photoStatus}
+        />
+      )}
       
       {/* Hotbar */}
       <Hotbar
-        tools={TOOLS}
-        selectedIndex={selectedToolIndex}
+        tools={TOOL_GROUPS}
+        selectedToolId={selectedToolId}
         onSelect={handleToolSelect}
         onRotate={handleRotate}
-        paused={isPaused}
+        paused={isPaused || photoMode}
+        visible={!photoMode}
         disabledToolIds={trainCount === 0 ? ['coach'] : []}
       />
       
@@ -941,7 +1050,7 @@ function AppRuntime() {
       />
       
       {/* Height Control Indicator - Moved to bottom-left */}
-      {heightOffset !== 0 && (
+      {!photoMode && heightOffset !== 0 && (
         <div className="absolute bottom-28 left-4 z-30 rounded-xl border border-[#e5a94f]/40 bg-[#101a2b]/85 px-4 py-2 font-mono text-sm text-white shadow-lg backdrop-blur-md sm:bottom-24">
           <div className="font-bold text-blue-400 mb-1">Bridge Mode</div>
           <div>Height: {heightOffset.toFixed(1)}</div>

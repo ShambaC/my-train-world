@@ -98,7 +98,8 @@ function getMat(colorHex, isGlowing = false) {
 const HEADLAMP_MAT = new THREE.MeshBasicMaterial({
   color: 0xfff2c0,
   transparent: true,
-  opacity: 0.1,
+  opacity: 0,
+
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,

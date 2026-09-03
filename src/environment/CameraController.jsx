@@ -13,7 +13,7 @@ function isKeyDown(code) {
  * The OrbitControls target moves with the camera so the view never
  * pitches toward a static point.
  */
-export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false }) {
+export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false, onCameraInput }) {
   const { camera } = useThree();
 
   useEffect(() => {
@@ -59,6 +59,7 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
     const rotating = rotateX !== 0 || rotateY !== 0;
     if (controls && !followActive) controls.enabled = !rotating;
     if (move.lengthSq() === 0 && (followActive || (rotateX === 0 && rotateY === 0))) return;
+    onCameraInput?.();
 
     if (move.lengthSq() > 0) {
       const speed = isKeyDown('shift') ? 15 : 6;

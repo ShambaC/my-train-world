@@ -12,7 +12,10 @@ export default function GameHud({
   onHelp,
   onPause,
   onTrainManagement,
+  onPhotoMode,
+  visible = true,
 }) {
+  if (!visible) return null;
   const hint = selectedTool?.type === 'train'
     ? `${selectedTool.label} · R changes direction`
     : selectedTool?.type === 'station'
@@ -35,7 +38,7 @@ export default function GameHud({
         </div>
         <div className="pointer-events-auto flex shrink-0 items-center gap-1">
           <button type="button" onClick={onUndo} aria-label="Undo" title="Undo last change (Ctrl+Z)" className="hidden min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b] sm:block"><img src={UI_ICONS.actions.undo} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
-          <button type="button" onClick={onRedo} aria-label="Redo" title="Redo last change (Ctrl+Y or Ctrl+Shift+Z)" className="hidden min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b] sm:block"><img src={UI_ICONS.actions.redo} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
+          <button type="button" onClick={onPhotoMode} aria-label="Enter photo mode" title="Enter photo mode" className="min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b]"><img src={UI_ICONS.actions.camera} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onHelp} aria-label="Open help" title="Open help guide" className="min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b]"><img src={UI_ICONS.actions.help} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onTrainManagement} aria-label="Open train management" title="Open live train management" className="min-h-10 min-w-10 rounded-xl bg-[#18263b] px-2 text-sm font-bold text-[#c5d0df] hover:bg-[#22344b]"><img src={UI_ICONS.trainControls.entityTrain} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>
           <button type="button" onClick={onPause} aria-label="Pause game" title="Pause railway" className="min-h-10 rounded-xl bg-[#e5a94f] px-3 text-xs font-bold text-[#101a2b] hover:bg-[#f1bd63]"><img src={UI_ICONS.actions.pause} alt="" aria-hidden="true" className="mx-auto h-5 w-5 object-contain" /></button>

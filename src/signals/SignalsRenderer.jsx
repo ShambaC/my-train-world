@@ -9,9 +9,9 @@ import { buildSignalMesh } from './signalModels.js';
  * React reconciles only when the signal topology changes (polled).
  * Per-frame lamp states are applied imperatively to cached groups.
  */
-export default function SignalsRenderer({ signalManager, trainManager, lighting, enabled = true }) {
+export default function SignalsRenderer({ signalManager, trainManager, lighting, enabled = true, simulationPaused = false }) {
   const rootRef = useRef();
-  const nodesRef = useRef(new Map()); // signalId -> THREE.Group
+  const nodesRef = useRef(new Map());
   const lastSigRef = useRef('');
   const enabledRef = useRef(enabled);
   const [snapshot, setSnapshot] = useState(null);
@@ -36,7 +36,7 @@ export default function SignalsRenderer({ signalManager, trainManager, lighting,
   // Per-frame state + lamp animation.
   useFrame((_, delta) => {
     if (!enabledRef.current || !signalManager) return;
-    signalManager.update(trainManager, delta);
+    if (!simulationPaused) signalManager.update(trainManager, delta);
     const nightness = lighting ? lighting.nightness : 0.6;
 
     for (const sig of signalManager.getSignals()) {

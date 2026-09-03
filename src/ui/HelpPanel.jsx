@@ -6,14 +6,12 @@ const PAGES = [
     title: 'Build your railway',
     sections: [
       ['Build tools', [
-        <><strong>1-9</strong> select a build tool</>,
-        <>Hand selects objects for inspection</>,
-        <>Straight, curved, and ramp place track</>,
-        <>Road places axis-aligned road segments</>,
-        <>Train places an engine on a track</>,
-        <>Station places a two-marker platform</>,
-        <>Coach adds a coach to an existing engine</>,
-        <>Delete removes the selected entity</>,
+        <><strong>1</strong> Hand</>,
+        <><strong>2</strong> Tracks → Straight, Curved, or Ramp</>,
+        <><strong>3</strong> Road places axis-aligned road segments</>,
+        <><strong>4</strong> Trains → Engine or Coach</>,
+        <><strong>5</strong> Station places a two-marker platform</>,
+        <><strong>6</strong> Delete removes the selected entity</>,
       ]],
       ['Placement', [
         <><strong>R</strong> rotate tracks, roads, or station direction</>,
@@ -40,8 +38,8 @@ const PAGES = [
       ['Train actions', [
         <>Focus moves the camera to the train</>,
         <>Follow keeps the camera with the train</>,
-        <>Train management in Pause lists every engine</>,
-        <>Global speed controls the pace of all trains</>,
+        <>Train management opens live drawer from HUD or Pause</>,
+        <>Each train has its own target speed (0.10–1.50)</>,
         <>Remove coach acts on one coach without deleting the engine</>,
       ]],
     ],
@@ -94,7 +92,7 @@ const PAGES = [
   },
 ];
 
-export default function HelpPanel({ onClose }) {
+export default function HelpPanel({ onClose, onReplayTutorial }) {
   const closeRef = useRef(null);
   const [page, setPage] = useState(0);
   const current = PAGES[page];
@@ -128,6 +126,7 @@ export default function HelpPanel({ onClose }) {
         </div>
         <p className="mt-5 text-sm leading-6 text-[#aebbd0]">{current.note}</p>
 
+        {onReplayTutorial && <button type="button" onClick={onReplayTutorial} className="mt-5 min-h-11 w-full rounded-xl border border-[#63c9dc]/40 bg-[#18384a] px-4 py-2 text-sm font-semibold text-[#d9f7ff] hover:bg-[#20536a]">Replay tutorial</button>}
         <div className="mt-6 flex gap-3">
           <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page === 0} className="min-h-12 flex-1 rounded-xl border border-white/10 bg-[#18263b] px-4 py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
           {page < PAGES.length - 1 ? <button type="button" onClick={() => setPage((value) => Math.min(PAGES.length - 1, value + 1))} className="min-h-12 flex-1 rounded-xl bg-[#4b8dff] px-4 py-3 font-semibold text-white hover:bg-[#387be8]">Next</button> : <button type="button" onClick={onClose} className="min-h-12 flex-1 rounded-xl bg-[#4b8dff] px-4 py-3 font-semibold text-white hover:bg-[#387be8]">Back to railway</button>}

@@ -5,9 +5,14 @@
  * Coaches trail the engine along the track graph (walkBack each frame).
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
-import { COACH_LENGTH } from './coachTypes.js';
 import { DEFAULT_ENGINE } from './engineTypes.js';
+import { COACH_LENGTH } from './coachTypes.js';
 import { MAX_STATION_LATERAL } from '../stations/StationManager.js';
+
+export const DEFAULT_TRAIN_SPEED = 0.5;
+export const MIN_TRAIN_SPEED = 0.1;
+export const MAX_TRAIN_SPEED = 1.5;
+export const TRAIN_SPEED_STEP = 0.05;
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -27,16 +32,15 @@ export class TrainManager {
     this.time = 0;
     this.STOP_DURATION = 5; // seconds trains dwell at stations
     this.STOP_COOLDOWN = 8; // seconds after departing before a re-stop is allowed
-    this.globalSpeed = 0.5; // user-controlled speed target for all trains
   }
 
-  /**
-   * User speed setting — applied to every train. Speed itself is eased
-   * toward this target per frame (smooth acceleration/deceleration).
-   */
-  setGlobalSpeed(v) {
-    this.globalSpeed = v;
-    for (const train of this.trains.values()) train.speedMax = v;
+  setTrainSpeed(trainId, value) {
+    const train = this.trains.get(trainId);
+    if (!train) return false;
+    const speed = Number(value);
+    if (!Number.isFinite(speed)) return false;
+    train.speedMax = Math.min(MAX_TRAIN_SPEED, Math.max(MIN_TRAIN_SPEED, speed));
+    return true;
   }
 
   setStationManager(stationManager) {
@@ -67,7 +71,7 @@ export class TrainManager {
       currentTrackId: startTrackId,
       progress: t,
       speed: 0,          // eased toward speedMax each frame (smooth motion)
-      speedMax: this.globalSpeed,
+      speedMax: DEFAULT_TRAIN_SPEED,
       heading,
       position: { ...startTrack.position },
       rotation: Math.atan2(heading.x, heading.z),
@@ -103,6 +107,9 @@ export class TrainManager {
     const train = {
       ...data,
       engineType: data.engineType || DEFAULT_ENGINE,
+      speedMax: Number.isFinite(Number(data.speedMax))
+        ? Math.min(MAX_TRAIN_SPEED, Math.max(MIN_TRAIN_SPEED, Number(data.speedMax)))
+        : DEFAULT_TRAIN_SPEED,
       heading: { ...data.heading },
       position: { ...data.position },
       cooldowns: data.cooldowns instanceof Map ? data.cooldowns : new Map(Object.entries(data.cooldowns || {})),
