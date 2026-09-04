@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/scr_new_a.png" alt="MyTrainWorld railway scene" width="49%">
-  <img src="screenshots/scr_new_b.png" alt="MyTrainWorld world browser" width="49%">
+  <img src="screenshots/scr_new_a.png" alt="MyTrainWorld railway scene">
+  <img src="screenshots/scr_new_b.png" alt="MyTrainWorld world browser">
 </p>
 
 ## Overview
