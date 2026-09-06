@@ -50,6 +50,10 @@ import {
 } from "./utils/worldSave";
 import { captureCanvasToPng } from "./utils/photoCapture.js";
 import { advanceTutorial, completedTutorialState, initialTutorialState, normalizeTutorialState } from "./utils/tutorial.js";
+import { trailerConfig } from "./trailer/trailerConfig.js";
+import TrailerOverlay from "./trailer/TrailerOverlay.jsx";
+
+const TRAILER_MODE = trailerConfig.enabled;
 
 const TOOL_GROUPS = [
   {
@@ -127,17 +131,17 @@ function loadGlobalGraphicsDefaults() {
 
 function AppRuntime() {
   const [terrainSize, setTerrainSize] = useState({ length: 100, breadth: 100 });
-  const [terrainSeed, setTerrainSeed] = useState(1337);
-  const [showDebug, setShowDebug] = useState(() => loadSettings().developerDiagnostics ?? false);
-  const [showAxes, setShowAxes] = useState(() => loadSettings().showAxes ?? false);
+  const [terrainSeed, setTerrainSeed] = useState(TRAILER_MODE ? trailerConfig.seed : 1337);
+  const [showDebug, setShowDebug] = useState(() => TRAILER_MODE ? false : (loadSettings().developerDiagnostics ?? false));
+  const [showAxes, setShowAxes] = useState(() => TRAILER_MODE ? false : (loadSettings().showAxes ?? false));
   const [showTechnicalInfo, setShowTechnicalInfo] = useState(() => loadSettings().showTechnicalInfo ?? false);
-  const [debugOverlayVisible, setDebugOverlayVisible] = useState(() => loadSettings().developerDiagnostics ?? false);
+  const [debugOverlayVisible, setDebugOverlayVisible] = useState(() => TRAILER_MODE ? false : (loadSettings().developerDiagnostics ?? false));
   const [debugDetail, setDebugDetail] = useState(() => loadSettings().debugDetail ?? 'compact');
   const [debugPosition, setDebugPosition] = useState(() => loadSettings().debugPosition ?? 'top-left');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolId, setSelectedToolId] = useState('hand');
   const [heightOffset, setHeightOffset] = useState(0);
-  const [timeOfDay, setTimeOfDay] = useState('day');
+  const [timeOfDay, setTimeOfDay] = useState(TRAILER_MODE ? 'dawn' : 'day');
   const [fogEnabled, setFogEnabled] = useState(true);
   const [fogDensity, setFogDensity] = useState(null); // null = use time-of-day preset density
   const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
@@ -153,14 +157,17 @@ function AppRuntime() {
   // Render pacing prefs — persisted, never touch world state.
   // Defaults: 120 FPS limit, vsync on (see PerformanceSettings.jsx).
   const [frameLimit, setFrameLimit] = useState(() => {
+    if (TRAILER_MODE) return trailerConfig.fps;
     const v = loadSettings().frameLimit;
     return v === undefined || v === null ? 120 : v;
   });
   const [vsync, setVsync] = useState(() => {
+    if (TRAILER_MODE) return false;
     const v = loadSettings().vsync;
     return v === undefined || v === null ? true : v;
   });
   const [graphicsQuality, setGraphicsQuality] = useState(() => {
+    if (TRAILER_MODE) return 'high';
     return loadSettings().graphicsQuality || 'medium';
   });
   const [tracksVersion, setTracksVersion] = useState(0);
@@ -168,7 +175,7 @@ function AppRuntime() {
   const [loadProgress, setLoadProgress] = useState(0);
   const [sceneReady, setSceneReady] = useState(false);
   const [trainCount, setTrainCount] = useState(0);
-  const [appView, setAppView] = useState('menu');
+  const [appView, setAppView] = useState(TRAILER_MODE ? 'gameplay' : 'menu');
   const [worlds, setWorlds] = useState(() => listWorlds());
   const [lastWorldId, setLastWorldIdState] = useState(() => getLastWorldId());
   const [currentWorldId, setCurrentWorldId] = useState(null);
@@ -192,6 +199,7 @@ function AppRuntime() {
   const [cameraFov, setCameraFov] = useState(60);
   const [photoCapturing, setPhotoCapturing] = useState(false);
   const [photoStatus, setPhotoStatus] = useState('');
+  const [trailerCard, setTrailerCard] = useState(null);
   const photoSnapshotRef = useRef(null);
   const [worldStatus, setWorldStatus] = useState('');
   const [tutorialState, setTutorialState] = useState(completedTutorialState);
@@ -385,6 +393,7 @@ function AppRuntime() {
 
   // Debounced quiet autosave after meaningful edits (never per-frame).
   const scheduleAutosave = useCallback(() => {
+    if (TRAILER_MODE) return;
     clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
       const payload = makeWorldPayload();
@@ -396,7 +405,6 @@ function AppRuntime() {
       }
     }, 2500);
   }, [makeWorldPayload, refreshLibrary]);
-
   const handleTutorialAction = useCallback((action) => {
     if (tutorialReplayStep) {
       const next = advanceTutorial({ step: tutorialReplayStep, skipped: false }, action);
@@ -414,14 +422,6 @@ function AppRuntime() {
     if (source === 'placed') handleTutorialAction('track');
     if (source === 'road-placed') handleTutorialAction('road');
   }, [handleTutorialAction]);
-  const handleSkipTutorial = useCallback(() => {
-    if (tutorialReplayStep) {
-      setTutorialReplayStep(null);
-      return;
-    }
-    setTutorialState((current) => ({ ...current, step: 'complete', skipped: true }));
-    scheduleAutosave();
-  }, [scheduleAutosave, tutorialReplayStep]);
   const enterPhotoMode = useCallback(() => {
     if (photoMode || !sceneReady) return;
     photoSnapshotRef.current = {
@@ -816,6 +816,7 @@ function AppRuntime() {
   const handleSceneReady = useCallback(() => {
     setLoadProgress(1);
     setSceneReady(true);
+    if (TRAILER_MODE) return;
     const pendingNewWorld = pendingNewWorldRef.current;
     if (pendingNewWorld && !currentWorldIdRef.current) {
       const result = createWorldRecord({
@@ -835,7 +836,9 @@ function AppRuntime() {
   }, [captureWorldThumbnail, makeWorldPayload, refreshLibrary]);
 
   if (isLoading) {
-    return <LoadingScreen progress={loadProgress} />;
+    return TRAILER_MODE
+      ? <div className="w-full h-screen bg-[#0b1422]" aria-hidden="true" />
+      : <LoadingScreen progress={loadProgress} />;
   }
 
   if (appView === 'menu') {
@@ -928,8 +931,19 @@ function AppRuntime() {
         signalManager={signalManagerRef.current}
         graphicsQuality={graphicsQuality}
         onCanvasReady={(canvas) => { canvasRef.current = canvas; }}
+        trailerMode={TRAILER_MODE}
+        trailerShot={trailerConfig.shot}
+        trailerConfig={trailerConfig}
+        onTrailerEnvironmentChange={(patch) => {
+          if (patch?.timeOfDay) setTimeOfDay(patch.timeOfDay);
+        }}
+        onTrailerCardChange={setTrailerCard}
       />
       
+      {TRAILER_MODE ? (
+        <TrailerOverlay card={trailerCard} />
+      ) : (
+        <>
       <PauseMenu
         isPaused={isPaused && !photoMode}
         helpOpen={helpOpen && !photoMode}
@@ -1059,6 +1073,7 @@ function AppRuntime() {
       {!photoMode && heightOffset !== 0 && (
         <div className="absolute bottom-28 left-4 z-30 rounded-xl border border-[#e5a94f]/40 bg-[#101a2b]/85 px-4 py-2 font-mono text-sm text-white shadow-lg backdrop-blur-md sm:bottom-24">
           <div className="font-bold text-blue-400 mb-1">Bridge Mode</div>
+
           <div>Height: {heightOffset.toFixed(1)}</div>
           <div className="text-xs text-gray-400 mt-1">
             Q/E: Adjust • X: Reset
@@ -1067,12 +1082,17 @@ function AppRuntime() {
       )}
       
       {!sceneReady && <LoadingScreen progress={loadProgress} />}
+        </>
+      )}
     </div>
   );
 }
 
+
 function App() {
-  return (
+  return TRAILER_MODE ? (
+    <AppRuntime />
+  ) : (
     <DeviceAccessGate>
       <AppRuntime />
     </DeviceAccessGate>

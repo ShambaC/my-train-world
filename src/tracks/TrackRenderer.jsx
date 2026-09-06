@@ -40,6 +40,7 @@ export default function TrackRenderer({
   history,
   onSelect,
   terrainData,
+  trackLayoutVersion = 0,
 }) {
   const [tracks, setTracks] = useState([]);
   const ghostMeshRef = useRef(null);
@@ -93,10 +94,9 @@ export default function TrackRenderer({
   roadManagerRef.current = roadManager;
   historyRef.current = history;
   onSelectRef.current = onSelect;
-
   useEffect(() => {
     setTracks(trackManager.getAllTracks());
-  }, [trackManager]);
+  }, [trackManager, trackLayoutVersion]);
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');

@@ -41,6 +41,7 @@ import PracticalLights from './environment/PracticalLights';
 import ShoreDressing from './environment/ShoreDressing.jsx';
 import VisualReviewHarness from './render/VisualReviewHarness.jsx';
 import { getQualityPreset } from './render/graphicsQuality.js';
+import TrailerDirector from './trailer/TrailerDirector.jsx';
 
 // Scene component that contains the terrain
 function Scene({ 
@@ -89,6 +90,7 @@ function Scene({
   onSelect,
   selectedTrainId,
   trainsVersion,
+  onTrainsChanged,
   stationsScatterVersion,
   showAxes,
   showDebug = false,
@@ -98,6 +100,11 @@ function Scene({
   onCameraInput,
   cameraFov = 60,
   simulationPaused = false,
+  trailerMode = false,
+  trailerShot = null,
+  trailerConfig = null,
+  onTrailerEnvironmentChange,
+  onTrailerCardChange,
 }) {
   const qualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const terrainRef = useRef();
@@ -185,39 +192,41 @@ function Scene({
       trainAudio.updateAmbient(camera, terrain?.userData, timeOfDay);
     }
 
-    // Train follow camera
-    const controls = orbitRef.current;
-    const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
-    if (controls) controls.enabled = !followTrain;
-    if (followTrain) {
-      const hx = Math.sin(followTrain.rotation);
-      const hz = Math.cos(followTrain.rotation);
-      const sideX = hz;
-      const sideZ = -hx;
-      const target = new THREE.Vector3(
-        followTrain.position.x,
-        followTrain.position.y + 0.25,
-        followTrain.position.z,
-      );
-      const desired = new THREE.Vector3(
-        target.x - hx * 3.6 + sideX * 1.4,
-        target.y + 2.25,
-        target.z - hz * 3.6 + sideZ * 1.4,
-      );
-      constrainCamera(desired, target, terrain?.userData, trackManager, trainManager);
-      const k = 1 - Math.exp(-3.5 * Math.min(delta, 0.1));
-      camera.position.lerp(desired, k);
-      controls.target.lerp(target, k);
-      controls.update();
-      return;
-    }
+    // Gameplay camera ownership. TrailerDirector owns camera in clean capture mode.
+    if (!trailerMode) {
+      const controls = orbitRef.current;
+      const followTrain = followTrainId ? trainManager.getTrain(followTrainId) : null;
+      if (controls) controls.enabled = !followTrain;
+      if (followTrain) {
+        const hx = Math.sin(followTrain.rotation);
+        const hz = Math.cos(followTrain.rotation);
+        const sideX = hz;
+        const sideZ = -hx;
+        const target = new THREE.Vector3(
+          followTrain.position.x,
+          followTrain.position.y + 0.25,
+          followTrain.position.z,
+        );
+        const desired = new THREE.Vector3(
+          target.x - hx * 3.6 + sideX * 1.4,
+          target.y + 2.25,
+          target.z - hz * 3.6 + sideZ * 1.4,
+        );
+        constrainCamera(desired, target, terrain?.userData, trackManager, trainManager);
+        const k = 1 - Math.exp(-3.5 * Math.min(delta, 0.1));
+        camera.position.lerp(desired, k);
+        controls.target.lerp(target, k);
+        controls.update();
+        return;
+      }
 
-    if (controls) {
-      const distance = camera.position.distanceTo(controls.target);
-      const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
-      controls.zoomSpeed = 1.5 * closeRangeBoost;
-      controls.panSpeed = 1.5 * closeRangeBoost;
-      if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
+      if (controls) {
+        const distance = camera.position.distanceTo(controls.target);
+        const closeRangeBoost = THREE.MathUtils.clamp(8 / Math.max(distance, 0.2), 1, 8);
+        controls.zoomSpeed = 1.5 * closeRangeBoost;
+        controls.panSpeed = 1.5 * closeRangeBoost;
+        if (import.meta.env.DEV && window.__mtw) window.__mtw.orbitControls = controls;
+      }
     }
 
     const hemi = scene.getObjectByName('hemisphereLight');
@@ -293,7 +302,7 @@ function Scene({
   return (
     <>
       <Skybox timeOfDay={timeOfDay} lighting={lighting} />
-      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} onCameraInput={onCameraInput} />
+      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} enabled={!trailerMode} onCameraInput={onCameraInput} />
       
       {/* Hemisphere Lighting */}
       <hemisphereLight
@@ -375,6 +384,7 @@ function Scene({
           history={history}
           onSelect={onSelect}
           terrainData={terrain?.userData}
+          trackLayoutVersion={trackLayoutVersion}
         />
       )}
 
@@ -501,42 +511,67 @@ function Scene({
         stationManager={stationManager}
         lighting={lighting}
       />
-      
+
       {/* Grid helper */}
       <primitive object={createGrid(Math.max(terrainSize.length, terrainSize.breadth))} />
-      
+
       {/* Camera controls */}
-      <OrbitControls
-        ref={orbitRef}
-        enableDamping
-        dampingFactor={0.05}
-        minDistance={0.75}
-        maxDistance={Math.max(120, Math.max(terrainSize.length, terrainSize.breadth) * 0.75)}
-        maxPolarAngle={Math.PI - 0.08}
-      />
+      {!trailerMode && (
+        <OrbitControls
+          ref={orbitRef}
+          enableDamping
+          dampingFactor={0.05}
+          minDistance={0.75}
+          maxDistance={Math.max(120, Math.max(terrainSize.length, terrainSize.breadth) * 0.75)}
+          maxPolarAngle={Math.PI - 0.08}
+        />
+      )}
 
-      {/* QoL camera commands */}
-      <CameraCommands
-        terrainSize={terrainSize}
-        trackManager={trackManager}
-        stationManager={stationManager}
-        trainManager={trainManager}
-        followTrainId={followTrainId}
-        orbitRef={orbitRef}
-      />
+      {!trailerMode && (
+        <>
+          {/* QoL camera commands */}
+          <CameraCommands
+            terrainSize={terrainSize}
+            trackManager={trackManager}
+            stationManager={stationManager}
+            trainManager={trainManager}
+            followTrainId={followTrainId}
+            orbitRef={orbitRef}
+          />
 
-      <CameraCollision
-        terrainData={terrain?.userData}
-        trackManager={trackManager}
-        trainManager={trainManager}
-        orbitRef={orbitRef}
-      />
+          <CameraCollision
+            terrainData={terrain?.userData}
+            trackManager={trackManager}
+            trainManager={trainManager}
+            orbitRef={orbitRef}
+          />
+        </>
+      )}
 
       {/* Axis indicator gizmo */}
-      <AxisGizmo visible={showAxes} />
+      <AxisGizmo visible={showAxes && !trailerMode} />
 
-      {/* Visual Review Dev Harness */}
-      <VisualReviewHarness camera={camera} orbitRef={orbitRef} />
+      {trailerMode && terrain && (
+        <TrailerDirector
+          shot={trailerShot}
+          autoplay={trailerConfig?.autoplay !== false}
+          terrainData={terrain.userData}
+          trackManager={trackManager}
+          stationManager={stationManager}
+          trainManager={trainManager}
+          roadManager={roadManager}
+          signalManager={signalManager}
+          crossingManager={crossingManager}
+          trailerSeed={trailerConfig?.seed}
+          onTracksChanged={onTracksChange}
+          onTrainsChanged={onTrainsChanged}
+          onEnvironmentChange={onTrailerEnvironmentChange}
+          onCardChange={onTrailerCardChange}
+          debug={trailerConfig?.debug}
+        />
+      )}
+
+      {!trailerMode && <VisualReviewHarness camera={camera} orbitRef={orbitRef} />}
     </>
   );
 }
@@ -555,6 +590,7 @@ export default function GameScene({
   heightOffset,
   onTracksChange,
   tracksVersion,
+  onTrainsChanged,
   timeOfDay = 'day',
   fogEnabled = true,
   fogDensity,
@@ -589,6 +625,11 @@ export default function GameScene({
   debugPosition = 'top-left',
   graphicsQuality = 'medium',
   onCanvasReady,
+  trailerMode = false,
+  trailerShot = null,
+  trailerConfig = null,
+  onTrailerEnvironmentChange,
+  onTrailerCardChange,
 }) {
   const rootQualityPreset = useMemo(() => getQualityPreset(graphicsQuality), [graphicsQuality]);
   const [sceneStats, setSceneStats] = useState({
@@ -830,6 +871,7 @@ export default function GameScene({
           rotation={rotation}
           heightOffset={heightOffset}
           onTracksChange={handleTracksChange}
+          onTrainsChanged={() => setTrainsVersion((v) => v + 1)}
           tracksVersion={tracksVersion}
           timeOfDay={timeOfDay}
           fogEnabled={fogEnabled}
@@ -868,6 +910,11 @@ export default function GameScene({
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
            showDebug={showDebug}
+          trailerMode={trailerMode}
+          trailerShot={trailerShot}
+          trailerConfig={trailerConfig}
+          onTrailerEnvironmentChange={onTrailerEnvironmentChange}
+          onTrailerCardChange={onTrailerCardChange}
          />
         {/* Final color pass always mounted: vanilla now shares the miniature
             mode's vibrant grading (exposure/saturation/vignette); the tilt
@@ -881,10 +928,10 @@ export default function GameScene({
       </Canvas>
 
       {/* Real-time DoF Tuning Slider Overlay */}
-      {!photoMode && <DofDebugPanel tiltShiftEnabled={tiltShiftEnabled} />}
+      {!photoMode && !trailerMode && <DofDebugPanel tiltShiftEnabled={tiltShiftEnabled} />}
 
       {/* Radial engine picker */}
-      {!photoMode && engineMenu && (
+      {!photoMode && !trailerMode && engineMenu && (
         <EngineMenu
           x={engineMenu.x}
           y={engineMenu.y}
@@ -895,7 +942,7 @@ export default function GameScene({
       )}
 
       {/* Radial coach picker */}
-      {!photoMode && coachMenu && (
+      {!photoMode && !trailerMode && coachMenu && (
         <CoachMenu
           x={coachMenu.x}
           y={coachMenu.y}
@@ -905,7 +952,7 @@ export default function GameScene({
       )}
 
       {/* Station role picker (after placement) */}
-      {!photoMode && roleMenu && (
+      {!photoMode && !trailerMode && roleMenu && (
         <StationRoleMenu
           x={roleMenu.x}
           y={roleMenu.y}
@@ -915,7 +962,7 @@ export default function GameScene({
       )}
       
       {/* Debug Overlay */}
-      {showDebug && (
+      {showDebug && !trailerMode && (
         <div className={`absolute z-30 max-w-[min(32rem,calc(100vw-2rem))] rounded-lg bg-black/70 px-4 py-3 font-mono text-sm text-white ${
           debugPosition === 'top-right' ? 'right-4 top-4' :
           debugPosition === 'bottom-left' ? 'bottom-4 left-4' :
