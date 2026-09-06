@@ -4,27 +4,19 @@ import * as THREE from 'three';
 import { trainAudio } from '../audio/trainAudio';
 
 const MAX_BURSTS = 32;
-const PARTICLES_PER_BURST = 8;
-const PARTICLE_COUNT = MAX_BURSTS * PARTICLES_PER_BURST;
+const CLOUDS_PER_BURST = 6;
+const CLOUD_COUNT = MAX_BURSTS * CLOUDS_PER_BURST;
 const BURST_LIFE = 0.72;
+const CLOUD_LIFE = 1.1;
 const CHAIN_DELAY = 0.2;
-const PARTICLE_LIFE = 0.72;
 
-const BURST_GEO = new THREE.IcosahedronGeometry(0.28, 0);
+const CLOUD_GEO = new THREE.DodecahedronGeometry(0.42, 0);
 const RING_GEO = new THREE.RingGeometry(0.16, 0.24, 12);
 const FLASH_GEO = new THREE.SphereGeometry(0.42, 12, 8);
 const DUMMY = new THREE.Object3D();
-const ORANGE = new THREE.Color(0xff5a18);
-const YELLOW = new THREE.Color(0xffd44a);
-const SMOKE = new THREE.Color(0x3f3029);
-
-function randomUnit() {
-  const x = Math.random() * 2 - 1;
-  const y = Math.random() * 2 - 0.5;
-  const z = Math.random() * 2 - 1;
-  const length = Math.hypot(x, y, z) || 1;
-  return { x: x / length, y: y / length, z: z / length };
-}
+const CLOUD_DARK = new THREE.Color(0x4b4746);
+const CLOUD_MID = new THREE.Color(0x77716e);
+const CLOUD_LIGHT = new THREE.Color(0xa59c97);
 
 function createEffect(event) {
   const chainPoints = (event.chainPoints || [event.contact]).slice(0, MAX_BURSTS);
@@ -39,74 +31,42 @@ function createEffect(event) {
     burstPositions[i * 3 + 2] = point.z;
   }
 
-  const positions = new Float32Array(PARTICLE_COUNT * 3);
-  const colors = new Float32Array(PARTICLE_COUNT * 3);
-  const particleBurst = new Uint8Array(PARTICLE_COUNT);
-  const particleAge = new Float32Array(PARTICLE_COUNT);
-  const particleLife = new Float32Array(PARTICLE_COUNT);
-  const velocityX = new Float32Array(PARTICLE_COUNT);
-  const velocityY = new Float32Array(PARTICLE_COUNT);
-  const velocityZ = new Float32Array(PARTICLE_COUNT);
-
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const burst = i % burstCount;
-    const offset = i * 3;
-    const direction = randomUnit();
-    const speed = 0.7 + Math.random() * 1.7;
-    particleBurst[i] = burst;
-    particleAge[i] = -1;
-    particleLife[i] = PARTICLE_LIFE * (0.75 + Math.random() * 0.5);
-    velocityX[i] = direction.x * speed;
-    velocityY[i] = direction.y * speed + 0.8;
-    velocityZ[i] = direction.z * speed;
-    positions[offset] = burstPositions[burst * 3];
-    positions[offset + 1] = -1000;
-    positions[offset + 2] = burstPositions[burst * 3 + 2];
-    const color = i % 3 === 0 ? SMOKE : (i % 2 === 0 ? ORANGE : YELLOW);
-    colors[offset] = color.r;
-    colors[offset + 1] = color.g;
-    colors[offset + 2] = color.b;
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  const positionAttribute = new THREE.BufferAttribute(positions, 3);
-  positionAttribute.setUsage(THREE.DynamicDrawUsage);
-  geometry.setAttribute('position', positionAttribute);
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.setDrawRange(0, PARTICLE_COUNT);
-
-  const particleMaterial = new THREE.PointsMaterial({
-    size: 0.14,
-    sizeAttenuation: true,
+  const cloudBurst = new Uint8Array(CLOUD_COUNT);
+  const cloudOffsetX = new Float32Array(CLOUD_COUNT);
+  const cloudOffsetY = new Float32Array(CLOUD_COUNT);
+  const cloudOffsetZ = new Float32Array(CLOUD_COUNT);
+  const cloudScale = new Float32Array(CLOUD_COUNT);
+  const cloudMaterial = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.88,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     toneMapped: false,
   });
-  const points = new THREE.Points(geometry, particleMaterial);
-  points.frustumCulled = false;
+  const clouds = new THREE.InstancedMesh(CLOUD_GEO, cloudMaterial, CLOUD_COUNT);
+  clouds.frustumCulled = false;
+  clouds.renderOrder = 4;
+  clouds.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-  const burstMaterial = new THREE.MeshBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 1,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  });
-  const bursts = new THREE.InstancedMesh(BURST_GEO, burstMaterial, MAX_BURSTS);
-  bursts.frustumCulled = false;
-  bursts.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  for (let i = 0; i < MAX_BURSTS; i++) {
-    bursts.setColorAt(i, i % 2 === 0 ? ORANGE : YELLOW);
+  for (let i = 0; i < CLOUD_COUNT; i++) {
+    const burst = Math.floor(i / CLOUDS_PER_BURST);
+    const lobe = i % CLOUDS_PER_BURST;
+    const angle = (lobe / CLOUDS_PER_BURST) * Math.PI * 2 + Math.random() * 0.35;
+    const radius = lobe === 0 ? 0 : 0.24 + Math.random() * 0.16;
+    cloudBurst[i] = burst;
+    cloudOffsetX[i] = Math.cos(angle) * radius;
+    cloudOffsetY[i] = lobe === 0 ? 0.04 : 0.12 + Math.random() * 0.2;
+    cloudOffsetZ[i] = Math.sin(angle) * radius;
+    cloudScale[i] = lobe === 0 ? 1.35 : 0.82 + Math.random() * 0.28;
+    const color = lobe === 0 ? CLOUD_LIGHT : (lobe % 2 === 0 ? CLOUD_DARK : CLOUD_MID);
+    clouds.setColorAt(i, color);
     DUMMY.position.set(0, -1000, 0);
     DUMMY.scale.setScalar(0);
     DUMMY.updateMatrix();
-    bursts.setMatrixAt(i, DUMMY.matrix);
+    clouds.setMatrixAt(i, DUMMY.matrix);
   }
-  bursts.instanceColor.needsUpdate = true;
+  clouds.instanceColor.needsUpdate = true;
 
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: 0xffa52f,
@@ -119,6 +79,7 @@ function createEffect(event) {
   });
   const rings = new THREE.InstancedMesh(RING_GEO, ringMaterial, MAX_BURSTS);
   rings.frustumCulled = false;
+  rings.renderOrder = 5;
   rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   for (let i = 0; i < MAX_BURSTS; i++) {
     DUMMY.position.set(0, -1000, 0);
@@ -137,43 +98,63 @@ function createEffect(event) {
     toneMapped: false,
   });
   const flash = new THREE.Mesh(FLASH_GEO, flashMaterial);
+  flash.renderOrder = 6;
   flash.position.set(event.contact.x, event.contact.y + 0.2, event.contact.z);
 
   const group = new THREE.Group();
   group.name = `collision_explosion_${event.id}`;
-  group.add(points);
-  group.add(bursts);
+  group.add(clouds);
   group.add(rings);
   group.add(flash);
   return {
     id: event.id,
     group,
-    points,
-    bursts,
+    clouds,
     rings,
     flash,
     burstCount,
     burstStarts,
     burstPositions,
-    positions,
-    positionAttribute,
-    particleBurst,
-    particleAge,
-    particleLife,
-    velocityX,
-    velocityY,
-    velocityZ,
+    cloudBurst,
+    cloudOffsetX,
+    cloudOffsetY,
+    cloudOffsetZ,
+    cloudScale,
     age: 0,
-    duration: Math.max(1.55, (burstCount - 1) * CHAIN_DELAY + BURST_LIFE + 0.25),
+    duration: Math.max(1.55, (burstCount - 1) * CHAIN_DELAY + Math.max(BURST_LIFE, CLOUD_LIFE) + 0.25),
   };
 }
 
 function updateEffect(effect, delta) {
   effect.age += Math.min(delta, 0.05);
-  const burstOpacity = Math.max(0, 1 - Math.max(0, effect.age - effect.duration + 0.7) / 0.7);
-  effect.bursts.material.opacity = burstOpacity;
-  effect.rings.material.opacity = burstOpacity * 0.75;
-  effect.points.material.opacity = burstOpacity * 0.92;
+  const effectOpacity = Math.max(0, 1 - Math.max(0, effect.age - effect.duration + 0.7) / 0.7);
+  effect.clouds.material.opacity = effectOpacity * 0.88;
+  effect.rings.material.opacity = effectOpacity * 0.75;
+
+  for (let i = 0; i < CLOUD_COUNT; i++) {
+    const burst = effect.cloudBurst[i];
+    const localAge = effect.age - effect.burstStarts[burst];
+    if (burst >= effect.burstCount || localAge < 0 || localAge > CLOUD_LIFE) {
+      DUMMY.position.set(0, -1000, 0);
+      DUMMY.scale.setScalar(0);
+      DUMMY.updateMatrix();
+      effect.clouds.setMatrixAt(i, DUMMY.matrix);
+      continue;
+    }
+    const puffIn = Math.min(1, localAge / 0.18);
+    const puffFade = 1 - localAge / CLOUD_LIFE;
+    const burstOffset = burst * 3;
+    DUMMY.position.set(
+      effect.burstPositions[burstOffset] + effect.cloudOffsetX[i] * puffIn,
+      effect.burstPositions[burstOffset + 1] + effect.cloudOffsetY[i] * puffIn + localAge * 0.14,
+      effect.burstPositions[burstOffset + 2] + effect.cloudOffsetZ[i] * puffIn,
+    );
+    DUMMY.rotation.set(localAge * (1.2 + (i % 3) * 0.35), i * 0.41, localAge * 0.8);
+    DUMMY.scale.setScalar(effect.cloudScale[i] * (0.3 + puffIn * 0.95) * (0.55 + puffFade * 0.45));
+    DUMMY.updateMatrix();
+    effect.clouds.setMatrixAt(i, DUMMY.matrix);
+  }
+  effect.clouds.instanceMatrix.needsUpdate = true;
 
   for (let i = 0; i < effect.burstCount; i++) {
     const localAge = effect.age - effect.burstStarts[i];
@@ -182,58 +163,22 @@ function updateEffect(effect, delta) {
       DUMMY.position.set(0, -1000, 0);
       DUMMY.scale.setScalar(0);
       DUMMY.updateMatrix();
-      effect.bursts.setMatrixAt(i, DUMMY.matrix);
       effect.rings.setMatrixAt(i, DUMMY.matrix);
       continue;
     }
-
-    const growth = Math.min(1, localAge / 0.12);
     const fade = 1 - localAge / BURST_LIFE;
-    const pulse = 0.72 + Math.sin(localAge * 28) * 0.12;
     DUMMY.position.set(effect.burstPositions[offset], effect.burstPositions[offset + 1], effect.burstPositions[offset + 2]);
-    DUMMY.scale.setScalar((0.18 + growth * 0.34) * (0.65 + fade * 0.35) * pulse);
-    DUMMY.rotation.set(localAge * 3, localAge * 5, localAge * 2);
-    DUMMY.updateMatrix();
-    effect.bursts.setMatrixAt(i, DUMMY.matrix);
-
     DUMMY.scale.setScalar((0.5 + localAge * 1.5) * fade);
     DUMMY.rotation.set(-Math.PI / 2, 0, 0);
     DUMMY.updateMatrix();
     effect.rings.setMatrixAt(i, DUMMY.matrix);
   }
-  effect.bursts.instanceMatrix.needsUpdate = true;
   effect.rings.instanceMatrix.needsUpdate = true;
 
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const burst = effect.particleBurst[i];
-    if (effect.particleAge[i] < 0) {
-      if (effect.age < effect.burstStarts[burst]) continue;
-      effect.particleAge[i] = 0;
-      const offset = i * 3;
-      const burstOffset = burst * 3;
-      effect.positions[offset] = effect.burstPositions[burstOffset];
-      effect.positions[offset + 1] = effect.burstPositions[burstOffset + 1];
-      effect.positions[offset + 2] = effect.burstPositions[burstOffset + 2];
-    }
-    effect.particleAge[i] += delta;
-    const offset = i * 3;
-    if (effect.particleAge[i] >= effect.particleLife[i]) {
-      effect.positions[offset + 1] = -1000;
-      continue;
-    }
-    effect.positions[offset] += effect.velocityX[i] * delta;
-    effect.positions[offset + 1] += effect.velocityY[i] * delta;
-    effect.positions[offset + 2] += effect.velocityZ[i] * delta;
-    effect.velocityY[i] -= 2.8 * delta;
-  }
-  effect.positionAttribute.needsUpdate = true;
-
-  const flashAge = effect.age;
-  if (flashAge < 0.3) {
-    const flashFade = 1 - flashAge / 0.3;
+  if (effect.age < 0.3) {
+    const flashFade = 1 - effect.age / 0.3;
     effect.flash.material.opacity = flashFade * 0.92;
-    const scale = 0.8 + (flashAge / 0.3) * 1.8;
-    effect.flash.scale.setScalar(scale);
+    effect.flash.scale.setScalar(0.8 + (effect.age / 0.3) * 1.8);
   } else {
     effect.flash.material.opacity = 0;
   }
@@ -241,9 +186,7 @@ function updateEffect(effect, delta) {
 
 function disposeEffect(effect) {
   if (effect.group.parent) effect.group.parent.remove(effect.group);
-  effect.points.geometry.dispose();
-  effect.points.material.dispose();
-  effect.bursts.material.dispose();
+  effect.clouds.material.dispose();
   effect.rings.material.dispose();
   effect.flash.material.dispose();
 }

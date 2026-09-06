@@ -30,6 +30,7 @@ const BIOME = { water: 0, meadow: 1, forest: 2, highland: 3, wetland: 4 };
 const VOXEL_SIZE = 0.5;
 const MAX_AUDIO_DISTANCE = 45;
 const LOOP_FADE = 0.18;
+const COLLISION_SOUND_KEY = 'train_collision_explosion_loop';
 
 function setAudioParam(param, value) {
   if (param) param.value = value;
@@ -56,11 +57,12 @@ class TrainAudio {
     this.musicTimer = null;
     this.ambientSignature = '';
     this.nextAmbientEvent = 0;
-
     if (typeof window !== 'undefined') {
       const activate = () => {
         this.userActivated = true;
         this.resume();
+        this.ensure();
+        this.loadBuffer(COLLISION_SOUND_KEY);
         this.startMusic();
       };
       window.addEventListener('pointerdown', activate, { capture: true });
@@ -232,7 +234,7 @@ class TrainAudio {
     });
   }
 
-  startLoop(id, key, { bus = 'train', gain = 1, position = null, rate = 1 } = {}) {
+  startLoop(id, key, { bus = 'train', gain = 1, position = null, rate = 1, offset = null } = {}) {
     if (!this.busEnabled(bus) || this.loops.has(id)) {
       const current = this.loops.get(id);
       if (current?.key === key) return;
@@ -253,7 +255,10 @@ class TrainAudio {
       source.connect(output.gain);
       entry.source = source;
       entry.output = output;
-      source.start(0, Math.random() * Math.max(0, buffer.duration - 0.05));
+      const startOffset = offset === null
+        ? Math.random() * Math.max(0, buffer.duration - 0.05)
+        : Math.min(Math.max(offset, 0), Math.max(0, buffer.duration - 0.01));
+      source.start(0, startOffset);
       output.gain.gain.setTargetAtTime(gain, ctx.currentTime, LOOP_FADE);
     });
   }
@@ -352,10 +357,11 @@ class TrainAudio {
   startCollision(id, position, trainIds = []) {
     for (const trainId of trainIds) this.stopLoopsByPrefix(`train:${trainId}:`);
     this.play('train_brake_squeal', { bus: 'train', gain: 0.45, position });
-    this.startLoop(`collision:${id}`, 'train_collision_explosion_loop', {
+    this.startLoop(`collision:${id}`, COLLISION_SOUND_KEY, {
       bus: 'train',
-      gain: 0.58,
+      gain: 0.85,
       position,
+      offset: 0,
     });
   }
 

@@ -71,7 +71,7 @@ export function getLightingForTime(timeOfDay) {
       shadowRadius: 4,
     },
     night: {
-      ambient: { intensity: 0.45, color: 0x223048 },
+      ambient: { intensity: 0.55, color: 0x223048 },
       hemisphereSky: 0x283854,
       hemisphereGround: 0x18202c,
       directional: { intensity: 0.35, color: 0x7da4d4, position: [20, 50, 15] },
