@@ -65,10 +65,10 @@ function buildCameraSpec(layout, mode) {
     fov = [44, 48];
   } else if (mode === 'station') {
     positions = [
-      new THREE.Vector3(station.x - 4.5, station.y + 3.5, station.z + 5.5),
-      new THREE.Vector3(station.x - 1.5, station.y + 2.4, station.z + 4.0),
-      new THREE.Vector3(station.x + 4.5, station.y + 2.2, station.z + 3.0),
-      new THREE.Vector3(station.x + 7.0, station.y + 3.0, station.z + 5.5),
+      new THREE.Vector3(station.x - 4.5, station.y + 3.5, station.z - 5.5),
+      new THREE.Vector3(station.x - 1.5, station.y + 2.4, station.z - 4.0),
+      new THREE.Vector3(station.x + 4.5, station.y + 2.2, station.z - 3.0),
+      new THREE.Vector3(station.x + 7.0, station.y + 3.0, station.z - 5.5),
     ];
     targets = [station, station, stationTrackTarget, stationTrackTarget];
     fov = [46, 50];
