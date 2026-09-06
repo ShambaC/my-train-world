@@ -819,7 +819,7 @@ export default function GameScene({
           selectedTool={selectedTool}
           rotation={rotation}
           heightOffset={heightOffset}
-          onTracksChange={onTracksChange}
+          onTracksChange={handleTracksChange}
           tracksVersion={tracksVersion}
           timeOfDay={timeOfDay}
           fogEnabled={fogEnabled}
