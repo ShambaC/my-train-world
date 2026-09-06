@@ -24,6 +24,8 @@ export function parseTrailerConfig(search = typeof window === 'undefined' ? '' :
     autoplay: parseBoolean(params.get('autoplay'), true),
     fps: parseFps(params.get('fps')),
     debug: parseBoolean(params.get('debug'), false),
+    fogEnabled: parseBoolean(params.get('fog'), true),
+    tiltShiftEnabled: parseBoolean(params.get('miniature'), false),
     seed: TRAILER_SEED,
   };
 }

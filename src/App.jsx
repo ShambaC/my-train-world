@@ -142,10 +142,10 @@ function AppRuntime() {
   const [selectedToolId, setSelectedToolId] = useState('hand');
   const [heightOffset, setHeightOffset] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState(TRAILER_MODE ? 'dawn' : 'day');
-  const [fogEnabled, setFogEnabled] = useState(true);
+  const [fogEnabled, setFogEnabled] = useState(TRAILER_MODE ? trailerConfig.fogEnabled : true);
   const [fogDensity, setFogDensity] = useState(null); // null = use time-of-day preset density
   const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
-  const [tiltShiftEnabled, setTiltShiftEnabled] = useState(false);
+  const [tiltShiftEnabled, setTiltShiftEnabled] = useState(TRAILER_MODE ? trailerConfig.tiltShiftEnabled : false);
   const [celShadingEnabled, setCelShadingEnabled] = useState(false);
   const [ambientEnabled, setAmbientEnabled] = useState(true);
   const [soundsEnabled, setSoundsEnabled] = useState(true);
