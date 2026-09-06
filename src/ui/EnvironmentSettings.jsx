@@ -56,7 +56,7 @@ function EnvironmentSettings({
       />
     </div>
   );
-  const icon = (key) => <img src={UI_ICONS.environment[key]} alt="" aria-hidden="true" className="inline-block h-5 w-5 object-contain align-middle" />;
+  const icon = (key) => <img src={UI_ICONS.environment[key]} alt="" aria-hidden="true" className="ui-icon-image inline-block h-5 w-5 object-contain align-middle" />;
 
   return (
     <div className="mb-4">

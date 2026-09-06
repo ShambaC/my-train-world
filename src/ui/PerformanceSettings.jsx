@@ -216,7 +216,7 @@ function PerformanceSettings({
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className="flex items-center gap-2 font-bold">
-          <img src={UI_ICONS.environment.performance} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+          <img src={UI_ICONS.environment.performance} alt="" aria-hidden="true" className="ui-icon-image h-5 w-5 object-contain" />
           Performance & Graphics
         </span>
         <span className="text-sm">{isOpen ? '▼' : '▶'}</span>
@@ -281,7 +281,7 @@ function PerformanceSettings({
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">
               <span className="flex items-center gap-2">
-                <img src={UI_ICONS.environment.performance} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
+                <img src={UI_ICONS.environment.performance} alt="" aria-hidden="true" className="ui-icon-image h-5 w-5 object-contain" />
                 Vsync
               </span>
             </label>

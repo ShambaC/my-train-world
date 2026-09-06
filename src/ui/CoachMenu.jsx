@@ -57,7 +57,7 @@ export default function CoachMenu({ x, y, onSelect, onClose }) {
             src={UI_ICONS.hubs.coach}
             alt=""
             aria-hidden="true"
-            className="w-7 h-7 object-contain"
+            className="ui-icon-image w-7 h-7 object-contain"
             draggable={false}
           />
           <span className="text-[9px] text-gray-300">Coach</span>

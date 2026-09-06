@@ -51,7 +51,7 @@ export default function EngineMenu({ x, y, currentEngine = 'steam-engine', onSel
             src={UI_ICONS.hubs.engine}
             alt=""
             aria-hidden="true"
-            className="w-7 h-7 object-contain"
+            className="ui-icon-image w-7 h-7 object-contain"
             draggable={false}
           />
           <span className="text-[9px] text-gray-300 font-semibold">Engine</span>

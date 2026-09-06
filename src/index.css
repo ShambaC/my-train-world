@@ -48,3 +48,8 @@ html[data-reduced-motion='true'] *::after {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+.ui-icon-image {
+  transform: scale(1.45);
+  transform-origin: center;
+}

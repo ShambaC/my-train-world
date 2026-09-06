@@ -110,7 +110,7 @@ export default function Hotbar({ tools, selectedToolId, onSelect, onRotate, disa
               {group.children.map((child, index) => {
                 const disabled = disabledToolIds.includes(child.id);
                 return <button key={child.id} ref={(node) => { childRefs.current[index] = node; }} type="button" role="menuitem" data-tool-id={child.id} disabled={disabled} onClick={() => selectLeaf(child)} aria-label={disabled ? `${child.name}, unavailable until an engine exists` : child.name} aria-pressed={selectedToolId === child.id} title={disabled ? `${child.name} (needs an engine in the world)` : child.name} className={`relative flex h-16 w-16 flex-none flex-col items-center justify-center rounded-xl border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#63c9dc] ${disabled ? 'border-transparent bg-[#18263b] opacity-40' : selectedToolId === child.id ? 'border-[#e5a94f] bg-[#244b67]' : 'border-white/5 bg-[#18263b] hover:border-[#63c9dc]/60'}`}>
-                  <img src={TOOL_ICONS[child.iconKey || child.id]} alt="" aria-hidden="true" className="mb-1 h-6 w-6 object-contain" />
+                  <img src={TOOL_ICONS[child.iconKey || child.id]} alt="" aria-hidden="true" className="ui-icon-image mb-1 h-6 w-6 object-contain" />
                   <span className="text-[10px] font-semibold text-[#f7f0df]">{child.label}</span>
                   <span className="absolute right-1 top-1 text-[9px] text-[#aebbd0]">{index + 1}</span>
                 </button>;
@@ -122,7 +122,7 @@ export default function Hotbar({ tools, selectedToolId, onSelect, onRotate, disa
             const hasChildren = Array.isArray(tool.children);
             const icon = TOOL_ICONS[tool.iconKey || tool.id];
             return <button key={tool.id} type="button" data-tool-id={tool.id} onClick={() => hasChildren ? openGroup(tool) : selectLeaf(tool)} disabled={disabled} aria-label={tool.name} aria-haspopup={hasChildren ? 'menu' : undefined} aria-expanded={hasChildren ? openGroupId === tool.id : undefined} aria-describedby={hasChildren && selectedToolId !== tool.id ? `active-child-${tool.id}` : undefined} aria-pressed={selectedParentId === tool.id} className={`relative flex h-[4.35rem] w-[4.35rem] flex-none snap-start flex-col items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#63c9dc] ${disabled ? 'border-transparent bg-[#18263b] opacity-40 cursor-not-allowed' : selectedParentId === tool.id ? 'border-[#e5a94f] bg-[#244b67] shadow-[0_0_0_2px_rgba(229,169,79,0.18)]' : 'border-white/5 bg-[#18263b] hover:border-[#63c9dc]/60 hover:bg-[#22344b]'}`}>
-              <img src={icon} alt="" aria-hidden="true" draggable={false} className="mb-1 h-7 w-7 object-contain" />
+              <img src={icon} alt="" aria-hidden="true" draggable={false} className="ui-icon-image mb-1 h-7 w-7 object-contain" />
               <span className="text-[11px] font-semibold leading-none text-[#f7f0df]">{tool.label}</span>
               <span className="absolute right-1 top-1 rounded bg-[#101a2b] px-1 text-[10px] font-mono text-[#aebbd0]">{index + 1}</span>
               {hasChildren && <span id={`active-child-${tool.id}`} className="sr-only">Active tool: {tool.children.find((child) => child.id === selectedToolId)?.label || 'none'}</span>}

@@ -239,7 +239,7 @@ export default function MainMenu({
   const graphicsToggle = (key, label, description) => (
     <label className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#18263b] p-3">
       <span>
-        <span className="flex items-center gap-2 text-sm font-semibold text-[#c5d0df]"><img src={UI_ICONS.environment[toggleIcons[key]]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{label}</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-[#c5d0df]"><img src={UI_ICONS.environment[toggleIcons[key]]} alt="" aria-hidden="true" className="ui-icon-image h-5 w-5 object-contain" />{label}</span>
         <span className="mt-0.5 block text-xs text-[#aebbd0]">{description}</span>
       </span>
       <input type="checkbox" checked={globalGraphics[key]} onChange={(event) => updateGraphics({ [key]: event.target.checked })} className="h-5 w-5 shrink-0 accent-[#4b8dff]" />
@@ -403,7 +403,7 @@ export default function MainMenu({
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {TIME_OPTIONS.map((option) => (
                         <button key={option.value} type="button" onClick={() => updateGraphics({ timeOfDay: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.timeOfDay === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`} style={{ borderLeftColor: option.color, borderLeftWidth: 4 }}>
-                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.value]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
+                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.value]} alt="" aria-hidden="true" className="ui-icon-image h-5 w-5 object-contain" />{option.label}</span>
                         </button>
                       ))}
                     </div>
@@ -425,7 +425,7 @@ export default function MainMenu({
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       {SHADOW_OPTIONS.map((option) => (
                         <button key={option.value} type="button" onClick={() => updateGraphics({ shadowMode: option.value })} className={`rounded-xl border p-2 text-sm font-semibold transition ${globalGraphics.shadowMode === option.value ? 'border-[#e5a94f] bg-[#244b67] text-white' : 'border-white/10 bg-[#18263b] text-[#aebbd0] hover:border-[#63c9dc]'}`}>
-                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.icon]} alt="" aria-hidden="true" className="h-5 w-5 object-contain" />{option.label}</span>
+                          <span className="inline-flex items-center gap-1"><img src={UI_ICONS.environment[option.icon]} alt="" aria-hidden="true" className="ui-icon-image h-5 w-5 object-contain" />{option.label}</span>
                         </button>
                       ))}
                     </div>

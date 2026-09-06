@@ -30,7 +30,7 @@ export default function LoadingScreen({ progress }) {
             />
           </div>
           <p className="mt-3 flex items-center justify-center gap-2 text-sm text-[#aebbd0]">
-            <img src={UI_ICONS.status.loading} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
+            <img src={UI_ICONS.status.loading} alt="" aria-hidden="true" className="ui-icon-image h-4 w-4 object-contain" />
             {display}% Complete
           </p>
         </div>
