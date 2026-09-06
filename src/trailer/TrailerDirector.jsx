@@ -34,12 +34,13 @@ function buildCameraSpec(layout, mode) {
   const middle = pathPoint(layout, Math.floor(layout.route.length * 0.45), 1.5);
   const bridge = pathPoint(layout, Math.max(1, layout.bridgeRange.start === Infinity ? 16 : layout.bridgeRange.start + 1), 1.3);
   const end = pathPoint(layout, layout.route.length - 1, 2.0);
-  const station = new THREE.Vector3(layout.station.world.x, layout.station.world.y + 1.4, layout.station.world.z);
+  const station = new THREE.Vector3(layout.station.centerWorld.x, layout.station.centerWorld.y + 1.4, layout.station.centerWorld.z);
   const crossing = new THREE.Vector3(layout.crossing.x, layout.crossing.y + 1.0, layout.crossing.z);
   const routeTarget = (index, y = 0.35) => {
     const piece = layout.route[Math.max(0, Math.min(layout.route.length - 1, index))];
     return new THREE.Vector3(piece.position.x, piece.position.y + y, piece.position.z);
   };
+  const stationTrackTarget = station.clone().lerp(routeTarget(10), 0.35);
 
   let positions;
   let targets;
@@ -64,12 +65,12 @@ function buildCameraSpec(layout, mode) {
     fov = [44, 48];
   } else if (mode === 'station') {
     positions = [
-      new THREE.Vector3(station.x - 4.5, station.y + 3.5, station.z - 5.5),
-      new THREE.Vector3(station.x - 1.5, station.y + 2.4, station.z - 4.0),
-      new THREE.Vector3(station.x + 4.5, station.y + 2.2, station.z - 1.2),
-      new THREE.Vector3(station.x + 7.0, station.y + 3.0, station.z + 2.5),
+      new THREE.Vector3(station.x - 4.5, station.y + 3.5, station.z + 5.5),
+      new THREE.Vector3(station.x - 1.5, station.y + 2.4, station.z + 4.0),
+      new THREE.Vector3(station.x + 4.5, station.y + 2.2, station.z + 3.0),
+      new THREE.Vector3(station.x + 7.0, station.y + 3.0, station.z + 5.5),
     ];
-    targets = [station, station, routeTarget(10), routeTarget(20)];
+    targets = [station, station, stationTrackTarget, stationTrackTarget];
     fov = [46, 50];
   } else if (mode === 'assembly') {
     positions = [
@@ -362,7 +363,22 @@ export default function TrailerDirector({
     const spec = state.cameraSpec;
     if (!spec) return;
 
-    if (sequence.cameraMode === 'run' && state.trainId && state.elapsed < 5.2) {
+    if (sequence.cameraMode === 'beauty' && state.trainId && state.elapsed >= 6.2) {
+      const train = trainManager.getTrain(state.trainId);
+      if (train) {
+        const heading = new THREE.Vector3(train.heading.x, 0, train.heading.z).normalize();
+        const side = new THREE.Vector3(-heading.z, 0, heading.x);
+        const desired = new THREE.Vector3(train.position.x, train.position.y + 2.4, train.position.z)
+          .addScaledVector(heading, -4.2)
+          .addScaledVector(side, 2.1);
+        const target = new THREE.Vector3(train.position.x, train.position.y + 0.65, train.position.z)
+          .addScaledVector(heading, 1.4);
+        camera.position.lerp(desired, 1 - Math.exp(-4 * dt));
+        camera.lookAt(target);
+        camera.fov = 48;
+        camera.updateProjectionMatrix();
+      }
+    } else if (sequence.cameraMode === 'run' && state.trainId && state.elapsed < 5.2) {
       const train = trainManager.getTrain(state.trainId);
       if (train) {
         const heading = new THREE.Vector3(train.heading.x, 0, train.heading.z).normalize();

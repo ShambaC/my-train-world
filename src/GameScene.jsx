@@ -383,6 +383,7 @@ function Scene({
           roadManager={roadManager}
           history={history}
           onSelect={onSelect}
+          terrainData={terrain?.userData}
           trackLayoutVersion={trackLayoutVersion}
           trailerMode={trailerMode}
         />
@@ -909,6 +910,7 @@ export default function GameScene({
           trainsVersion={trainsVersion}
           onCollisionComplete={() => setTrainsVersion((v) => v + 1)}
           stationsScatterVersion={stationsScatterVersion}
+          trackLayoutVersion={trackLayoutVersion}
            showAxes={showAxes}
            showDebug={showDebug}
           trailerMode={trailerMode}

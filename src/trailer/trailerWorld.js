@@ -171,15 +171,25 @@ function createLayout(terrainData, corridor) {
     });
   }
 
-  const stationStartCell = { x: corridor.startX + 4, z: corridor.startZ + STATION_LATERAL };
-  const stationEndCell = { x: stationStartCell.x + STATION_LENGTH - 1, z: stationStartCell.z };
-  const crossingWorld = toWorld(corridor.startX + corridor.crossingIndex, corridor.startZ, terrainData);
+  const stationDir = { x: -1, z: 0 };
+  const stationStartCell = {
+    x: corridor.startX + 4 + STATION_LENGTH - 1,
+    z: corridor.startZ + STATION_LATERAL,
+  };
+  const stationEndCell = {
+    x: stationStartCell.x + stationDir.x * (STATION_LENGTH - 1),
+    z: stationStartCell.z,
+  };
   const stationWorld = toWorld(stationStartCell.x, stationStartCell.z, terrainData);
+  const stationCenterWorld = {
+    x: stationWorld.x + stationDir.x * VOXEL_SIZE * STATION_LENGTH / 2,
+    z: stationWorld.z,
+  };
+  const crossingWorld = toWorld(corridor.startX + corridor.crossingIndex, corridor.startZ, terrainData);
   return {
     seed: terrainData.seed,
     corridor,
     route,
-    routeY,
     bridgeRange: { start: corridor.waterStart, end: corridor.waterEnd },
     spawnIndex: 12,
     crossingIndex: corridor.crossingIndex,
@@ -187,10 +197,11 @@ function createLayout(terrainData, corridor) {
     station: {
       startCell: stationStartCell,
       endCell: stationEndCell,
-      dir: { x: 1, z: 0 },
+      dir: stationDir,
       lengthCells: STATION_LENGTH,
       startHeight: corridor.landHeight,
       trackSide: 1,
+      centerWorld: { ...stationCenterWorld, y: routeY },
       terrainLength: terrainData.length,
       terrainBreadth: terrainData.breadth,
       world: { ...stationWorld, y: routeY },

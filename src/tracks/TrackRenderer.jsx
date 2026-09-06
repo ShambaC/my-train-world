@@ -96,8 +96,9 @@ export default function TrackRenderer({
   historyRef.current = history;
   onSelectRef.current = onSelect;
   useEffect(() => {
+    trackMeshesRef.current.clear();
     setTracks(trackManager.getAllTracks());
-  }, [trackManager, trackLayoutVersion]);
+  }, [trackManager, trackLayoutVersion, terrainData]);
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');
