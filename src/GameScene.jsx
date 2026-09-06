@@ -364,7 +364,7 @@ function Scene({
       {/* Track System */}
       {terrain && (
         <TrackRenderer
-          key={tracksVersion}
+          key={trailerMode ? trackLayoutVersion : tracksVersion}
           trackManager={trackManager}
           stationManager={stationManager}
           trainManager={trainManager}
@@ -383,8 +383,8 @@ function Scene({
           roadManager={roadManager}
           history={history}
           onSelect={onSelect}
-          terrainData={terrain?.userData}
           trackLayoutVersion={trackLayoutVersion}
+          trailerMode={trailerMode}
         />
       )}
 
@@ -564,6 +564,7 @@ function Scene({
           crossingManager={crossingManager}
           trailerSeed={trailerConfig?.seed}
           onTracksChanged={onTracksChange}
+          onStationsChanged={onStationsChange}
           onTrainsChanged={onTrainsChanged}
           onEnvironmentChange={onTrailerEnvironmentChange}
           onCardChange={onTrailerCardChange}

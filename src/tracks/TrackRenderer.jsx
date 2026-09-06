@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { trainAudio } from '../audio/trainAudio';
 
 // Road tool rotation 0 follows local +Z: width X, tile length Z.
+
 const ROAD_GHOST_GEO = new THREE.BoxGeometry(ROAD_WIDTH.branch + ROAD_SHOULDER, 0.02, ROAD_TILE_LENGTH);
 
 export default function TrackRenderer({

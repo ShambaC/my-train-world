@@ -28,6 +28,7 @@ function inspectCandidate(terrainData, startX, startZ, allowWater) {
 
   const stationHeight = heightMap[startX + 4]?.[startZ + STATION_LATERAL];
   let landHeight = stationHeight > WATER_LEVEL_VOXEL ? stationHeight : null;
+  let maxLandHeight = landHeight;
   let waterCount = 0;
   let waterStart = Infinity;
   let waterEnd = -1;
@@ -41,8 +42,10 @@ function inspectCandidate(terrainData, startX, startZ, allowWater) {
       continue;
     }
     if (landHeight == null) landHeight = h;
+    maxLandHeight = Math.max(maxLandHeight ?? h, h);
   }
   if (landHeight == null || waterCount > MAX_WATER_GAP) return null;
+  if (maxLandHeight !== landHeight) return null;
   if (!allowWater && waterCount > 0) return null;
 
   // Camera corridor only needs valid cells; the rail deck intentionally
