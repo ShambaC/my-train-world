@@ -400,6 +400,7 @@ function Scene({
         <ActivityRenderer
           activityManager={activityManager}
           stationManager={stationManager}
+          trainManager={trainManager}
           enabled={ambientEnabled}
           simulationPaused={simulationPaused}
         />

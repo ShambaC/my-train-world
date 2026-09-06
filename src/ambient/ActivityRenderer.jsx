@@ -63,7 +63,7 @@ export default function ActivityRenderer({ activityManager, stationManager, trai
       const g = node.group;
 
       if (item.state === 'riding') {
-        const train = trainManager.getTrain(item.trainId);
+        const train = trainManager?.getTrain?.(item.trainId);
         const coach = train?.coaches?.find((c) => c.id === item.coachId);
         if (coach?.position) {
           if (RIDE_VISIBLE[item.type]) {

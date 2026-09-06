@@ -145,6 +145,7 @@ In any case, I made this game after that and had very fun. This game is in no wa
 ## Plans
 - [ ] More biomes and terrain types
 - [ ] Change all textures and icons to hand drawn ones. (I recently got a drawing tab as a gift. I'd like to draw the textures and give this game a hand drawn aesthetic)
+- [ ] Add building and foliage placement
 - [ ] Controller support
 - [ ] Mobile support
 - [ ] Multiplayer ?
