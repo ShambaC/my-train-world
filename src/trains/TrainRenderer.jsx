@@ -113,7 +113,8 @@ export default function TrainRenderer({ trainManager, lighting, selectedTrainId,
 
     for (const train of trainManager.getAllTrains()) {
       liveTrainIds.add(train.id);
-      trainAudio.updateTrain(train, state.camera);
+      if (train.collision) trainAudio.removeTrain(train.id);
+      else trainAudio.updateTrain(train, state.camera);
       const node = trainNodesRef.current.get(train.id);
       if (node) {
         // Small idle motion while parked (stopped at a station or inactive)

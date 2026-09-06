@@ -74,7 +74,10 @@ class TrainAudio {
 
   setTrainEnabled(on) {
     this.trainEnabled = on;
-    if (!on) this.stopLoopsByPrefix('train:');
+    if (!on) {
+      this.stopLoopsByPrefix('train:');
+      this.stopLoopsByPrefix('collision:');
+    }
   }
 
   setAmbientEnabled(on) {
@@ -344,6 +347,20 @@ class TrainAudio {
 
   stopCrossing(id) {
     this.stopLoop(`crossing:${id}`);
+  }
+
+  startCollision(id, position, trainIds = []) {
+    for (const trainId of trainIds) this.stopLoopsByPrefix(`train:${trainId}:`);
+    this.play('train_brake_squeal', { bus: 'train', gain: 0.45, position });
+    this.startLoop(`collision:${id}`, 'train_collision_explosion_loop', {
+      bus: 'train',
+      gain: 0.58,
+      position,
+    });
+  }
+
+  stopCollision(id) {
+    this.stopLoop(`collision:${id}`);
   }
 
   startMusic() {

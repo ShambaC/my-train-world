@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { generateTerrain, createGrid, VOXEL_SIZE } from './terrain';
 import TrackRenderer from './tracks/TrackRenderer';
 import TrainRenderer from './trains/TrainRenderer';
+import CollisionExplosionRenderer from './trains/CollisionExplosionRenderer';
 import Skybox from './environment/Skybox';
 import LightingState from './environment/LightingState';
 import Fireflies from './environment/Fireflies';
@@ -93,6 +94,7 @@ function Scene({
   showDebug = false,
   graphicsQuality = 'medium',
   onTutorialAction,
+  onCollisionComplete,
   onCameraInput,
   cameraFov = 60,
   simulationPaused = false,
@@ -486,6 +488,13 @@ function Scene({
           simulationPaused={simulationPaused}
         />
       )}
+      {terrain && (
+        <CollisionExplosionRenderer
+          trainManager={trainManager}
+          onCollisionComplete={onCollisionComplete}
+          simulationPaused={simulationPaused}
+        />
+      )}
 
       <PracticalLights
         trainManager={trainManager}
@@ -855,6 +864,7 @@ export default function GameScene({
           onSelect={onSelect}
           selectedTrainId={selectedTrainId}
           trainsVersion={trainsVersion}
+          onCollisionComplete={() => setTrainsVersion((v) => v + 1)}
           stationsScatterVersion={stationsScatterVersion}
            showAxes={showAxes}
            showDebug={showDebug}

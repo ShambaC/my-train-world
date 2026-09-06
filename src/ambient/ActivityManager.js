@@ -195,6 +195,10 @@ export class ActivityManager {
 
     // ── Dwell events: board + unload + whistle/bell ──
     for (const train of this.trainManager.getAllTrains()) {
+      if (train.collision) {
+        this.dwellState.delete(train.id);
+        continue;
+      }
       const dwelling = train.dwell ? train.dwell.stationId : null;
       const prev = this.dwellState.get(train.id);
       if (dwelling && prev !== dwelling) {

@@ -5,7 +5,7 @@
  * Coaches trail the engine along the track graph (walkBack each frame).
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
-import { DEFAULT_ENGINE } from './engineTypes.js';
+import { DEFAULT_ENGINE, ENGINE_DIMENSIONS } from './engineTypes.js';
 import { COACH_LENGTH } from './coachTypes.js';
 import { MAX_STATION_LATERAL } from '../stations/StationManager.js';
 
@@ -13,6 +13,10 @@ export const DEFAULT_TRAIN_SPEED = 0.5;
 export const MIN_TRAIN_SPEED = 0.1;
 export const MAX_TRAIN_SPEED = 1.5;
 export const TRAIN_SPEED_STEP = 0.05;
+
+const COLLISION_TRIGGER_MARGIN = 0.12;
+const COLLISION_MAX_CHAIN_POINTS = 32;
+
 
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
@@ -22,6 +26,34 @@ const rotLocalToWorld = (local, rotationY) => {
     z: -local.x * sin + local.z * cos,
   };
 };
+const getForward = (rotation) => ({ x: Math.sin(rotation), z: Math.cos(rotation) });
+
+const bodyOverlaps = (a, b) => {
+  const axes = [
+    a.forward,
+    { x: a.forward.z, z: -a.forward.x },
+    b.forward,
+    { x: b.forward.z, z: -b.forward.x },
+  ];
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  for (const axis of axes) {
+    const distance = Math.abs(dx * axis.x + dz * axis.z);
+    const aRadius = a.halfLength * Math.abs(a.forward.x * axis.x + a.forward.z * axis.z)
+      + a.halfWidth * Math.abs(a.forward.z * axis.x - a.forward.x * axis.z);
+    const bRadius = b.halfLength * Math.abs(b.forward.x * axis.x + b.forward.z * axis.z)
+      + b.halfWidth * Math.abs(b.forward.z * axis.x - b.forward.x * axis.z);
+    if (distance > aRadius + bRadius + COLLISION_TRIGGER_MARGIN) return false;
+  }
+  return Math.abs((b.y || 0) - (a.y || 0))
+    <= a.halfHeight + b.halfHeight + COLLISION_TRIGGER_MARGIN;
+};
+
+const distanceSq = (a, b) => {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return dx * dx + dz * dz;
+};
 
 export class TrainManager {
   constructor(trackManager, stationManager = null) {
@@ -30,6 +62,10 @@ export class TrainManager {
     this.trains = new Map();
     this.nextId = 0;
     this.time = 0;
+    this.collisionQueue = [];
+    this.collisions = new Map();
+    this.collisionPairs = new Set();
+    this.nextCollisionId = 0;
     this.STOP_DURATION = 5; // seconds trains dwell at stations
     this.STOP_COOLDOWN = 8; // seconds after departing before a re-stop is allowed
   }
@@ -80,6 +116,7 @@ export class TrainManager {
       dwell: null,      // { stationId, until } while stopped at a station
       cooldowns: new Map(), // stationId -> departure time (prevents re-stop)
       coaches: [],      // { id, type, spacing, position, rotation, dir }
+      collision: null,   // transient collision id while the comic sequence runs
     };
 
     this.trains.set(id, train);
@@ -106,6 +143,7 @@ export class TrainManager {
   restoreTrain(data) {
     const train = {
       ...data,
+      collision: null,
       engineType: data.engineType || DEFAULT_ENGINE,
       speedMax: Number.isFinite(Number(data.speedMax))
         ? Math.min(MAX_TRAIN_SPEED, Math.max(MIN_TRAIN_SPEED, Number(data.speedMax)))
@@ -161,6 +199,8 @@ export class TrainManager {
     this.time += deltaTime;
 
     for (const train of this.trains.values()) {
+      if (train.collision) continue;
+
       let currentTrack = this.trackManager.tracks.get(train.currentTrackId);
       if (!currentTrack) {
         if (train.active) {
@@ -406,9 +446,134 @@ export class TrainManager {
         speedTarget: Number(speedTarget.toFixed(2)),
       };
     }
+    this.detectCollisions();
+  }
+  getCollisionBodies(train) {
+    const dimensions = ENGINE_DIMENSIONS[train.engineType] || ENGINE_DIMENSIONS[DEFAULT_ENGINE];
+    const bodies = [{
+      x: train.position.x,
+      y: train.position.y,
+      z: train.position.z,
+      rotation: train.rotation,
+      forward: getForward(train.rotation),
+      halfLength: dimensions.length * 0.5,
+      halfWidth: dimensions.width * 0.5,
+      halfHeight: dimensions.height * 0.5,
+    }];
+
+    for (const coach of train.coaches || []) {
+      if (!coach.position) continue;
+      const rotation = coach.rotation || train.rotation;
+      bodies.push({
+        x: coach.position.x,
+        y: coach.position.y,
+        z: coach.position.z,
+        rotation,
+        forward: getForward(rotation),
+        halfLength: (COACH_LENGTH[coach.type] || 1.12) * 0.5,
+        halfWidth: 0.25,
+        halfHeight: 0.25,
+      });
+    }
+    return bodies;
+  }
+
+  detectCollisions() {
+    if (this.trains.size < 2) return;
+    const trains = this.getAllTrains();
+    for (let i = 0; i < trains.length - 1; i++) {
+      const first = trains[i];
+      if (first.collision) continue;
+      const firstBodies = this.getCollisionBodies(first);
+      for (let j = i + 1; j < trains.length; j++) {
+        const second = trains[j];
+        if (second.collision || (!first.active && !second.active)) continue;
+        const pairKey = [first.id, second.id].sort().join('|');
+        if (this.collisionPairs.has(pairKey)) continue;
+
+        const secondBodies = this.getCollisionBodies(second);
+        let contactA = null;
+        let contactB = null;
+        let hit = false;
+        for (const bodyA of firstBodies) {
+          for (const bodyB of secondBodies) {
+            if (!bodyOverlaps(bodyA, bodyB)) continue;
+            contactA = bodyA;
+            contactB = bodyB;
+            hit = true;
+            break;
+          }
+          if (hit) break;
+        }
+        if (!hit) continue;
+
+        this.startCollision(first, second, firstBodies, secondBodies, contactA, contactB, pairKey);
+      }
+    }
+  }
+
+  startCollision(first, second, firstBodies, secondBodies, contactA, contactB, pairKey) {
+    const id = `collision_${this.nextCollisionId++}`;
+    const contact = {
+      x: (contactA.x + contactB.x) * 0.5,
+      y: (contactA.y + contactB.y) * 0.5,
+      z: (contactA.z + contactB.z) * 0.5,
+    };
+    const chainBodies = [...firstBodies, ...secondBodies]
+      .sort((a, b) => distanceSq(a, contact) - distanceSq(b, contact));
+    const chainPoints = [contact, ...chainBodies.map((body) => ({
+      x: body.x,
+      y: body.y,
+      z: body.z,
+    }))];
+    if (chainPoints.length > COLLISION_MAX_CHAIN_POINTS) {
+      const tail = chainPoints.slice(-2);
+      chainPoints.length = COLLISION_MAX_CHAIN_POINTS - 2;
+      chainPoints.push(...tail);
+    }
+
+    const collision = {
+      id,
+      pairKey,
+      trainIds: [first.id, second.id],
+      contact,
+      chainPoints,
+      startedAt: this.time,
+    };
+    this.collisions.set(id, collision);
+    this.collisionQueue.push(collision);
+    this.collisionPairs.add(pairKey);
+
+    for (const train of [first, second]) {
+      train.active = false;
+      train.speed = 0;
+      train.dwell = null;
+      train.collision = id;
+    }
+  }
+
+  consumeCollisionEvents() {
+    return this.collisionQueue.splice(0);
+  }
+
+  finishCollision(id) {
+    const collision = this.collisions.get(id);
+    if (!collision) return false;
+    for (const trainId of collision.trainIds) {
+      const train = this.trains.get(trainId);
+      if (train?.collision === id) this.trains.delete(trainId);
+    }
+    this.collisionPairs.delete(collision.pairKey);
+    this.collisions.delete(id);
+    return true;
+  }
+
+  getActiveCollisions() {
+    return Array.from(this.collisions.values());
   }
 
   // ── Coaches ────────────────────────────────────────────────────────────
+
 
   /**
    * Attach a coach behind the engine. One train = one engine; a coach
@@ -631,5 +796,9 @@ export class TrainManager {
   clear() {
     this.trains.clear();
     this.nextId = 0;
+    this.collisionQueue.length = 0;
+    this.collisions.clear();
+    this.collisionPairs.clear();
+    this.nextCollisionId = 0;
   }
 }
