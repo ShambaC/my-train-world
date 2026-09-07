@@ -49,7 +49,7 @@ import {
   hasRecoverySnapshot,
 } from "./utils/worldSave";
 import { captureCanvasToPng } from "./utils/photoCapture.js";
-import { advanceTutorial, completedTutorialState, initialTutorialState, normalizeTutorialState } from "./utils/tutorial.js";
+import { advanceTutorial, completedTutorialState, initialTutorialState, normalizeTutorialState, skipTutorial } from "./utils/tutorial.js";
 import { trailerConfig } from "./trailer/trailerConfig.js";
 import TrailerOverlay from "./trailer/TrailerOverlay.jsx";
 
@@ -418,6 +418,17 @@ function AppRuntime() {
       return next;
     });
   }, [scheduleAutosave, tutorialReplayStep]);
+  const handleSkipTutorial = useCallback(() => {
+    if (tutorialReplayStep) {
+      setTutorialReplayStep(null);
+      return;
+    }
+    setTutorialState((current) => {
+      const next = skipTutorial(current);
+      if (next.step !== current.step || next.skipped !== current.skipped) scheduleAutosave();
+      return next;
+    });
+  }, [scheduleAutosave, tutorialReplayStep]);
   const handleTutorialTracksChange = useCallback((tracks, source) => {
     if (source === 'placed') handleTutorialAction('track');
     if (source === 'road-placed') handleTutorialAction('road');
@@ -727,6 +738,7 @@ function AppRuntime() {
         else if (helpOpen) { setHelpOpen(false); setIsPaused(false); }
         else if (trainControlsOpen) setTrainControlsOpen(false);
         else if (settingsOpen) setSettingsOpen(false);
+        else setIsPaused((paused) => !paused);
       }
       if (e.key === 'F9') {
         if (!showDebug || appView !== 'gameplay' || !sceneReady) return;

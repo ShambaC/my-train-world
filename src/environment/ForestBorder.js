@@ -27,15 +27,18 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
     return Math.max(0.2, (heightMap[cx][cz] + 1) * VOXEL_SIZE);
   };
 
-  // --- 1. Extended Solid Ground Skirt (prevents floating trees) ---
+  // --- 1. Shallow solid ground fill (covers lowered border cells) ---
+  const skirtDepth = 3;
   const skirtVoxelGeo = new THREE.BoxGeometry(VOXEL_SIZE, 1.0, VOXEL_SIZE);
   skirtVoxelGeo.translate(0, -0.5, 0);
   const skirtMat = getStyleMaterial('forest_ground', {
-    color: STYLE_PALETTE.forest_ground.dark,
+    color: STYLE_PALETTE.forest_ground.base,
     roughness: 0.94,
   });
 
-  const skirtMargin = 6;
+  // Tree rows are spaced in world units; skirt margin is indexed in cells.
+  // Keep skirt footprint wider than tree ring, including placement jitter.
+  const skirtMargin = Math.ceil((rows * rowSpacing + 1) / VOXEL_SIZE);
   const skirtPositions = [];
   for (let x = -skirtMargin; x < len + skirtMargin; x++) {
     for (let z = -skirtMargin; z < brd + skirtMargin; z++) {
@@ -60,7 +63,7 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
 
   skirtPositions.forEach((pos, i) => {
     position.set(pos.x, pos.y, pos.z);
-    matrix.compose(position, quaternion, scaleVec.set(1, 1, 1));
+    matrix.compose(position, quaternion, scaleVec.set(1, skirtDepth, 1));
     skirtMesh.setMatrixAt(i, matrix);
   });
   skirtMesh.instanceMatrix.needsUpdate = true;
@@ -149,5 +152,50 @@ export function createForestBorder(terrainSize, seed = 1337, rows = 6, rowSpacin
 
   borderGroup.add(trunkInst, canopy1Inst, canopy2Inst, canopy3Inst);
 
+  // --- 3. Dense opaque cloud line at the forest edge ---
+  const cloudGeo = new THREE.IcosahedronGeometry(1, 1);
+  const cloudMat = new THREE.MeshStandardMaterial({
+    color: 0xf3f7fb,
+    roughness: 1,
+    depthWrite: true,
+  });
+  const cloudPuffs = [];
+  const cloudExtent = maxExtent + 4.5;
+  const addCloud = (cx, cz, alongX) => {
+    const baseY = Math.max(6, getEdgeHeight(cx, cz) + 3.5 + rng());
+    const cloudScale = 3.2 + rng() * 1.4;
+    for (let p = 0; p < 5; p++) {
+      const along = (p - 2) * 0.72 * cloudScale;
+      const across = (rng() - 0.5) * 0.9;
+      const scale = cloudScale * (0.9 + rng() * 0.25);
+      cloudPuffs.push({
+        x: cx + (alongX ? along : across),
+        y: baseY + (p === 1 || p === 2 ? 0.55 : 0) - scale * 0.72,
+        z: cz + (alongX ? across : along),
+        scale,
+      });
+    }
+  };
+
+  for (let x = -cloudExtent; x <= cloudExtent; x += 4.5) {
+    addCloud(x, -cloudExtent, true);
+    addCloud(x, cloudExtent, true);
+  }
+  for (let z = -cloudExtent + 4.5; z < cloudExtent; z += 4.5) {
+    addCloud(-cloudExtent, z, false);
+    addCloud(cloudExtent, z, false);
+  }
+
+  const cloudInst = new THREE.InstancedMesh(cloudGeo, cloudMat, cloudPuffs.length);
+  cloudInst.name = 'forestBorderClouds';
+  cloudInst.castShadow = false;
+  cloudInst.receiveShadow = false;
+  cloudPuffs.forEach((cloud, i) => {
+    position.set(cloud.x, cloud.y, cloud.z);
+    matrix.compose(position, quaternion, scaleVec.set(cloud.scale, cloud.scale * 0.72, cloud.scale));
+    cloudInst.setMatrixAt(i, matrix);
+  });
+  cloudInst.instanceMatrix.needsUpdate = true;
+  borderGroup.add(cloudInst);
   return borderGroup;
 }
