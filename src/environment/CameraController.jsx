@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
+import { VOXEL_SIZE } from '../terrain.js';
 
 const pressedKeys = new Set();
 
@@ -58,8 +59,7 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
     const controls = orbitRef?.current;
     const rotating = rotateX !== 0 || rotateY !== 0;
     if (controls && !followActive) controls.enabled = !rotating;
-    if (move.lengthSq() === 0 && (followActive || (rotateX === 0 && rotateY === 0))) return;
-    onCameraInput?.();
+    if (move.lengthSq() > 0 || (!followActive && rotating)) onCameraInput?.();
 
     if (move.lengthSq() > 0) {
       const speed = isKeyDown('shift') ? 15 : 6;
@@ -95,13 +95,22 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
       }
     }
 
-    // Boundaries
-    const pad = 10;
-    const maxX = terrainSize.length / 2 + pad;
-    const maxZ = terrainSize.breadth / 2 + pad;
+    // Keep camera and OrbitControls target near the playable map, in world units.
+    const pad = 8;
+    const maxX = terrainSize.length * VOXEL_SIZE * 0.5 + pad;
+    const maxZ = terrainSize.breadth * VOXEL_SIZE * 0.5 + pad;
+    const maxY = Math.max(
+      2.5,
+      Math.max(terrainSize.length, terrainSize.breadth) * VOXEL_SIZE * (1 / 4),
+    );
     camera.position.x = THREE.MathUtils.clamp(camera.position.x, -maxX, maxX);
     camera.position.z = THREE.MathUtils.clamp(camera.position.z, -maxZ, maxZ);
-    camera.position.y = THREE.MathUtils.clamp(camera.position.y, 2.5, 150);
+    if (controls) {
+      controls.target.x = THREE.MathUtils.clamp(controls.target.x, -maxX, maxX);
+      controls.target.z = THREE.MathUtils.clamp(controls.target.z, -maxZ, maxZ);
+      controls.target.y = Math.min(controls.target.y, maxY);
+    }
+    camera.position.y = THREE.MathUtils.clamp(camera.position.y, 2.5, maxY);
   });
 
   return null;
