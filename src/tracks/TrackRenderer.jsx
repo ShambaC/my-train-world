@@ -47,6 +47,7 @@ export default function TrackRenderer({
   const ghostMeshRef = useRef(null);
   const trackMeshesRef = useRef(new Map());
   const mouseDownPosRef = useRef(null);
+  const placementDragRef = useRef(null);
   const ghostOffsetRef = useRef(null);
 
   const {
@@ -141,11 +142,104 @@ export default function TrackRenderer({
 
     const handleMouseDown = (e) => {
       if (e.target !== canvas) return;
+      if (e.button !== 0) return;
       mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+      const tool = selectedToolRef.current;
+      if (tool?.type === 'road' || (tool?.type === 'track' && tool.trackType === 'straight')) {
+        placementDragRef.current = {
+          tool: { type: tool.type, trackType: tool.trackType },
+          start: { x: e.clientX, y: e.clientY },
+          last: { x: e.clientX, y: e.clientY },
+          dragging: false,
+          seen: new Set(),
+          items: [],
+        };
+      }
+    };
+
+    const placeDragStep = (e, drag) => {
+      const tool = selectedToolRef.current;
+      if (tool?.type !== drag.tool.type || tool?.trackType !== drag.tool.trackType) return;
+      updateGhostRef.current(e);
+      const { ghostPosition, isValidPosition } = latestRefMirror.current.current;
+      if (!ghostPosition || !isValidPosition) return;
+      const key = `${ghostPosition.x}|${ghostPosition.y}|${ghostPosition.z}|${ghostPosition.rotation}`;
+      if (drag.seen.has(key)) return;
+      drag.seen.add(key);
+
+      if (drag.tool.type === 'road') {
+        const road = roadManagerRef.current?.addRoad(
+          { x: ghostPosition.x, y: ghostPosition.y, z: ghostPosition.z },
+          ghostPosition.rotation || 0,
+        );
+        if (road) drag.items.push({ kind: 'road', snapshot: clone(road) });
+      } else {
+        const track = handlePlacementRef.current();
+        if (track) drag.items.push({ kind: 'track', snapshot: clone(track) });
+      }
+    };
+
+    const finishPlacementDrag = (drag) => {
+      if (!drag.items.length) return;
+      const items = drag.items;
+      historyRef.current?.push({
+        undo: () => {
+          for (const item of [...items].reverse()) {
+            if (item.kind === 'track') trackManagerRef.current.removeTrack(item.snapshot.id);
+            else roadManagerRef.current?.removeRoad(item.snapshot.id);
+          }
+        },
+        redo: () => {
+          for (const item of items) {
+            if (item.kind === 'track') trackManagerRef.current.restoreTrack(clone(item.snapshot));
+            else roadManagerRef.current?.restoreUserRoad(clone(item.snapshot));
+          }
+        },
+      });
+      if (drag.tool.type === 'track') {
+        const currentTracks = trackManagerRef.current.getAllTracks();
+        setTracks(currentTracks);
+        onTracksChangeRef.current?.(currentTracks, 'placed');
+        trainAudio.trackPlaced('straight');
+      } else {
+        trainAudio.roadPlaced();
+        onTracksChangeRef.current?.(trackManagerRef.current.getAllTracks(), 'road-placed');
+      }
+    };
+
+    const handlePlacementDragMove = (e) => {
+      const drag = placementDragRef.current;
+      if (!drag) return;
+      const total = Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y);
+      if (!drag.dragging && total <= 5) return;
+      drag.dragging = true;
+      const dx = e.clientX - drag.last.x;
+      const dy = e.clientY - drag.last.y;
+      const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 4));
+      for (let i = 1; i <= steps; i++) {
+        placeDragStep({
+          clientX: drag.last.x + dx * i / steps,
+          clientY: drag.last.y + dy * i / steps,
+        }, drag);
+      }
+      drag.last = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleMouseUp = (e) => {
+      if (e.button !== 0) return;
+      const drag = placementDragRef.current;
+      if (drag) {
+        placementDragRef.current = null;
+        if (drag.dragging) {
+          finishPlacementDrag(drag);
+          mouseDownPosRef.current = null;
+        }
+      }
     };
 
     const handleClick = (e) => {
       if (e.target !== canvas) return;
+      if (e.button !== 0) return;
       if (!mouseDownPosRef.current) return;
       const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
       const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
@@ -252,9 +346,13 @@ export default function TrackRenderer({
 
     canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('click', handleClick);
+    window.addEventListener('mousemove', handlePlacementDragMove);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
       canvas.removeEventListener('mousedown', handleMouseDown);
       canvas.removeEventListener('click', handleClick);
+      window.removeEventListener('mousemove', handlePlacementDragMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 

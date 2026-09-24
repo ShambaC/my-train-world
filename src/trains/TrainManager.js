@@ -1,8 +1,8 @@
 /**
  * Train Manager — heading-based movement on undirected tracks.
  * Tracks have endpoints but no inherent travel direction; the engine
- * owns a heading (unit XZ vector) and facing always equals motion.
- * Coaches trail the engine along the track graph (walkBack each frame).
+ * owns a heading (unit XZ vector) and facing always equals motion. Coaches
+ * keep a separate consist direction so they stay coupled through reversals.
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
 import { DEFAULT_ENGINE, ENGINE_DIMENSIONS } from './engineTypes.js';
@@ -109,6 +109,7 @@ export class TrainManager {
       speed: 0,          // eased toward speedMax each frame (smooth motion)
       speedMax: DEFAULT_TRAIN_SPEED,
       heading,
+      coachDirection: direction,
       position: { ...startTrack.position },
       rotation: Math.atan2(heading.x, heading.z),
       bank: 0,           // curve roll, eased by the renderer-facing update
@@ -153,6 +154,11 @@ export class TrainManager {
       cooldowns: data.cooldowns instanceof Map ? data.cooldowns : new Map(Object.entries(data.cooldowns || {})),
       coaches: (data.coaches || []).map((c) => ({ ...c })),
     };
+    const track = this.trackManager.tracks.get(train.currentTrackId);
+    const tangent = track && rotLocalToWorld(tangentOnTrack(track.type, train.progress), track.rotation);
+    train.coachDirection = Number.isFinite(data.coachDirection)
+      ? (Math.sign(data.coachDirection) || 1)
+      : (tangent && tangent.x * train.heading.x + tangent.z * train.heading.z < 0 ? -1 : 1);
     this.trains.set(train.id, train);
     const num = parseInt(train.id.split('_')[1], 10);
     if (!Number.isNaN(num) && num >= this.nextId) this.nextId = num + 1;
@@ -168,6 +174,15 @@ export class TrainManager {
     const train = this.trains.get(id);
     if (!train) return false;
     train.heading = { x: -train.heading.x, z: -train.heading.z };
+    if (train.dwell) {
+      train.cooldowns.set(train.dwell.stationId, { departTime: this.time, hasExited: false });
+      train.dwell = null;
+    }
+    const track = this.trackManager.tracks.get(train.currentTrackId);
+    if (track) {
+      this.updateTrainPosition(train, track);
+      this.updateCoaches(train);
+    }
     return true;
   }
 
@@ -576,13 +591,17 @@ export class TrainManager {
 
 
   /**
-   * Attach a coach behind the engine. One train = one engine; a coach
-   * belongs to exactly one train. Spacing is per-pair: half of the car
+   * Attach a coach behind the consist. Spacing is per-pair: half of the car
    * ahead + half of the new coach + gap, so coaches never overlap.
    */
   addCoach(trainId, coachType) {
     const train = this.trains.get(trainId);
     if (!train) return null;
+    if (train.coaches.length === 0) {
+      const track = this.trackManager.tracks.get(train.currentTrackId);
+      const tangent = rotLocalToWorld(tangentOnTrack(track.type, train.progress), track.rotation);
+      train.coachDirection = tangent.x * train.heading.x + tangent.z * train.heading.z >= 0 ? 1 : -1;
+    }
     const prev = train.coaches[train.coaches.length - 1];
     const newHalf = (COACH_LENGTH[coachType] ?? 1.0) / 2;
     const aheadHalf = prev ? (COACH_LENGTH[prev.type] ?? 1.0) / 2 : 0.5; // engine half
@@ -604,8 +623,8 @@ export class TrainManager {
   }
 
   /**
-   * Position every coach by walking backward from the engine along the
-   * track graph by its spacing distance. Exact trailing, no drift.
+   * Position every coach by walking along the train's fixed consist direction.
+   * Exact spacing, no drift or side swap when the engine reverses.
    */
   updateCoaches(train) {
     let behind = 0;
@@ -626,16 +645,16 @@ export class TrainManager {
         z: track.position.z + -local.x * sin + local.z * cos,
       };
       const tangent = rotLocalToWorld(tangentOnTrack(track.type, pos.progress), track.rotation);
-      coach.rotation = Math.atan2(tangent.x * pos.travelDir, tangent.z * pos.travelDir);
+      coach.rotation = Math.atan2(tangent.x * pos.orientationDir, tangent.z * pos.orientationDir);
       const coachTangent = tangentOnTrack(track.type, pos.progress);
-      coach.pitch = coachTangent.y ? -Math.atan2(coachTangent.y, coachTangent.z) * (pos.travelDir >= 0 ? 1 : -1) : 0;
+      coach.pitch = coachTangent.y ? -Math.atan2(coachTangent.y, coachTangent.z) * (pos.orientationDir >= 0 ? 1 : -1) : 0;
     }
   }
 
   /**
-   * Walk `distance` world units backward from the engine along the path
-   * (opposite its heading). Returns { trackId, progress, travelDir } where
-   * travelDir is the travel (+1 = toward front) direction on the final track.
+   * Walk `distance` world units behind the engine along the consist direction.
+   * Returns { trackId, progress, orientationDir } where orientationDir is
+   * the consist orientation (+1 = toward front) on the final track.
    */
   walkBack(train, distance) {
     let trackId = train.currentTrackId;
@@ -645,9 +664,8 @@ export class TrainManager {
 
     let track = this.trackManager.tracks.get(trackId);
     if (!track) return null;
-    const tangent = rotLocalToWorld(tangentOnTrack(track.type, train.progress), track.rotation);
-    const sign = (tangent.x * train.heading.x + tangent.z * train.heading.z) >= 0 ? 1 : -1;
-    let walkDir = -sign; // walk opposite the travel direction
+    const sign = train.coachDirection;
+    let walkDir = -sign; // coaches stay behind the consist orientation
 
     while (remaining > 0 && guard++ < 200) {
       track = this.trackManager.tracks.get(trackId);
@@ -658,7 +676,7 @@ export class TrainManager {
 
       if (remaining <= distToEnd) {
         progress += walkDir > 0 ? remaining / len : -remaining / len;
-        return { trackId, progress, travelDir: -walkDir };
+        return { trackId, progress, orientationDir: -walkDir };
       }
 
       remaining -= distToEnd;
@@ -666,7 +684,7 @@ export class TrainManager {
       const nextId = track.connections[exitEnd];
       if (!nextId) {
         // Dead end — the coach bunches up at the end
-        return { trackId, progress: exitEnd === 'front' ? 1 : 0, travelDir: -walkDir };
+        return { trackId, progress: exitEnd === 'front' ? 1 : 0, orientationDir: -walkDir };
       }
 
       const nextTrack = this.trackManager.tracks.get(nextId);
@@ -688,11 +706,7 @@ export class TrainManager {
     return null;
   }
 
-  /**
-   * Move to connected track at exitEnd. At a dead end, solo engines reverse;
-   * a train with coaches stays parked at the end so the train never splits
-   * (the coaches trail behind and would be left at the dead end).
-   */
+  /** Move to connected track at exitEnd, or reverse at a dead end. */
   transition(train, currentTrack, exitEnd) {
     const nextId = currentTrack.connections[exitEnd];
 
@@ -704,14 +718,6 @@ export class TrainManager {
       train.heading = { x: -train.heading.x, z: -train.heading.z };
       parkAtEnd();
     };
-
-    if (train.coaches.length > 0) {
-      // Trains with coaches never reverse at a dead end
-      if (!nextId) {
-        parkAtEnd();
-        return;
-      }
-    }
 
     if (!nextId) {
       reverse();
@@ -744,6 +750,7 @@ export class TrainManager {
 
     train.currentTrackId = nextId;
     train.progress = entryEnd === 'back' ? 0.01 : 0.99;
+    if (exitEnd === entryEnd) train.coachDirection *= -1;
   }
 
   /**

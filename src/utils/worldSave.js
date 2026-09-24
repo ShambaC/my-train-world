@@ -352,6 +352,7 @@ export function captureWorld({ terrainSize, terrainSeed, trackManager, stationMa
     speed: t.speed,
     speedMax: t.speedMax,
     heading: { ...t.heading },
+    coachDirection: t.coachDirection,
     position: { ...t.position },
     rotation: t.rotation,
     bank: t.bank,

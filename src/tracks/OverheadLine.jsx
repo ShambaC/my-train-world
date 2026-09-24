@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { makeAtlasMaterial } from '../utils/atlasTextures.js';
-import { pointOnTrack } from './trackGeometry.js';
+import { pointOnTrack, tangentOnTrack } from './trackGeometry.js';
 
 const POLE_X = 0.55;        // posts stand ±0.55 across the track
 const BEAM_Y = 1.55;        // top beam height above track level (tune here)
@@ -197,13 +197,15 @@ function buildOverheadLine(tracks, terrainData) {
     for (const i of gantryIdx) {
       const track = byId.get(chain[i]);
       const center = pointOnTrack(track.type, 0.5);
+      const tangent = tangentOnTrack(track.type, 0.5);
+      const gantryRotation = (track.rotation || 0) + Math.atan2(tangent.x, tangent.z);
       const g = template.clone(true);
       g.position.set(
         track.position.x + center.x * Math.cos(track.rotation || 0) + center.z * Math.sin(track.rotation || 0),
         track.position.y + (center.y || 0),
         track.position.z - center.x * Math.sin(track.rotation || 0) + center.z * Math.cos(track.rotation || 0)
       );
-      g.rotation.y = track.rotation || 0;
+      g.rotation.y = gantryRotation;
 
       // Extend posts downward to ground on elevated tracks
       if (terrainData) {
@@ -228,7 +230,7 @@ function buildOverheadLine(tracks, terrainData) {
         x: g.position.x,
         y: g.position.y,
         z: g.position.z,
-        rotation: track.rotation || 0,
+        rotation: gantryRotation,
       });
     }
 

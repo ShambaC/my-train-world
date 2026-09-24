@@ -731,6 +731,16 @@ function AppRuntime() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.defaultPrevented) return;
+      if (appView === 'gameplay' && sceneReady && (e.ctrlKey || e.metaKey) && !e.altKey &&
+          !e.target.closest?.('input, textarea, select, [contenteditable="true"]')) {
+        const key = e.key.toLowerCase();
+        if (key === 'z' || key === 'y') {
+          e.preventDefault();
+          if (key === 'y' || e.shiftKey) doRedo();
+          else doUndo();
+          return;
+        }
+      }
       if (e.key === 'Escape') {
         if (appView !== 'gameplay' || !sceneReady) return;
         e.preventDefault();

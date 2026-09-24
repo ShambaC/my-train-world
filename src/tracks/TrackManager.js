@@ -216,6 +216,7 @@ export class TrackManager {
    * Auto-connects to whatever neighbors exist so links are restored.
    */
   restoreTrack(track) {
+    track.connections = { front: null, back: null };
     this.tracks.set(track.id, track);
     const num = parseInt(track.id.split('_')[1], 10);
     if (!Number.isNaN(num) && num >= this.nextId) this.nextId = num + 1;

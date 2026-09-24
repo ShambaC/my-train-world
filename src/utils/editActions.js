@@ -72,8 +72,8 @@ export function deleteEntity({ target, trackManager, stationManager, trainManage
       .map((t) => clone(t));
     history.push({
       undo: () => {
-        for (const s of trainSnaps) trainManager.restoreTrain(s);
         trackManager.restoreTrack(trackSnap);
+        for (const s of trainSnaps) trainManager.restoreTrain(s);
       },
       redo: () => {
         for (const s of trainSnaps) trainManager.removeTrain(s.id);

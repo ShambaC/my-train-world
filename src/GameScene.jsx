@@ -302,7 +302,7 @@ function Scene({
   return (
     <>
       <Skybox timeOfDay={timeOfDay} lighting={lighting} />
-      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} enabled={!trailerMode} onCameraInput={onCameraInput} />
+      <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} enabled={!trailerMode} onCameraInput={onCameraInput} selectedTool={selectedTool} />
       
       {/* Hemisphere Lighting */}
       <hemisphereLight
@@ -520,6 +520,11 @@ function Scene({
       {!trailerMode && (
         <OrbitControls
           ref={orbitRef}
+          mouseButtons={{
+            LEFT: selectedTool?.type === 'hand' ? THREE.MOUSE.ROTATE : undefined,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: selectedTool?.type === 'hand' ? THREE.MOUSE.PAN : undefined,
+          }}
           enableDamping
           dampingFactor={0.05}
           minDistance={0.75}

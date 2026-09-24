@@ -14,8 +14,65 @@ function isKeyDown(code) {
  * The OrbitControls target moves with the camera so the view never
  * pitches toward a static point.
  */
-export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false, onCameraInput }) {
-  const { camera } = useThree();
+export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false, onCameraInput, selectedTool }) {
+  const { camera, gl } = useThree();
+
+  useEffect(() => {
+    if (!enabled) return;
+    const canvas = gl.domElement;
+    let drag = null;
+    const handTool = selectedTool?.type === 'hand';
+    const onPointerDown = (event) => {
+      if (handTool || followActive || event.button !== 2) return;
+      drag = { x: event.clientX, y: event.clientY };
+      event.preventDefault();
+      onCameraInput?.();
+    };
+    const onPointerMove = (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      drag = { x: event.clientX, y: event.clientY };
+      if (!dx && !dy) return;
+
+      const controls = orbitRef?.current;
+      if (!controls) return;
+      const distance = camera.position.distanceTo(controls.target);
+      if (distance < 1e-4) return;
+      const direction = controls.target.clone().sub(camera.position).normalize();
+      direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.008);
+      const pitch = THREE.MathUtils.clamp(
+        Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1)) - dy * 0.008,
+        -Math.PI / 2 + 0.08,
+        Math.PI / 2 - 0.08,
+      );
+      const horizontal = Math.hypot(direction.x, direction.z);
+      if (horizontal > 1e-5) {
+        const horizontalScale = Math.cos(pitch) / horizontal;
+        direction.x *= horizontalScale;
+        direction.y = Math.sin(pitch);
+        direction.z *= horizontalScale;
+      }
+      controls.target.copy(camera.position).addScaledVector(direction, distance);
+      camera.lookAt(controls.target);
+      controls.update();
+      onCameraInput?.();
+    };
+    const onPointerUp = () => { drag = null; };
+    const onContextMenu = (event) => {
+      if (!handTool) event.preventDefault();
+    };
+    canvas.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('contextmenu', onContextMenu);
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, [camera, gl, orbitRef, followActive, onCameraInput, selectedTool?.type, enabled]);
 
   useEffect(() => {
     if (!enabled) return;
