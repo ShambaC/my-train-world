@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "export:models": "node scripts/export-models.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

@@ -67,6 +67,11 @@ function getGantryTemplate() {
   return gantryTemplate;
 }
 
+/** Standalone gantry clone used by asset export and dev inspection. */
+export function createOverheadGantry() {
+  return getGantryTemplate().clone(true);
+}
+
 // Wire tube geometries cached per quantized span length + ΔY (per wire kind),
 // built in LOCAL space along +X (0 → len) with sag baked into Y relative to
 // the chord between endpoints, so a wire mesh handles height differences.
@@ -88,6 +93,29 @@ function getWireGeo(length, sag, radius, kind, deltaY = 0) {
     wireGeoCache.set(key, geo);
   }
   return geo;
+}
+
+/** Standalone wire span matching the runtime contact/messenger assembly. */
+export function createOverheadWireSpan(length = 2.5, deltaY = 0) {
+  const span = new THREE.Group();
+  span.name = 'OverheadWireSpan';
+
+  for (const side of [-1, 1]) {
+    const wire = new THREE.Mesh(
+      getWireGeo(length, CONTACT_SAG, 0.018, 'contact', deltaY),
+      contactMat,
+    );
+    wire.position.set(0, CONTACT_Y, side * CONTACT_X);
+    span.add(wire);
+  }
+
+  const messenger = new THREE.Mesh(
+    getWireGeo(length, 0.03, 0.012, 'messenger', deltaY),
+    messengerMat,
+  );
+  messenger.position.y = MESSENGER_Y;
+  span.add(messenger);
+  return span;
 }
 
 const contactMat = new THREE.MeshLambertMaterial({ color: COLORS.contact, flatShading: true });
