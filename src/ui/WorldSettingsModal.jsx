@@ -7,6 +7,10 @@ export default function WorldSettingsModal({
   onClose,
   timeOfDay,
   onTimeChange,
+  dayNightCycleEnabled,
+  onDayNightCycleEnabledChange,
+  dayNightCycleMinutes,
+  onDayNightCycleMinutesChange,
   fogEnabled,
   onFogEnabledChange,
   fogDensity,
@@ -60,6 +64,10 @@ export default function WorldSettingsModal({
             <EnvironmentSettings
               timeOfDay={timeOfDay}
               onTimeChange={onTimeChange}
+              dayNightCycleEnabled={dayNightCycleEnabled}
+              onDayNightCycleEnabledChange={onDayNightCycleEnabledChange}
+              dayNightCycleMinutes={dayNightCycleMinutes}
+              onDayNightCycleMinutesChange={onDayNightCycleMinutesChange}
               fogEnabled={fogEnabled}
               onFogEnabledChange={onFogEnabledChange}
               fogDensity={fogDensity}

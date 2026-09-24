@@ -17,6 +17,10 @@ const SHADOW_OPTIONS = [
 function EnvironmentSettings({ 
   timeOfDay, 
   onTimeChange, 
+  dayNightCycleEnabled,
+  onDayNightCycleEnabledChange,
+  dayNightCycleMinutes,
+  onDayNightCycleMinutesChange,
   fogEnabled, 
   onFogEnabledChange,
   fogDensity,
@@ -93,6 +97,38 @@ function EnvironmentSettings({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2 border-t border-gray-700 pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Day–night cycle</span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Day–night cycle"
+                aria-checked={dayNightCycleEnabled}
+                onClick={() => onDayNightCycleEnabledChange(!dayNightCycleEnabled)}
+                className={`relative h-6 w-12 rounded-full ${dayNightCycleEnabled ? 'bg-blue-600' : 'bg-gray-600'}`}
+              >
+                <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${dayNightCycleEnabled ? 'translate-x-6' : ''}`} />
+              </button>
+            </div>
+            {dayNightCycleEnabled && (
+              <div>
+                <label htmlFor="day-night-cycle-rate" className="block text-sm">Time rate: {dayNightCycleMinutes} min per full cycle</label>
+                <input
+                  id="day-night-cycle-rate"
+                  type="range"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={dayNightCycleMinutes}
+                  onChange={(event) => onDayNightCycleMinutesChange(Number(event.target.value))}
+                  className="w-full accent-blue-500"
+                />
+                <div className="flex justify-between text-xs text-gray-400"><span>Fast</span><span>Slow</span></div>
+              </div>
+            )}
           </div>
 
           {/* Fog Toggle */}

@@ -54,6 +54,8 @@ import { trailerConfig } from "./trailer/trailerConfig.js";
 import TrailerOverlay from "./trailer/TrailerOverlay.jsx";
 
 const TRAILER_MODE = trailerConfig.enabled;
+const DAY_PHASES = ['dawn', 'day', 'dusk', 'night'];
+const DEFAULT_CYCLE_MINUTES = 8;
 
 const TOOL_GROUPS = [
   {
@@ -142,6 +144,8 @@ function AppRuntime() {
   const [selectedToolId, setSelectedToolId] = useState('hand');
   const [heightOffset, setHeightOffset] = useState(0);
   const [timeOfDay, setTimeOfDay] = useState(TRAILER_MODE ? 'dawn' : 'day');
+  const [dayNightCycleEnabled, setDayNightCycleEnabled] = useState(false);
+  const [dayNightCycleMinutes, setDayNightCycleMinutes] = useState(DEFAULT_CYCLE_MINUTES);
   const [fogEnabled, setFogEnabled] = useState(TRAILER_MODE ? trailerConfig.fogEnabled : true);
   const [fogDensity, setFogDensity] = useState(null); // null = use time-of-day preset density
   const [shadowMode, setShadowMode] = useState('soft'); // none | hard | soft
@@ -244,13 +248,20 @@ function AppRuntime() {
   // Latest environment state for world capture (plain object, no deps churn).
   const envRef = useRef({});
   envRef.current = {
-    timeOfDay, fogEnabled, fogDensity, shadowMode,
+    timeOfDay, dayNightCycleEnabled, dayNightCycleMinutes, fogEnabled, fogDensity, shadowMode,
     tiltShiftEnabled, celShadingEnabled, ambientEnabled,
     soundsEnabled, trafficEnabled, signalsEnabled,
     frameLimit, vsync, stationOrientation, trainDirection,
   };
 
   const selectedTool = TOOL_LEAVES[selectedToolId] || TOOL_LEAVES.hand;
+  useEffect(() => {
+    if (TRAILER_MODE || appView !== 'gameplay' || !sceneReady || isPaused || photoMode || !dayNightCycleEnabled) return;
+    const timer = window.setInterval(() => {
+      setTimeOfDay((current) => DAY_PHASES[(DAY_PHASES.indexOf(current) + 1) % DAY_PHASES.length]);
+    }, dayNightCycleMinutes * 60_000 / DAY_PHASES.length);
+    return () => window.clearInterval(timer);
+  }, [appView, sceneReady, isPaused, photoMode, dayNightCycleEnabled, dayNightCycleMinutes]);
   const visibleTutorialState = tutorialReplayStep
     ? { step: tutorialReplayStep, skipped: false }
     : tutorialState;
@@ -542,6 +553,8 @@ function AppRuntime() {
     if (t.length) setTerrainSize({ length: t.length, breadth: t.breadth });
     if (t.seed !== undefined) setTerrainSeed(t.seed);
     if (env.timeOfDay) setTimeOfDay(env.timeOfDay);
+    setDayNightCycleEnabled(env.dayNightCycleEnabled === true);
+    setDayNightCycleMinutes(Math.min(30, Math.max(1, Number(env.dayNightCycleMinutes) || DEFAULT_CYCLE_MINUTES)));
     if (env.fogEnabled !== undefined) setFogEnabled(env.fogEnabled);
     if (env.fogDensity !== undefined) setFogDensity(env.fogDensity);
     if (env.shadowMode) setShadowMode(env.shadowMode);
@@ -614,6 +627,8 @@ function AppRuntime() {
     setTerrainSize(size);
     setTerrainSeed(seed);
     setTimeOfDay(globalGraphics.timeOfDay);
+    setDayNightCycleEnabled(false);
+    setDayNightCycleMinutes(DEFAULT_CYCLE_MINUTES);
     setFogEnabled(globalGraphics.fogEnabled);
     setFogDensity(globalGraphics.fogDensity);
     setShadowMode(globalGraphics.shadowMode);
@@ -985,6 +1000,10 @@ function AppRuntime() {
         onExit={() => { saveCurrentWorldLocally(); setSettingsOpen(false); setIsPaused(false); setAppView('menu'); }}
         timeOfDay={timeOfDay}
         onTimeChange={setTimeOfDay}
+        dayNightCycleEnabled={dayNightCycleEnabled}
+        onDayNightCycleEnabledChange={(value) => { setDayNightCycleEnabled(value); scheduleAutosave(); }}
+        dayNightCycleMinutes={dayNightCycleMinutes}
+        onDayNightCycleMinutesChange={(value) => { setDayNightCycleMinutes(value); scheduleAutosave(); }}
         fogEnabled={fogEnabled}
         onFogEnabledChange={setFogEnabled}
         fogDensity={fogDensity}

@@ -3,7 +3,7 @@
  * Art-directed painterly gradient dome with luminous pastel horizons,
  * hemisphere ground bounce, and drifting cloud cylinders.
  */
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { getStyleTexture } from '../utils/atlasTextures.js';
@@ -12,9 +12,28 @@ import { windTime } from './wind.js';
 export const SKYBOX_TIMES = ['dawn', 'day', 'dusk', 'night'];
 export const SKYBOX_COUNT = SKYBOX_TIMES.length;
 
+const skyboxLoads = new Map();
+const CUBE_FACES = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
+
+function loadSkybox(time) {
+  if (skyboxLoads.has(time)) return skyboxLoads.get(time);
+
+  const urls = CUBE_FACES.map((face) => `${import.meta.env.BASE_URL}textures/${time}/${face}.png`);
+  const promise = new Promise((resolve, reject) => {
+    new THREE.CubeTextureLoader().load(urls, (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      resolve(texture);
+    }, undefined, reject);
+  });
+  skyboxLoads.set(time, promise);
+  return promise;
+}
+
 export function preloadSkyboxes(onProgress) {
-  onProgress?.(1);
-  return Promise.resolve();
+  let loaded = 0;
+  return Promise.all(SKYBOX_TIMES.map((time) => loadSkybox(time).then(() => {
+    onProgress?.(++loaded / SKYBOX_COUNT);
+  })));
 }
 
 export function getLightingForTime(timeOfDay) {
@@ -71,9 +90,9 @@ export function getLightingForTime(timeOfDay) {
       shadowRadius: 4,
     },
     night: {
-      ambient: { intensity: 0.55, color: 0x223048 },
-      hemisphereSky: 0x283854,
-      hemisphereGround: 0x18202c,
+      ambient: { intensity: 0.9, color: 0x354864 },
+      hemisphereSky: 0x526b8a,
+      hemisphereGround: 0x30394d,
       directional: { intensity: 0.35, color: 0x7da4d4, position: [20, 50, 15] },
       fog: { color: 0x141e2e, density: 0.012 },
       skyZenith: 0x0c1422,
@@ -98,6 +117,11 @@ const SkyDomeShader = {
     uHorizon: { value: new THREE.Color(0xd6eafc) },
     uGround: { value: new THREE.Color(0x6b945c) },
     uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
+    uSkyboxA: { value: null },
+    uSkyboxB: { value: null },
+    uSkyboxBlend: { value: 0 },
+    uSkyboxOpacity: { value: 0 },
+    uHasSkybox: { value: false },
   },
   vertexShader: `
     varying vec3 vWorldPosition;
@@ -111,6 +135,11 @@ const SkyDomeShader = {
     uniform vec3 uHorizon;
     uniform vec3 uGround;
     uniform vec3 uSunDir;
+    uniform samplerCube uSkyboxA;
+    uniform samplerCube uSkyboxB;
+    uniform float uSkyboxBlend;
+    uniform float uSkyboxOpacity;
+    uniform bool uHasSkybox;
     varying vec3 vWorldPosition;
 
     void main() {
@@ -119,6 +148,11 @@ const SkyDomeShader = {
       vec3 sky = y > 0.0 
         ? mix(uHorizon, uZenith, pow(y, 0.6))
         : mix(uHorizon, uGround, clamp(-y * 2.5, 0.0, 1.0));
+
+      if (uHasSkybox) {
+        vec3 imageSky = mix(textureCube(uSkyboxA, dir).rgb, textureCube(uSkyboxB, dir).rgb, uSkyboxBlend);
+        sky = mix(sky, imageSky, uSkyboxOpacity);
+      }
 
       // Luminous sun halo glow
       float sunDot = max(dot(dir, uSunDir), 0.0);
@@ -134,6 +168,7 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
   const cloudsRef1 = useRef();
   const cloudsRef2 = useRef();
   const cloudsRef3 = useRef();
+  const skyTransition = useRef({ current: null, target: null, elapsed: 0, opacity: 0 });
 
   const cloudTexA = useMemo(() => getStyleTexture('cloud_large_a', { repeat: [8, 1] }), []);
   const cloudTexB = useMemo(() => getStyleTexture('cloud_medium_a', { repeat: [6, 1] }), []);
@@ -148,6 +183,31 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
       depthWrite: false,
     });
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    loadSkybox(SKYBOX_TIMES.includes(timeOfDay) ? timeOfDay : 'day').then((texture) => {
+      if (!active) return;
+      const transition = skyTransition.current;
+      const uniforms = skyMat.uniforms;
+      if (!transition.current) {
+        transition.current = texture;
+        transition.target = texture;
+        uniforms.uSkyboxA.value = texture;
+        uniforms.uSkyboxB.value = texture;
+        uniforms.uHasSkybox.value = true;
+        transition.opacity = 0;
+        uniforms.uSkyboxOpacity.value = 0;
+      } else if (transition.target !== texture) {
+        uniforms.uSkyboxA.value = transition.current;
+        uniforms.uSkyboxB.value = texture;
+        uniforms.uSkyboxBlend.value = 0;
+        transition.target = texture;
+        transition.elapsed = 0;
+      }
+    }).catch((error) => console.error(`[SkyAtmosphere] Failed loading ${timeOfDay} skybox`, error));
+    return () => { active = false; };
+  }, [timeOfDay, skyMat]);
 
   const cloudMat1 = useMemo(() => {
     return new THREE.MeshBasicMaterial({
@@ -179,7 +239,23 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
     });
   }, [cloudTexHaze]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    const transition = skyTransition.current;
+    if (transition.current && transition.opacity < 1) {
+      transition.opacity = Math.min(1, transition.opacity + delta);
+      skyMat.uniforms.uSkyboxOpacity.value = transition.opacity;
+    }
+    if (transition.current && transition.target !== transition.current) {
+      transition.elapsed = Math.min(1, transition.elapsed + delta);
+      skyMat.uniforms.uSkyboxBlend.value = transition.elapsed;
+      if (transition.elapsed === 1) {
+        transition.current = transition.target;
+        skyMat.uniforms.uSkyboxA.value = transition.current;
+        skyMat.uniforms.uSkyboxB.value = transition.current;
+        skyMat.uniforms.uSkyboxBlend.value = 0;
+      }
+    }
+
     if (lighting) {
       skyMat.uniforms.uZenith.value.copy(lighting.skyZenith || lighting.skyTint);
       skyMat.uniforms.uHorizon.value.copy(lighting.fog.color);

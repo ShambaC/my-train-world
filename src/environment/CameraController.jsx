@@ -22,13 +22,12 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
     const canvas = gl.domElement;
     let drag = null;
     const handTool = selectedTool?.type === 'hand';
-    const onPointerDown = (event) => {
+    const onMouseDown = (event) => {
       if (handTool || followActive || event.button !== 2) return;
       drag = { x: event.clientX, y: event.clientY };
-      event.preventDefault();
       onCameraInput?.();
     };
-    const onPointerMove = (event) => {
+    const onMouseMove = (event) => {
       if (!drag) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
@@ -58,18 +57,18 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
       controls.update();
       onCameraInput?.();
     };
-    const onPointerUp = () => { drag = null; };
+    const onMouseUp = (event) => { if (event.button === 2) drag = null; };
     const onContextMenu = (event) => {
       if (!handTool) event.preventDefault();
     };
-    canvas.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('contextmenu', onContextMenu);
     return () => {
-      canvas.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
   }, [camera, gl, orbitRef, followActive, onCameraInput, selectedTool?.type, enabled]);

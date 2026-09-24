@@ -175,7 +175,10 @@ export default function TrackRenderer({
         if (road) drag.items.push({ kind: 'road', snapshot: clone(road) });
       } else {
         const track = handlePlacementRef.current();
-        if (track) drag.items.push({ kind: 'track', snapshot: clone(track) });
+        if (track) {
+          drag.items.push({ kind: 'track', snapshot: clone(track) });
+          setTracks(trackManagerRef.current.getAllTracks());
+        }
       }
     };
 

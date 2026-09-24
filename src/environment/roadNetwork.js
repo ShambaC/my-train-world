@@ -593,6 +593,10 @@ export class RoadManager {
    */
   userLamps() {
     const lamps = [];
+    const userTileAxes = new Set(this.userRoads.map((tile) => {
+      const [a, b] = tile.waypoints;
+      return `${Math.abs(b.x - a.x) > Math.abs(b.z - a.z) ? 'x' : 'z'}:${tile.cells[0][0]},${tile.cells[0][1]}`;
+    }));
     for (const road of this.mergeUserRoads()) {
       let side = 1;
       for (let i = 1; i < road.waypoints.length - 1; i += 2) {
@@ -603,6 +607,12 @@ export class RoadManager {
         const len = Math.hypot(dx, dz) || 1;
         const perpX = (-dz / len) * side;
         const perpZ = (dx / len) * side;
+        const [cellX, cellZ] = road.tileCells[i];
+        const adjacent = `${Math.abs(dx) > Math.abs(dz) ? 'x' : 'z'}:${cellX + Math.round(perpX)},${cellZ + Math.round(perpZ)}`;
+        if (userTileAxes.has(adjacent)) {
+          side = -side;
+          continue;
+        }
         lamps.push({
           x: (a.x + b.x) / 2 + perpX * 0.55,
           y: a.y,

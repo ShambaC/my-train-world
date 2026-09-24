@@ -17,6 +17,16 @@ const APPROACH_R = 7;
 const OCCUPY_R = 1.3;
 const DEPART_TIME = 3;
 
+function terrainCenterYAt(terrainData, x, z) {
+  if (!terrainData?.heightMap) return null;
+  const { heightMap, length, breadth } = terrainData;
+  const cx = Math.round(x / 0.5 + length / 2 - 0.5);
+  const cz = Math.round(z / 0.5 + breadth / 2 - 0.5);
+  return cx >= 0 && cx < length && cz >= 0 && cz < breadth
+    ? heightMap[cx][cz] * 0.5
+    : null;
+}
+
 const rotLocalToWorld = (local, rotationY) => {
   const cos = Math.cos(rotationY);
   const sin = Math.sin(rotationY);
@@ -40,20 +50,20 @@ export class SignalManager {
     const track = this.trackManager.tracks.get(trackId);
     if (!track) return null;
     const pos = trackPointWorld(this.trackManager, trackId, progress);
+    if (auto) {
+      const trackGroundY = terrainCenterYAt(terrainData, pos.x, pos.z);
+      const clearance = trackGroundY === null
+        ? (track.heightOffset || 0) + pos.y - track.position.y
+        : pos.y - (trackGroundY + 0.25);
+      if (clearance > 0.05) return null;
+    }
     const tan = rotLocalToWorld(tangentOnTrack(track.type, progress), track.rotation);
     const perp = { x: -tan.z, z: tan.x };
     const signalX = pos.x + perp.x * side * SIDE_OFFSET;
     const signalZ = pos.z + perp.z * side * SIDE_OFFSET;
     // Compute ground Y for mast extension
     let groundY = 0;
-    if (terrainData?.heightMap) {
-      const { heightMap, length, breadth } = terrainData;
-      const cx = Math.round(signalX / 0.5 + length / 2 - 0.5);
-      const cz = Math.round(signalZ / 0.5 + breadth / 2 - 0.5);
-      if (cx >= 0 && cx < length && cz >= 0 && cz < breadth) {
-        groundY = heightMap[cx][cz] * 0.5;
-      }
-    }
+    groundY = terrainCenterYAt(terrainData, signalX, signalZ) ?? groundY;
     const signal = {
       id: auto ? `sig_auto_${this.nextId++}` : `sig_${this.nextId++}`,
       auto,

@@ -97,7 +97,7 @@ export default function Roads({ terrainData, roadManager, lighting, enabled = tr
       if (hit) {
         light.position.set(hit.l.x, hit.l.y + 0.55, hit.l.z);
         light.target.position.set(hit.l.x, hit.l.y - 1, hit.l.z);
-        light.intensity = nightness * 6; // ~0.65x the train headlight
+        light.intensity = nightness * 4.5;
       } else {
         light.intensity = 0;
       }
