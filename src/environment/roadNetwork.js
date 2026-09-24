@@ -819,6 +819,8 @@ export class RoadManager {
           const userTile = tileIndex >= 0 ? this.userRoads.find((tile) => tile.id === tileId) : null;
           const a = road.cells[0];
           const b = road.cells[road.cells.length - 1];
+          const roadStart = userTile?.waypoints[0] ?? road.waypoints[0];
+          const roadEnd = userTile?.waypoints[1] ?? road.waypoints[road.waypoints.length - 1];
           const centerCell = tileIndex >= 0 ? road.tileCells[tileIndex] : null;
           const centerX = centerCell ? centerCell[0] : (a[0] + b[0]) / 2;
           const centerZ = centerCell ? centerCell[1] : (a[1] + b[1]) / 2;
@@ -830,7 +832,7 @@ export class RoadManager {
               y: userTile?.waypoints[0].y ?? road.waypoints[0]?.y ?? pos.y,
               z: userTile ? (userTile.waypoints[0].z + userTile.waypoints[1].z) / 2 : (centerZ - this.breadth / 2 + 0.5) * VOXEL,
             },
-            rotation: Math.atan2(b[0] - a[0], b[1] - a[1]),
+            rotation: Math.atan2(roadEnd.x - roadStart.x, roadEnd.z - roadStart.z),
           };
         }
       }

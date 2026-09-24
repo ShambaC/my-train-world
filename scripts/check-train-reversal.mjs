@@ -38,13 +38,18 @@ try {
   assert.ok(Math.abs(train.coaches.at(-1).position.z - oldEngineZ) < 0.03, 'last coach reaches old engine position');
   assert.ok(Math.abs(train.coaches[0].position.z - train.position.z - train.coaches[0].spacing) < 0.03, 'first coach stays coupled');
 
-  const deadEnd = { id: 'dead_end', type: 'straight', position: { x: 0, y: 0, z: 0 }, rotation: 0, connections: { back: null, front: null } };
-  const deadEndManager = new TrainManager({ tracks: new Map([[deadEnd.id, deadEnd]]) });
-  const parkedTrain = deadEndManager.addTrain(deadEnd.id, 1);
-  deadEndManager.addCoach(parkedTrain.id, 'passenger-coach');
-  deadEndManager.transition(parkedTrain, deadEnd, 'front');
-  assert.equal(parkedTrain.heading.z, 1, 'coach train does not reverse at dead end');
-  assert.equal(parkedTrain.progress, 0.99, 'coach train parks at dead end');
+  for (const direction of [1, -1]) {
+    const autoManager = new TrainManager({ tracks });
+    const endId = direction > 0 ? 'track_7' : 'track_-7';
+    const automatic = autoManager.addTrain(endId, direction);
+    autoManager.addCoach(automatic.id, 'passenger-coach');
+    automatic.active = true;
+    for (let frame = 0; frame < 100 && automatic.currentTrackId === endId; frame++) autoManager.update(0.1);
+    assert.notEqual(automatic.currentTrackId, endId, 'train moves away from dead end');
+    assert.equal(Math.sign(automatic.heading.z), -direction, 'whole consist auto-reverses at either end');
+    assert.ok(direction * (automatic.coaches[0].position.z - automatic.position.z) > 0,
+      'coach stays behind reversed engine');
+  }
 
   console.log('Train reversal check passed');
 } finally {

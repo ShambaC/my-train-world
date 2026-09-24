@@ -18,6 +18,7 @@ import { useThree } from '@react-three/fiber';
  */
 export default function RenderScheduler({ frameLimit, vsync, paused = false }) {
   const advance = useThree((state) => state.advance);
+  const clock = useThree((state) => state.clock);
   const limitRef = useRef(frameLimit);
   const vsyncRef = useRef(vsync);
 
@@ -29,6 +30,8 @@ export default function RenderScheduler({ frameLimit, vsync, paused = false }) {
     let rafId = 0;
     let timerId = 0;
     let lastFrame = performance.now();
+    // frameloop="never" derives delta from elapsedTime; exclude paused wall time.
+    clock.elapsedTime = lastFrame / 1000;
 
     const renderIfDue = () => {
       const now = performance.now();
@@ -70,7 +73,7 @@ export default function RenderScheduler({ frameLimit, vsync, paused = false }) {
       cancelAnimationFrame(rafId);
       clearTimeout(timerId);
     };
-  }, [advance, paused]);
+  }, [advance, clock, paused]);
 
   return null;
 }

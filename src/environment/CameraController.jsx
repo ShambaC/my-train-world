@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { VOXEL_SIZE } from '../terrain.js';
@@ -16,22 +16,26 @@ function isKeyDown(code) {
  */
 export default function CameraController({ terrainSize, enabled = true, orbitRef, followActive = false, onCameraInput, selectedTool }) {
   const { camera, gl } = useThree();
+  const onCameraInputRef = useRef(onCameraInput);
+  onCameraInputRef.current = onCameraInput;
 
   useEffect(() => {
     if (!enabled) return;
     const canvas = gl.domElement;
-    let drag = null;
+    const doc = canvas.ownerDocument;
     const handTool = selectedTool?.type === 'hand';
-    const onMouseDown = (event) => {
+    let drag = null;
+    const onPointerDown = (event) => {
       if (handTool || followActive || event.button !== 2) return;
-      drag = { x: event.clientX, y: event.clientY };
-      onCameraInput?.();
+      drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      canvas.setPointerCapture(event.pointerId);
+      onCameraInputRef.current?.();
     };
-    const onMouseMove = (event) => {
-      if (!drag) return;
+    const onPointerMove = (event) => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
-      drag = { x: event.clientX, y: event.clientY };
+      drag = { ...drag, x: event.clientX, y: event.clientY };
       if (!dx && !dy) return;
 
       const controls = orbitRef?.current;
@@ -54,24 +58,27 @@ export default function CameraController({ terrainSize, enabled = true, orbitRef
       }
       controls.target.copy(camera.position).addScaledVector(direction, distance);
       camera.lookAt(controls.target);
-      controls.update();
-      onCameraInput?.();
+      onCameraInputRef.current?.();
     };
-    const onMouseUp = (event) => { if (event.button === 2) drag = null; };
+    const onPointerUp = (event) => {
+      if (event.pointerId === drag?.pointerId) drag = null;
+    };
     const onContextMenu = (event) => {
       if (!handTool) event.preventDefault();
     };
-    canvas.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('pointerdown', onPointerDown, true);
+    doc.addEventListener('pointermove', onPointerMove, true);
+    doc.addEventListener('pointerup', onPointerUp, true);
+    doc.addEventListener('pointercancel', onPointerUp, true);
     canvas.addEventListener('contextmenu', onContextMenu);
     return () => {
-      canvas.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('pointerdown', onPointerDown, true);
+      doc.removeEventListener('pointermove', onPointerMove, true);
+      doc.removeEventListener('pointerup', onPointerUp, true);
+      doc.removeEventListener('pointercancel', onPointerUp, true);
       canvas.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [camera, gl, orbitRef, followActive, onCameraInput, selectedTool?.type, enabled]);
+  }, [camera, gl, orbitRef, followActive, selectedTool?.type, enabled]);
 
   useEffect(() => {
     if (!enabled) return;

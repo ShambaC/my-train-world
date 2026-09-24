@@ -36,6 +36,12 @@ try {
   outer.addRoad({ x: 0.5, y: 0.25, z: 0 }, 0);
   assert.equal(outer.layout.lamps.length, 1, 'outer lamp remains beside paired tiles');
   assert.ok(outer.layout.lamps[0].x < 0, 'remaining lamp faces away from neighboring tile');
+  const parallel = new RoadManager();
+  parallel.length = parallel.breadth = 20;
+  parallel.addRoad({ x: 0, y: 0.25, z: 0 }, Math.PI / 2);
+  parallel.addRoad({ x: 0, y: 0.25, z: 0.5 }, Math.PI / 2);
+  assert.ok(Math.abs(parallel.findRoadAtPosition({ x: 0, z: 0.5 }).rotation - Math.PI / 2) < 0.01,
+    'second parallel road delete ghost keeps placed rotation');
 
   const { SignalManager } = await vite.ssrLoadModule('/src/signals/SignalManager.js');
   const trackManager = { tracks: new Map() };

@@ -739,25 +739,22 @@ export class TrainManager {
     };
 
     const reverse = () => {
+      if (train.coaches.length > 0) {
+        train.progress = exitEnd === 'front' ? 1 : 0;
+        this.reverseTrain(train.id);
+        return;
+      }
       train.heading = { x: -train.heading.x, z: -train.heading.z };
       parkAtEnd();
     };
 
     if (!nextId) {
-      if (train.coaches.length > 0) {
-        parkAtEnd();
-        return;
-      }
       reverse();
       return;
     }
 
     const nextTrack = this.trackManager.tracks.get(nextId);
     if (!nextTrack) {
-      if (train.coaches.length > 0) {
-        parkAtEnd();
-        return;
-      }
       reverse();
       return;
     }
@@ -768,10 +765,6 @@ export class TrainManager {
     else if (nextTrack.connections.front === currentTrack.id) entryEnd = 'front';
 
     if (!entryEnd) {
-      if (train.coaches.length > 0) {
-        parkAtEnd();
-        return;
-      }
       reverse();
       return;
     }
