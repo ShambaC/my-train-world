@@ -816,6 +816,7 @@ export class RoadManager {
             ? road.tileCells.findIndex(([tx, tz]) => tx === x && tz === z)
             : -1;
           const tileId = tileIndex >= 0 ? road.tileIds[tileIndex] : road.id;
+          const userTile = tileIndex >= 0 ? this.userRoads.find((tile) => tile.id === tileId) : null;
           const a = road.cells[0];
           const b = road.cells[road.cells.length - 1];
           const centerCell = tileIndex >= 0 ? road.tileCells[tileIndex] : null;
@@ -825,9 +826,9 @@ export class RoadManager {
             road,
             id: tileId,
             center: {
-              x: (centerX - this.length / 2 + 0.5) * VOXEL,
-              y: road.waypoints[0]?.y || pos.y,
-              z: (centerZ - this.breadth / 2 + 0.5) * VOXEL,
+              x: userTile ? (userTile.waypoints[0].x + userTile.waypoints[1].x) / 2 : (centerX - this.length / 2 + 0.5) * VOXEL,
+              y: userTile?.waypoints[0].y ?? road.waypoints[0]?.y ?? pos.y,
+              z: userTile ? (userTile.waypoints[0].z + userTile.waypoints[1].z) / 2 : (centerZ - this.breadth / 2 + 0.5) * VOXEL,
             },
             rotation: Math.atan2(b[0] - a[0], b[1] - a[1]),
           };

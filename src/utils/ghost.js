@@ -10,7 +10,7 @@ import * as THREE from 'three';
  * @param {number} opacity — transparency level (0–1)
  * @returns {THREE.Group}
  */
-export function makeGhost(object, hex = 0x00ff00, opacity = 0.55) {
+export function makeGhost(object, hex = 0x00ff00, opacity = 0.7) {
   const clone = object.clone(true);
   const color = new THREE.Color(hex);
   // Make the ghost color lighter/less saturated for visibility
@@ -23,7 +23,7 @@ export function makeGhost(object, hex = 0x00ff00, opacity = 0.55) {
       c.material = new THREE.MeshBasicMaterial({
         color,
         transparent: true,
-        opacity: 0.7,
+        opacity,
         depthWrite: false,
         side: THREE.DoubleSide,
         toneMapped: false, // keep ghosts bright under the effects pipeline

@@ -54,7 +54,6 @@ import { trailerConfig } from "./trailer/trailerConfig.js";
 import TrailerOverlay from "./trailer/TrailerOverlay.jsx";
 
 const TRAILER_MODE = trailerConfig.enabled;
-const DAY_PHASES = ['dawn', 'day', 'dusk', 'night'];
 const DEFAULT_CYCLE_MINUTES = 8;
 
 const TOOL_GROUPS = [
@@ -255,13 +254,6 @@ function AppRuntime() {
   };
 
   const selectedTool = TOOL_LEAVES[selectedToolId] || TOOL_LEAVES.hand;
-  useEffect(() => {
-    if (TRAILER_MODE || appView !== 'gameplay' || !sceneReady || isPaused || photoMode || !dayNightCycleEnabled) return;
-    const timer = window.setInterval(() => {
-      setTimeOfDay((current) => DAY_PHASES[(DAY_PHASES.indexOf(current) + 1) % DAY_PHASES.length]);
-    }, dayNightCycleMinutes * 60_000 / DAY_PHASES.length);
-    return () => window.clearInterval(timer);
-  }, [appView, sceneReady, isPaused, photoMode, dayNightCycleEnabled, dayNightCycleMinutes]);
   const visibleTutorialState = tutorialReplayStep
     ? { step: tutorialReplayStep, skipped: false }
     : tutorialState;
@@ -938,6 +930,9 @@ function AppRuntime() {
         heightOffset={heightOffset}
         tracksVersion={tracksVersion}
         timeOfDay={timeOfDay}
+        dayNightCycleEnabled={dayNightCycleEnabled}
+        dayNightCycleMinutes={dayNightCycleMinutes}
+        onCycleTimeChange={setTimeOfDay}
         fogEnabled={fogEnabled}
         fogDensity={fogDensity}
         shadowMode={shadowMode}

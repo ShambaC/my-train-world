@@ -21,6 +21,23 @@ import { trainAudio } from '../audio/trainAudio';
 
 const ROAD_GHOST_GEO = new THREE.BoxGeometry(ROAD_WIDTH.branch + ROAD_SHOULDER, 0.02, ROAD_TILE_LENGTH);
 
+function createRoadDeleteGhost() {
+  const group = new THREE.Group();
+  const mesh = new THREE.Mesh(ROAD_GHOST_GEO, new THREE.MeshBasicMaterial({
+    color: GHOST_RED,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false,
+  }));
+  // Road waypoints sit just below asphalt surface; lift overlay to its top.
+  mesh.position.y = 0.014;
+  mesh.renderOrder = 10;
+  group.add(mesh);
+  return group;
+}
+
 export default function TrackRenderer({
   trackManager,
   stationManager,
@@ -394,7 +411,7 @@ export default function TrackRenderer({
 
     if (selectedTool.type === 'track') {
       mesh = ghostPosition?.type === 'straight'
-        ? makeGhost(createStraightTrack(), color)
+        ? makeGhost(createStraightTrack(), isValidPosition ? 0x007700 : color, 0.9)
         : ghostPosition?.type === 'ramp'
         ? makeGhost(createRampTrack(), color)
         : makeGhost(createCurvedTrack(), color);
@@ -431,7 +448,7 @@ export default function TrackRenderer({
     } else if (selectedTool.type === 'delete') {
       // Red silhouette of hovered target: road, station, train engine or track
       if (ghostPosition?.target?.kind === 'road') {
-        mesh = makeGhost(new THREE.Mesh(ROAD_GHOST_GEO, new THREE.MeshBasicMaterial({ color: GHOST_RED })), GHOST_RED, 0.5);
+        mesh = createRoadDeleteGhost();
       } else if (ghostPosition?.target?.kind === 'station') {
         const r = ghostPosition.target.rect;
         const w = r.maxX - r.minX;

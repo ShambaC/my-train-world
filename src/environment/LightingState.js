@@ -2,6 +2,32 @@ import * as THREE from 'three';
 import { getLightingForTime } from './SkyAtmosphere.jsx';
 
 const LERP_RATE = 3.0;
+const PHASES = ['dawn', 'day', 'dusk', 'night'];
+
+function targetForTime(timeOfDay) {
+  const p = getLightingForTime(timeOfDay);
+  return {
+    ambientColor: new THREE.Color(p.ambient.color),
+    ambientIntensity: p.ambient.intensity,
+    hemisphereSky: new THREE.Color(p.hemisphereSky || p.ambient.color),
+    hemisphereGround: new THREE.Color(p.hemisphereGround || 0x444444),
+    sunColor: new THREE.Color(p.directional.color),
+    sunIntensity: p.directional.intensity,
+    sunPosition: new THREE.Vector3(...p.directional.position),
+    fogColor: new THREE.Color(p.fog.color),
+    fogDensity: p.fog.density,
+    skyTint: new THREE.Color(p.skyHorizon || p.fog.color),
+    skyZenith: new THREE.Color(p.skyZenith || p.ambient.color),
+    skyGround: new THREE.Color(p.skyGround || p.fog.color),
+    sunTint: new THREE.Color(p.sunTint),
+    waterDeep: new THREE.Color(p.waterDeep),
+    waterShallow: new THREE.Color(p.waterShallow),
+    waterFoam: new THREE.Color(p.waterFoam),
+    waterSand: new THREE.Color(p.waterSand),
+    nightness: p.nightness,
+    shadowRadius: p.shadowRadius,
+  };
+}
 
 /**
  * Interpolated lighting state. Holds the *current* (animated) values for
@@ -24,34 +50,46 @@ export default class LightingState {
     this.waterSand = new THREE.Color();
     this.nightness = 0;
     this.shadowRadius = 4;
+    this.cycleBlend = 0;
+    this.cyclePhase = timeOfDay;
+    this.cycleTargets = null;
     this.target = null;
     this.setTarget(timeOfDay, true);
   }
 
   setTarget(timeOfDay, snap = false) {
-    const p = getLightingForTime(timeOfDay);
-    this.target = {
-      ambientColor: new THREE.Color(p.ambient.color),
-      ambientIntensity: p.ambient.intensity,
-      hemisphereSky: new THREE.Color(p.hemisphereSky || p.ambient.color),
-      hemisphereGround: new THREE.Color(p.hemisphereGround || 0x444444),
-      sunColor: new THREE.Color(p.directional.color),
-      sunIntensity: p.directional.intensity,
-      sunPosition: new THREE.Vector3(...p.directional.position),
-      fogColor: new THREE.Color(p.fog.color),
-      fogDensity: p.fog.density,
-      skyTint: new THREE.Color(p.skyHorizon || p.fog.color),
-      skyZenith: new THREE.Color(p.skyZenith || p.ambient.color),
-      skyGround: new THREE.Color(p.skyGround || p.fog.color),
-      sunTint: new THREE.Color(p.sunTint),
-      waterDeep: new THREE.Color(p.waterDeep),
-      waterShallow: new THREE.Color(p.waterShallow),
-      waterFoam: new THREE.Color(p.waterFoam),
-      waterSand: new THREE.Color(p.waterSand),
-      nightness: p.nightness,
-      shadowRadius: p.shadowRadius,
-    };
+    this.target = targetForTime(timeOfDay);
     if (snap) this.snapTo(this.target);
+  }
+
+  updateCycle(timeOfDay, progress) {
+    this.cycleTargets ||= PHASES.map(targetForTime);
+    const index = Math.max(0, PHASES.indexOf(timeOfDay));
+    const a = this.cycleTargets[index];
+    const b = this.cycleTargets[(index + 1) % PHASES.length];
+    const blend = Math.max(0, progress * 2 - 1);
+    this.cycleBlend = blend;
+    this.cyclePhase = timeOfDay;
+    this.target = a;
+    this.ambient.color.copy(a.ambientColor).lerp(b.ambientColor, blend);
+    this.ambient.intensity = THREE.MathUtils.lerp(a.ambientIntensity, b.ambientIntensity, blend);
+    this.hemisphereSky.copy(a.hemisphereSky).lerp(b.hemisphereSky, blend);
+    this.hemisphereGround.copy(a.hemisphereGround).lerp(b.hemisphereGround, blend);
+    this.sun.color.copy(a.sunColor).lerp(b.sunColor, blend);
+    this.sun.intensity = THREE.MathUtils.lerp(a.sunIntensity, b.sunIntensity, blend);
+    this.sun.position.copy(a.sunPosition).lerp(b.sunPosition, progress);
+    this.fog.color.copy(a.fogColor).lerp(b.fogColor, blend);
+    this.fog.density = THREE.MathUtils.lerp(a.fogDensity, b.fogDensity, blend);
+    this.skyTint.copy(a.skyTint).lerp(b.skyTint, blend);
+    this.skyZenith.copy(a.skyZenith).lerp(b.skyZenith, blend);
+    this.skyGround.copy(a.skyGround).lerp(b.skyGround, blend);
+    this.sunTint.copy(a.sunTint).lerp(b.sunTint, blend);
+    this.waterDeep.copy(a.waterDeep).lerp(b.waterDeep, blend);
+    this.waterShallow.copy(a.waterShallow).lerp(b.waterShallow, blend);
+    this.waterFoam.copy(a.waterFoam).lerp(b.waterFoam, blend);
+    this.waterSand.copy(a.waterSand).lerp(b.waterSand, blend);
+    this.nightness = THREE.MathUtils.lerp(a.nightness, b.nightness, blend);
+    this.shadowRadius = THREE.MathUtils.lerp(a.shadowRadius, b.shadowRadius, blend);
   }
 
   snapTo(t) {

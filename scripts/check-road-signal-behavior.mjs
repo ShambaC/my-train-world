@@ -28,6 +28,9 @@ try {
   };
   const inner = makeRoads();
   inner.addRoad({ x: -0.5, y: 0.25, z: 0 }, 0);
+  const middle = inner.findRoadAtPosition({ x: 0, y: 0.25, z: 0 }, 0.1);
+  assert.equal(middle.id, inner.userRoads[1].id, 'middle tile targets its own id');
+  assert.equal(middle.center.z, 0, 'delete ghost uses placed tile center');
   assert.equal(inner.layout.lamps.length, 0, 'adjacent tile at lamp segment removes inner lamp');
   const outer = makeRoads();
   outer.addRoad({ x: 0.5, y: 0.25, z: 0 }, 0);

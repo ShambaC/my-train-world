@@ -163,12 +163,12 @@ const SkyDomeShader = {
   `,
 };
 
-export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
+export default function SkyAtmosphere({ timeOfDay = 'day', lighting, dayNightCycleEnabled = false }) {
   const domeRef = useRef();
   const cloudsRef1 = useRef();
   const cloudsRef2 = useRef();
   const cloudsRef3 = useRef();
-  const skyTransition = useRef({ current: null, target: null, elapsed: 0, opacity: 0 });
+  const skyTransition = useRef({ current: null, target: null, elapsed: 0, opacity: 0, phase: timeOfDay });
 
   const cloudTexA = useMemo(() => getStyleTexture('cloud_large_a', { repeat: [8, 1] }), []);
   const cloudTexB = useMemo(() => getStyleTexture('cloud_medium_a', { repeat: [6, 1] }), []);
@@ -186,11 +186,23 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
 
   useEffect(() => {
     let active = true;
-    loadSkybox(SKYBOX_TIMES.includes(timeOfDay) ? timeOfDay : 'day').then((texture) => {
+    const phase = SKYBOX_TIMES.includes(timeOfDay) ? timeOfDay : 'day';
+    const next = SKYBOX_TIMES[(SKYBOX_TIMES.indexOf(phase) + 1) % SKYBOX_TIMES.length];
+    Promise.all([loadSkybox(phase), dayNightCycleEnabled ? loadSkybox(next) : null]).then(([texture, nextTexture]) => {
       if (!active) return;
       const transition = skyTransition.current;
       const uniforms = skyMat.uniforms;
-      if (!transition.current) {
+      if (dayNightCycleEnabled) {
+        transition.phase = phase;
+        transition.current = texture;
+        transition.target = texture;
+        transition.opacity = 1;
+        uniforms.uSkyboxA.value = texture;
+        uniforms.uSkyboxB.value = nextTexture;
+        uniforms.uSkyboxBlend.value = lighting?.cycleBlend ?? 0;
+        uniforms.uSkyboxOpacity.value = 1;
+        uniforms.uHasSkybox.value = true;
+      } else if (!transition.current) {
         transition.current = texture;
         transition.target = texture;
         uniforms.uSkyboxA.value = texture;
@@ -207,7 +219,7 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
       }
     }).catch((error) => console.error(`[SkyAtmosphere] Failed loading ${timeOfDay} skybox`, error));
     return () => { active = false; };
-  }, [timeOfDay, skyMat]);
+  }, [timeOfDay, dayNightCycleEnabled, lighting, skyMat]);
 
   const cloudMat1 = useMemo(() => {
     return new THREE.MeshBasicMaterial({
@@ -241,11 +253,15 @@ export default function SkyAtmosphere({ timeOfDay = 'day', lighting }) {
 
   useFrame((_, delta) => {
     const transition = skyTransition.current;
-    if (transition.current && transition.opacity < 1) {
+    if (dayNightCycleEnabled) {
+      if (transition.current && transition.phase === lighting?.cyclePhase) {
+        skyMat.uniforms.uSkyboxBlend.value = lighting.cycleBlend;
+      }
+    } else if (transition.current && transition.opacity < 1) {
       transition.opacity = Math.min(1, transition.opacity + delta);
       skyMat.uniforms.uSkyboxOpacity.value = transition.opacity;
     }
-    if (transition.current && transition.target !== transition.current) {
+    if (!dayNightCycleEnabled && transition.current && transition.target !== transition.current) {
       transition.elapsed = Math.min(1, transition.elapsed + delta);
       skyMat.uniforms.uSkyboxBlend.value = transition.elapsed;
       if (transition.elapsed === 1) {

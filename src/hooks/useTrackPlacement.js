@@ -218,7 +218,7 @@ export function useTrackPlacement(terrainRef, trackManager, stationManager, trai
           if (!target && roadManager) {
             const road = roadManager.findRoadAtPosition(point, 0.7);
             if (road) {
-              target = { kind: 'road', id: road.road.id, position: road.center, rotation: road.rotation, type: null };
+              target = { kind: 'road', id: road.id, position: road.center, rotation: road.rotation, type: null };
             }
           }
           if (target) {

@@ -60,6 +60,9 @@ function Scene({
   onTracksChange,
   tracksVersion,
   timeOfDay,
+  dayNightCycleEnabled,
+  dayNightCycleMinutes,
+  onCycleTimeChange,
   fogEnabled,
   fogDensity,
   shadowMode = 'soft',
@@ -137,9 +140,15 @@ function Scene({
 
   // Interpolated lighting state
   const lighting = useMemo(() => new LightingState(timeOfDay), []);
+  const cycle = useRef({ phase: timeOfDay, elapsed: 0, segmentSeconds: dayNightCycleMinutes * 15 });
   useEffect(() => {
     lighting.setTarget(timeOfDay);
+    if (cycle.current.phase !== timeOfDay) {
+      cycle.current.phase = timeOfDay;
+      cycle.current.elapsed = 0;
+    }
   }, [timeOfDay, lighting]);
+  useEffect(() => { cycle.current.elapsed = 0; }, [dayNightCycleEnabled]);
 
   // Shadow camera covers the active playable region
   const shadowHalf = Math.max(40, Math.min(Math.max(terrainSize.length, terrainSize.breadth) * 0.5 * VOXEL_SIZE * 0.85, 110));
@@ -186,7 +195,26 @@ function Scene({
         onSceneReady?.();
       }
     }
-    lighting.update(delta);
+    if (dayNightCycleEnabled) {
+      const clock = cycle.current;
+      const segmentSeconds = dayNightCycleMinutes * 15;
+      if (clock.segmentSeconds !== segmentSeconds) {
+        clock.elapsed *= segmentSeconds / clock.segmentSeconds;
+        clock.segmentSeconds = segmentSeconds;
+      }
+      if (!simulationPaused && sceneReadyRef.current) {
+        clock.elapsed += delta;
+        if (clock.elapsed >= segmentSeconds) {
+          const phases = ['dawn', 'day', 'dusk', 'night'];
+          clock.phase = phases[(phases.indexOf(clock.phase) + Math.floor(clock.elapsed / segmentSeconds)) % phases.length];
+          clock.elapsed %= segmentSeconds;
+          onCycleTimeChange?.(clock.phase);
+        }
+      }
+      lighting.updateCycle(clock.phase, clock.elapsed / segmentSeconds);
+    } else {
+      lighting.update(delta);
+    }
     if (!simulationPaused) {
       advanceWind(delta);
       trainAudio.updateAmbient(camera, terrain?.userData, timeOfDay);
@@ -241,6 +269,7 @@ function Scene({
       dir.color.copy(lighting.sun.color);
       dir.intensity = lighting.sun.intensity;
       dir.position.copy(lighting.sun.position);
+      dir.shadow.radius = lighting.shadowRadius;
     }
 
     if (fogEnabled) {
@@ -301,7 +330,7 @@ function Scene({
 
   return (
     <>
-      <Skybox timeOfDay={timeOfDay} lighting={lighting} />
+      <Skybox timeOfDay={timeOfDay} lighting={lighting} dayNightCycleEnabled={dayNightCycleEnabled} />
       <CameraController terrainSize={terrainSize} orbitRef={orbitRef} followActive={!!followTrainId} enabled={!trailerMode} onCameraInput={onCameraInput} selectedTool={selectedTool} />
       
       {/* Hemisphere Lighting */}
@@ -599,6 +628,9 @@ export default function GameScene({
   tracksVersion,
   onTrainsChanged,
   timeOfDay = 'day',
+  dayNightCycleEnabled = false,
+  dayNightCycleMinutes = 8,
+  onCycleTimeChange,
   fogEnabled = true,
   fogDensity,
   shadowMode = 'soft',
@@ -881,6 +913,9 @@ export default function GameScene({
           onTrainsChanged={() => setTrainsVersion((v) => v + 1)}
           tracksVersion={tracksVersion}
           timeOfDay={timeOfDay}
+          dayNightCycleEnabled={dayNightCycleEnabled}
+          dayNightCycleMinutes={dayNightCycleMinutes}
+          onCycleTimeChange={onCycleTimeChange}
           fogEnabled={fogEnabled}
           fogDensity={fogDensity}
           shadowMode={shadowMode}

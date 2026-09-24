@@ -198,7 +198,13 @@ function buildOverheadLine(tracks, terrainData) {
       const track = byId.get(chain[i]);
       const center = pointOnTrack(track.type, 0.5);
       const tangent = tangentOnTrack(track.type, 0.5);
-      const gantryRotation = (track.rotation || 0) + Math.atan2(tangent.x, tangent.z);
+      const nextId = chain[i + 1];
+      const previousId = chain[i - 1];
+      // Keep contact-wire sides aligned when joined tracks face the same end.
+      let direction = 1;
+      if (nextId) direction = track.connections?.front === nextId ? 1 : -1;
+      else if (previousId) direction = track.connections?.back === previousId ? 1 : -1;
+      const gantryRotation = (track.rotation || 0) + Math.atan2(tangent.x * direction, tangent.z * direction);
       const g = template.clone(true);
       g.position.set(
         track.position.x + center.x * Math.cos(track.rotation || 0) + center.z * Math.sin(track.rotation || 0),

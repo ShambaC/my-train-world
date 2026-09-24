@@ -2,7 +2,7 @@
  * Train Manager — heading-based movement on undirected tracks.
  * Tracks have endpoints but no inherent travel direction; the engine
  * owns a heading (unit XZ vector) and facing always equals motion. Coaches
- * keep a separate consist direction so they stay coupled through reversals.
+ * follow the consist direction, which changes when the whole train reverses.
  */
 import { pointOnTrack, tangentOnTrack } from '../tracks/trackGeometry.js';
 import { DEFAULT_ENGINE, ENGINE_DIMENSIONS } from './engineTypes.js';
@@ -180,7 +180,31 @@ export class TrainManager {
     }
     const track = this.trackManager.tracks.get(train.currentTrackId);
     if (track) {
-      this.updateTrainPosition(train, track);
+      if (train.coaches.length > 0) {
+        const tailDistance = train.coaches.reduce((distance, coach) => distance + coach.spacing, 0);
+        const tail = this.walkBack(train, tailDistance);
+        const tailTrack = tail && this.trackManager.tracks.get(tail.trackId);
+        const atBlockedBack = tail?.orientationDir > 0 && tail.progress === 0 && !tailTrack?.connections.back;
+        const atBlockedFront = tail?.orientationDir < 0 && tail.progress === 1 && !tailTrack?.connections.front;
+        if (tail && tailTrack && !atBlockedBack && !atBlockedFront) {
+          train.currentTrackId = tail.trackId;
+          train.progress = tail.progress;
+          const tangent = rotLocalToWorld(
+            tangentOnTrack(tailTrack.type, tail.progress),
+            tailTrack.rotation
+          );
+          train.heading = {
+            x: -tangent.x * tail.orientationDir,
+            z: -tangent.z * tail.orientationDir,
+          };
+          train.coachDirection = -tail.orientationDir;
+        } else {
+          train.coachDirection *= -1;
+        }
+      } else {
+        train.coachDirection *= -1;
+      }
+      this.updateTrainPosition(train, this.trackManager.tracks.get(train.currentTrackId));
       this.updateCoaches(train);
     }
     return true;
@@ -624,7 +648,7 @@ export class TrainManager {
 
   /**
    * Position every coach by walking along the train's fixed consist direction.
-   * Exact spacing, no drift or side swap when the engine reverses.
+   * Exact spacing; reverseTrain moves the engine to the other end of the consist.
    */
   updateCoaches(train) {
     let behind = 0;
@@ -720,6 +744,10 @@ export class TrainManager {
     };
 
     if (!nextId) {
+      if (train.coaches.length > 0) {
+        parkAtEnd();
+        return;
+      }
       reverse();
       return;
     }
