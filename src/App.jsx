@@ -142,7 +142,7 @@ function AppRuntime() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedToolId, setSelectedToolId] = useState('hand');
   const [heightOffset, setHeightOffset] = useState(0);
-  const [timeOfDay, setTimeOfDay] = useState(TRAILER_MODE ? 'dawn' : 'day');
+  const [timeOfDay, setTimeOfDay] = useState('day');
   const [dayNightCycleEnabled, setDayNightCycleEnabled] = useState(false);
   const [dayNightCycleMinutes, setDayNightCycleMinutes] = useState(DEFAULT_CYCLE_MINUTES);
   const [fogEnabled, setFogEnabled] = useState(TRAILER_MODE ? trailerConfig.fogEnabled : true);
@@ -291,6 +291,7 @@ function AppRuntime() {
 
   // Persist render pacing prefs
   useEffect(() => {
+    if (TRAILER_MODE) return;
     saveSettings({ frameLimit, vsync });
   }, [frameLimit, vsync]);
 

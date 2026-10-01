@@ -9,14 +9,14 @@ export function createTrailerSequences(layout) {
       duration: 5,
       cameraMode: 'reveal',
       card: { title: 'BUILD YOUR RAILWAY', subtitle: 'A tiny world, waiting to move.' },
-      events: [event(0, 'environment', 'dawn'), event(3.9, 'card', null)],
+      events: [event(0, 'environment', 'day'), event(3.9, 'card', null)],
     },
     tracks: {
       id: 'tracks',
       duration: 7.5,
       cameraMode: 'tracks',
       card: { title: 'BUILD YOUR RAILWAY', subtitle: 'Lay it piece by piece.' },
-      events: [event(0, 'environment', 'dawn'), ...trackEvents, event(6.4, 'card', null)],
+      events: [event(0, 'environment', 'day'), ...trackEvents, event(6.4, 'card', null)],
     },
     station: {
       id: 'station',
@@ -63,8 +63,6 @@ export function createTrailerSequences(layout) {
       events: [
         event(0, 'environment', 'day'),
         event(0.7, 'start-train'),
-        event(3.2, 'environment', 'dusk'),
-        event(6.2, 'environment', 'night'),
         event(8.5, 'finale'),
       ],
     },
@@ -74,7 +72,7 @@ export function createTrailerSequences(layout) {
       cameraMode: 'all',
       card: { title: 'BUILD YOUR RAILWAY', subtitle: 'A 30-second MyTrainWorld preview.' },
       events: [
-        event(0, 'environment', 'dawn'),
+        event(0, 'environment', 'day'),
         ...trackEvents,
         event(7.0, 'add-station'),
         event(8.8, 'card', { title: 'BUILD THE TRAIN', subtitle: 'Engine, coaches, possibility.' }),
@@ -85,8 +83,6 @@ export function createTrailerSequences(layout) {
         event(10.45, 'add-crossing'),
         event(10.7, 'start-train'),
         event(12.0, 'card', { title: 'WATCH IT COME ALIVE', subtitle: 'Build. Connect. Watch it run.' }),
-        event(19.0, 'environment', 'dusk'),
-        event(23.0, 'environment', 'night'),
         event(26.5, 'card', null),
         event(28.0, 'finale'),
       ],

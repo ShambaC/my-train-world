@@ -8,8 +8,9 @@ function parseBoolean(value, fallback) {
 }
 
 function parseFps(value) {
+  if (value == null || value === '') return 120;
   const fps = Number(value);
-  if (!Number.isFinite(fps)) return 60;
+  if (!Number.isFinite(fps)) return 120;
   return Math.max(24, Math.min(120, Math.round(fps)));
 }
 

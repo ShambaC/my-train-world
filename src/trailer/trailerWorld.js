@@ -132,8 +132,9 @@ export function buildTrailerLayout(terrainData) {
 function createLayout(terrainData, corridor) {
   const groundY = topY(corridor.landHeight);
   const routeY = groundY;
+  const stationLength = STATION_LENGTH - 3;
   const route = [];
-  for (let i = 0; i < ROUTE_LENGTH; i += 1) {
+  for (let i = 0; i < ROUTE_LENGTH - 1; i += 1) {
     const world = toWorld(corridor.startX + i, corridor.startZ, terrainData);
     route.push({
       key: `main-${i}`,
@@ -150,11 +151,11 @@ function createLayout(terrainData, corridor) {
   const curveWorld = toWorld(curveCell.x, curveCell.z, terrainData);
   route.push({
     key: 'turn',
-    index: ROUTE_LENGTH,
+    index: ROUTE_LENGTH - 1,
     type: 'curved',
     cell: curveCell,
     position: { x: curveWorld.x, y: routeY, z: curveWorld.z },
-    rotation: 0,
+    rotation: -Math.PI / 2,
     water: false,
   });
   for (let i = 1; i <= 4; i += 1) {
@@ -162,7 +163,7 @@ function createLayout(terrainData, corridor) {
     const world = toWorld(cell.x, cell.z, terrainData);
     route.push({
       key: `tail-${i}`,
-      index: ROUTE_LENGTH + i,
+      index: ROUTE_LENGTH - 1 + i,
       type: 'straight',
       cell,
       position: { x: world.x, y: routeY, z: world.z },
@@ -173,16 +174,16 @@ function createLayout(terrainData, corridor) {
 
   const stationDir = { x: -1, z: 0 };
   const stationStartCell = {
-    x: corridor.startX + 4 + STATION_LENGTH - 1,
+    x: corridor.startX + 4 + stationLength - 1,
     z: corridor.startZ + STATION_LATERAL,
   };
   const stationEndCell = {
-    x: stationStartCell.x + stationDir.x * (STATION_LENGTH - 1),
+    x: stationStartCell.x + stationDir.x * (stationLength - 1),
     z: stationStartCell.z,
   };
   const stationWorld = toWorld(stationStartCell.x, stationStartCell.z, terrainData);
   const stationCenterWorld = {
-    x: stationWorld.x + stationDir.x * VOXEL_SIZE * STATION_LENGTH / 2,
+    x: stationWorld.x + stationDir.x * VOXEL_SIZE * stationLength / 2,
     z: stationWorld.z,
   };
   const crossingWorld = toWorld(corridor.startX + corridor.crossingIndex, corridor.startZ, terrainData);
@@ -198,7 +199,7 @@ function createLayout(terrainData, corridor) {
       startCell: stationStartCell,
       endCell: stationEndCell,
       dir: stationDir,
-      lengthCells: STATION_LENGTH,
+      lengthCells: stationLength,
       startHeight: corridor.landHeight,
       trackSide: 1,
       centerWorld: { ...stationCenterWorld, y: routeY },
